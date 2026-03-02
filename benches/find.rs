@@ -24,7 +24,8 @@ fn find(criterion: &mut Criterion) {
     nums[400_000] = 0;
     let mut group = criterion.benchmark_group("find_found_late");
     bench_fn!(group.iter_find_0(&nums));
-    bench_fn!(group.bc_find_0(&nums));
+    bench_fn!(group.bc_collect_find_0(&nums));
+    bench_fn!(group.bc_collect_then_finish_find_0(&nums));
     group.finish();
 
     let nums: Box<_> = std::iter::repeat_with(|| rng.random_range(1..=i32::MAX))
@@ -34,7 +35,8 @@ fn find(criterion: &mut Criterion) {
     println!("First 10 elements: {:?}", &nums[..10]);
     let mut group = criterion.benchmark_group("find_not_found");
     bench_fn!(group.iter_find_0(&nums));
-    bench_fn!(group.bc_find_0(&nums));
+    bench_fn!(group.bc_collect_find_0(&nums));
+    bench_fn!(group.bc_collect_then_finish_find_0(&nums));
     group.finish();
 }
 
@@ -54,13 +56,17 @@ fn iter_find_0(nums: &[i32]) -> Option<i32> {
 
 // Use manual `collect` because `tee_*` uses this method anyway.
 // Not to mention `Find`'s `collect_then_finish` forwards to `find()`.
-fn bc_find_0(nums: &[i32]) -> Option<i32> {
+fn bc_collect_find_0(nums: &[i32]) -> Option<i32> {
     let mut collector = Find::new(|&num| num == 0);
-    let mut nums = nums.iter();
+    let mut nums = nums.iter().copied();
 
-    while let Some(&num) = nums.next()
+    while let Some(num) = nums.next()
         && collector.collect(num).is_continue()
     {}
 
     collector.finish()
+}
+
+fn bc_collect_then_finish_find_0(nums: &[i32]) -> Option<i32> {
+    nums.iter().feed_into(Find::new(|&&num| num == 0)).copied()
 }
