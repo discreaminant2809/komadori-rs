@@ -129,7 +129,7 @@ mod proptests {
     // Precondition:
     // - `Vec::IntoCollector`
     // - `Collector::take()`
-    // - `Sink`
+    // - `Dropping`
     proptest! {
         #[test]
         fn all_collect_methods(

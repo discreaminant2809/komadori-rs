@@ -8,8 +8,8 @@ use super::{AltBreakHint, Nest, NestExact, TeeWith};
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Funnel,
     Fuse, Inspect, IntoCollector, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip,
-    Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, Unbatching, Unzip, assert_collector,
-    assert_collector_base,
+    SkipWhile, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, Unbatching, Unzip,
+    assert_collector, assert_collector_base,
 };
 #[cfg(feature = "itertools")]
 use super::{PartitionMap, Update};
@@ -519,7 +519,7 @@ pub trait CollectorBase {
     ///
     /// Note that in the current implementation,
     /// if the underlying collector has stopped accumulating during skipping,
-    /// its [`collect()`], [`break_hint()`] and similar methods will return [`Break(())`],
+    /// its [`collect()`], [`break_hint()`] and similar methods may return [`Break(())`],
     /// regardless of whether the adaptor has skipped enough items or not.
     ///
     /// # Examples
@@ -1181,6 +1181,44 @@ pub trait CollectorBase {
         P: FnMut(T) -> Option<R>,
     {
         assert_collector::<_, T>(MapWhile::new(self, pred))
+    }
+
+    /// Creates a collector that skips the first collected items that satisfy a predicate
+    /// before accumulating.
+    ///
+    /// `skip_while()` ignores collected items until the first item that
+    /// does not satisfy the predicate.
+    /// After that, this item and subsequent items are accumulated normally.
+    ///
+    /// Note that in the current implementation,
+    /// if the underlying collector has stopped accumulating during skipping,
+    /// its [`collect()`], [`break_hint()`] and similar methods may return [`Break(())`],
+    /// regardless of whether the adapter has met an item that does not satisfy
+    /// the predicate or not.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = String::new()
+    ///     .into_collector()
+    ///     .skip_while(|&ch| ch != '\n');
+    ///
+    /// assert!(collector.collect_many("noble\nand\nsinger".chars()).is_continue());
+    /// assert_eq!(collector.finish(), "\nand\nsinger");
+    /// ```
+    ///
+    /// [`Break(())`]: ControlFlow::Break
+    /// [`collect()`]: super::Collector::collect
+    /// [`break_hint()`]: CollectorBase::break_hint
+    #[inline]
+    fn skip_while<P, T>(self, pred: P) -> SkipWhile<Self, P>
+    where
+        Self: Collector<T> + Sized,
+        P: FnMut(&T) -> bool,
+    {
+        SkipWhile::new(self, pred)
     }
 
     /// Creates a collector that alternates the behavior of [`break_hint()`](Self::break_hint).

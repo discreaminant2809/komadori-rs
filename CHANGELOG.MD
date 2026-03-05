@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2
+
+### Added
+
+- `CollectorBase::skip_while()`.
+
 ## 0.5.1
 
 ### Added

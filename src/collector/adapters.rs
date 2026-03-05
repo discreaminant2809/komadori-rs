@@ -20,6 +20,7 @@ mod partition;
 #[cfg(feature = "itertools")]
 mod partition_map;
 mod skip;
+mod skip_while;
 mod take;
 mod take_while;
 mod tee;
@@ -55,6 +56,7 @@ pub use partition::*;
 #[cfg(feature = "itertools")]
 pub use partition_map::*;
 pub use skip::*;
+pub use skip_while::*;
 pub use take::*;
 pub use take_while::*;
 pub use tee::*;
