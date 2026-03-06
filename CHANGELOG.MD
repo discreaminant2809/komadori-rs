@@ -5,6 +5,7 @@
 ### Added
 
 - `CollectorBase::skip_while()`.
+- `crate::iter::ForEach`.
 
 ## 0.5.1
 
