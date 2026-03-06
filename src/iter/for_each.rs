@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, assert_collector};
 
 /// A collector that calls a provided closure for each collected item.
 ///
@@ -32,7 +32,7 @@ impl<F> ForEach<F> {
     where
         F: FnMut(T),
     {
-        Self { f }
+        assert_collector::<_, T>(Self { f })
     }
 }
 

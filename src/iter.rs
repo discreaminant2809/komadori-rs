@@ -24,6 +24,7 @@ mod fold;
 mod for_each;
 mod iterator_ext;
 mod last;
+mod position;
 mod reduce;
 mod try_fold;
 
@@ -36,5 +37,6 @@ pub use fold::*;
 pub use for_each::*;
 pub use iterator_ext::*;
 pub use last::*;
+pub use position::*;
 pub use reduce::*;
 pub use try_fold::*;
