@@ -7,6 +7,7 @@
 - `CollectorBase::skip_while()`.
 - `crate::iter::ForEach`.
 - `crate::iter::Position`.
+- `crate::iter::FindMap`.
 
 ## 0.5.1
 

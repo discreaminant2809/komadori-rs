@@ -20,6 +20,7 @@ mod count;
 #[cfg(feature = "unstable")]
 mod driver;
 mod find;
+mod find_map;
 mod fold;
 mod for_each;
 mod iterator_ext;
@@ -33,6 +34,7 @@ pub use count::*;
 #[cfg(feature = "unstable")]
 pub use driver::*;
 pub use find::*;
+pub use find_map::*;
 pub use fold::*;
 pub use for_each::*;
 pub use iterator_ext::*;
