@@ -99,15 +99,15 @@ mod proptests {
                 vec![]
                     .into_collector()
                     .take(take_count)
-                    .filter_map(|num: i32| num.checked_add(i32::MAX / 2))
+                    .filter_map(|num: i32| num.checked_add(i32::MAX))
             },
             should_break_pred: |iter| {
-                iter.filter_map(|num| num.checked_add(i32::MAX / 2)).count() >= take_count
+                iter.filter_map(|num| num.checked_add(i32::MAX)).count() >= take_count
             },
             pred: |mut iter, output, remaining| {
                 let expected = iter
                     .by_ref()
-                    .filter_map(|num| num.checked_add(i32::MAX / 2))
+                    .filter_map(|num| num.checked_add(i32::MAX))
                     .take(take_count);
 
                 if expected.ne(output) {

@@ -137,6 +137,6 @@ mod proptests {
     }
 
     fn map_while_pred(num: i32) -> Option<i32> {
-        num.checked_add(i32::MAX / 2)
+        num.checked_add(i32::MAX)
     }
 }

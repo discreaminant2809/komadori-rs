@@ -154,7 +154,7 @@ mod proptests {
 
     fn all_collect_methods_impl(nums: Vec<i32>, starting_nums: Vec<i32>) -> TestCaseResult {
         fn key_extractor(Id { num, .. }: &Id) -> i32 {
-            num.wrapping_add(i32::MAX / 2)
+            num.wrapping_add(i32::MAX)
         }
 
         BasicCollectorTester {

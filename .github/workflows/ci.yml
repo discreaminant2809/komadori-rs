@@ -59,6 +59,14 @@ jobs:
         if: matrix.rust == 'stable'
         run: cargo semver-checks check-release
 
+      - name: Upload cargo-semver-checks Crash Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-semver-checks-crash-report
+          path: /tmp/report-*.toml
+          if-no-files-found: ignore
+
       - name: Install thumbv7em-none-eabihf Target
         run: rustup target add thumbv7em-none-eabihf
 

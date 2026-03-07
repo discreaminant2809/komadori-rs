@@ -180,7 +180,7 @@ mod proptests {
 
     fn all_collect_methods_min_by_impl(nums: Vec<i32>) -> TestCaseResult {
         fn comparator(Id { num: a, .. }: &Id, Id { num: b, .. }: &Id) -> Ordering {
-            let (a, b) = (a.wrapping_add(i32::MAX / 2), b.wrapping_add(i32::MAX / 2));
+            let (a, b) = (a.wrapping_add(i32::MAX), b.wrapping_add(i32::MAX));
             a.cmp(&b)
         }
 
