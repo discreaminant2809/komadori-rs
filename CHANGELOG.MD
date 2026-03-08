@@ -8,6 +8,9 @@
 - `crate::iter::ForEach`.
 - `crate::iter::Position`.
 - `crate::iter::FindMap`.
+- `crate::cmp::IsSorted`.
+- `crate::cmp::IsSortedBy`.
+- `crate::cmp::IsSortedByKey`.
 
 ## 0.5.1
 
