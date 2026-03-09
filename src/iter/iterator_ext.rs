@@ -9,16 +9,6 @@ use crate::{assert_iterator, collector::CollectorBase};
 ///
 /// This trait is automatically implemented for all [`Iterator`] types.
 pub trait IteratorExt: Iterator {
-    /// Use [`feed_into()`](IteratorExt::feed_into).
-    #[deprecated(since = "0.4.0", note = "Use `feed_into()`")]
-    #[inline]
-    fn komadori<C>(&mut self, collector: C) -> C::Output
-    where
-        C: IntoCollector<Self::Item>,
-    {
-        collector.into_collector().collect_then_finish(self)
-    }
-
     /// Feeds items from this iterator into the provided collector till
     /// the collector stops accumulating or the iterator is exhausted.
     /// and returns the collector’s output.
@@ -64,7 +54,7 @@ pub trait IteratorExt: Iterator {
     /// [`try_fold()`](Iterator::try_fold) or [`any()`](Iterator::any).
     /// They stop when something is satisfied, preventing the collector
     /// from collecting every item.
-    /// Consider `for_each(drop)` the iterator before returning.
+    /// Consider `for_each(drop)` the iterator before returning
     /// if you want to exhaust the iterator.
     ///
     /// To use this method, import the [`IteratorExt`] trait.

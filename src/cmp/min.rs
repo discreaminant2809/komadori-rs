@@ -59,7 +59,6 @@ impl<T> Min<T> {
     where
         F: FnMut(&T, &T) -> Ordering,
     {
-        #[allow(deprecated)]
         assert_collector::<_, T>(MinBy::new(f))
     }
 
@@ -70,7 +69,6 @@ impl<T> Min<T> {
         K: Ord,
         F: FnMut(&T) -> K,
     {
-        #[allow(deprecated)]
         assert_collector::<_, T>(MinByKey::new(f))
     }
 }

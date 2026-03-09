@@ -48,10 +48,8 @@ where
     K: Ord,
     F: FnMut(&T) -> K,
 {
-    /// Creates a new instance of this collector with a given key-extraction function.
-    #[deprecated(since = "0.3.0", note = "Use `Max::by_key`")]
     #[inline]
-    pub const fn new(f: F) -> Self {
+    pub(super) const fn new(f: F) -> Self {
         assert_collector(Self {
             value_key_collector: Max::new(),
             f,

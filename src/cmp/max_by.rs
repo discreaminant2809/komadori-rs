@@ -48,10 +48,8 @@ impl<T, F> MaxBy<T, F>
 where
     F: FnMut(&T, &T) -> Ordering,
 {
-    /// Creates a new instance of this collector with a given comparison function.
-    #[deprecated(since = "0.3.0", note = "Use `Max::by`")]
     #[inline]
-    pub const fn new(f: F) -> Self {
+    pub(super) const fn new(f: F) -> Self {
         assert_collector(Self { max: None, f })
     }
 }

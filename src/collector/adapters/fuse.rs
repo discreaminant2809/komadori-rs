@@ -27,13 +27,6 @@ where
 }
 
 impl<C> Fuse<C> {
-    /// Use [`Fuse::break_hint()`].
-    #[inline]
-    #[deprecated(since = "0.4.0", note = "Use `Fuse::break_hint()`")]
-    pub fn finished(&self) -> bool {
-        self.break_hint.is_break()
-    }
-
     #[inline]
     fn collect_impl(&mut self, f: impl FnOnce(&mut C) -> ControlFlow<()>) -> ControlFlow<()> {
         self.break_hint?;

@@ -6,6 +6,10 @@
 
 - API surface of `crate::cmp::TryFold`.
 
+### Removed
+
+- Many deprecated items.
+
 ## 0.5.2
 
 ### Added

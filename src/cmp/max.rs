@@ -59,7 +59,6 @@ impl<T> Max<T> {
     where
         F: FnMut(&T, &T) -> Ordering,
     {
-        #[allow(deprecated)]
         assert_collector(MaxBy::new(f))
     }
 
@@ -70,7 +69,6 @@ impl<T> Max<T> {
         K: Ord,
         F: FnMut(&T) -> K,
     {
-        #[allow(deprecated)]
         assert_collector(MaxByKey::new(f))
     }
 }

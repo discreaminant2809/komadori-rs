@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase};
 
-/// A [`Collector`] with a custom collection logic.
+/// A collector with a custom collection logic.
 ///
 /// This `struct` is created by [`CollectorBase::unbatching()`]. See its documentation for more.
 #[derive(Clone)]
