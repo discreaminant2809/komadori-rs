@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+### Changed
+
+- API surface of `crate::cmp::TryFold`.
+
 ## 0.5.2
 
 ### Added

@@ -6,6 +6,8 @@
 
 mod product;
 mod sum;
+mod tri;
 
 pub use product::*;
 pub use sum::*;
+pub(crate) use tri::*;
