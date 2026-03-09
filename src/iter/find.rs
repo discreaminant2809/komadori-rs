@@ -6,7 +6,7 @@ use crate::collector::{Collector, CollectorBase, assert_collector};
 ///
 /// If no matching item has been found, its [`Output`] is `None`.
 /// When the collector encounters an item that makes the predicate return `true`,
-/// it returns [`Break`], and the [`Output`] becomes `Some` containing that item.
+/// it returns [`Break(())`], and the [`Output`] becomes `Some` containing that item.
 ///
 /// This collector corresponds to [`Iterator::find()`].
 ///
@@ -38,7 +38,7 @@ use crate::collector::{Collector, CollectorBase, assert_collector};
 /// assert_eq!(collector.finish(), None);
 /// ```
 ///
-/// [`Break`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: std::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[derive(Clone)]
 pub struct Find<T, F> {

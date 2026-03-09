@@ -9,7 +9,7 @@ use super::raw_all_any::RawAllAny;
 /// Its [`Output`] is initially `false` and remains `false` as long as every collected item
 /// does not satisfy the predicate.
 /// When the collector collects an item that makes the predicate `true`,
-/// it returns [`Break`], and the [`Output`] becomes `true`.
+/// it returns [`Break(())`], and the [`Output`] becomes `true`.
 ///
 /// This collector corresponds to [`Iterator::any()`].
 ///
@@ -41,7 +41,7 @@ use super::raw_all_any::RawAllAny;
 /// assert!(collector.finish());
 /// ```
 ///
-/// [`Break`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: std::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[derive(Clone)]
 pub struct Any<F> {

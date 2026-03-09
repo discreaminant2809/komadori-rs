@@ -9,7 +9,7 @@ use crate::{
 ///
 /// If no matching item has been found, its [`Output`] is `None`.
 /// When the collector encounters an item that makes the predicate return `true`,
-/// it returns [`Break`], and the [`Output`] becomes `Some` containing
+/// it returns [`Break(())`], and the [`Output`] becomes `Some` containing
 /// the n-th matching item.
 ///
 /// This collector corresponds to [`Iterator::position()`].
@@ -42,7 +42,7 @@ use crate::{
 /// assert_eq!(collector.finish(), None);
 /// ```
 ///
-/// [`Break`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: std::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[derive(Clone)]
 pub struct Position<P> {

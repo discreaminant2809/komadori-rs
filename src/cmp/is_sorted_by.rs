@@ -11,7 +11,7 @@ use super::{IsSorted, IsSortedBase, IsSortedStore};
 /// is greater than or equal to the previously collected item.
 /// When [`collect()`] or similar methods encounter an item
 /// that is less than the previously collected item,
-/// they return [`Break`], and the [`Output`] becomes `false`.
+/// they return [`Break(())`], and the [`Output`] becomes `false`.
 ///
 /// If no items or only one item were collected, the [`Output`] is `true`.
 ///
@@ -50,7 +50,7 @@ use super::{IsSorted, IsSortedBase, IsSortedStore};
 ///
 /// [`collect()`]: Collector::collect
 /// [`Output`]: CollectorBase::Output
-/// [`Break`]: ControlFlow::Break
+/// [`Break(())`]: ControlFlow::Break
 pub struct IsSortedBy<T, F> {
     base: IsSortedBase<T, Store<F>>,
 }

@@ -8,7 +8,7 @@ use super::Find;
 ///
 /// If no matching item has been found, its [`Output`] is [`None`].
 /// When the collector encounters an item that makes the predicate return [`Some`],
-/// it returns [`Break`], and the [`Output`] becomes [`Some`] containing the mapped item.
+/// it returns [`Break(())`], and the [`Output`] becomes [`Some`] containing the mapped item.
 ///
 /// This collector is constructed by [`Find::map()`](super::Find::map).
 ///
@@ -42,7 +42,7 @@ use super::Find;
 /// assert_eq!(collector.finish(), None);
 /// ```
 ///
-/// [`Break`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: std::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[derive(Clone)]
 pub struct FindMap<P, R> {

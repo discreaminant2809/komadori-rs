@@ -2,29 +2,32 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector};
 
-use super::{IsSortedBase, IsSortedStore};
+use super::{IsSorted, IsSortedBase, IsSortedStore};
 
-/// A collector that determines whether items are collected in sorted order.
+/// A collector that determines whether items are collected in sorted order
+/// using the given key extraction function.
 ///
-/// The [`Output`] remains `true` as long as each collected item
-/// is greater than or equal to the previously collected item.
-/// When [`collect()`] or similar methods encounter an item
-/// that is less than the previously collected item,
+/// The [`Output`] remains `true` as long as the key of each collected item
+/// is greater than or equal to the the key of the previously collected item.
+/// When [`collect()`] or similar methods encounter an item whose key
+/// is less than the key of the previously collected item,
 /// they return [`Break(())`], and the [`Output`] becomes `false`.
 ///
 /// If no items or only one item were collected, the [`Output`] is `true`.
 ///
-/// This collector corresponds to [`Iterator::is_sorted()`].
+/// This collector is constructed by [`IsSorted::by_key()`].
+///
+/// This collector corresponds to [`Iterator::is_sorted_by_key()`].
 ///
 /// # Examples
 ///
 /// ```
 /// use komadori::{prelude::*, cmp::IsSorted};
 ///
-/// let mut collector = IsSorted::new();
+/// let mut collector = IsSorted::by_key(i32::abs);
 ///
 /// assert!(collector.collect(1).is_continue());
-/// assert!(collector.collect(2).is_continue());
+/// assert!(collector.collect(-2).is_continue());
 /// assert!(collector.collect(3).is_continue());
 ///
 /// assert!(collector.finish());
@@ -33,12 +36,12 @@ use super::{IsSortedBase, IsSortedStore};
 /// ```
 /// use komadori::{prelude::*, cmp::IsSorted};
 ///
-/// let mut collector = IsSorted::new();
+/// let mut collector = IsSorted::by_key(i32::abs);
 ///
 /// assert!(collector.collect(1).is_continue());
-/// assert!(collector.collect(3).is_continue());
+/// assert!(collector.collect(-3).is_continue());
 ///
-/// // Not sorted!
+/// // |2| < |-3|
 /// assert!(collector.collect(2).is_break());
 ///
 /// assert!(!collector.finish());
@@ -47,26 +50,28 @@ use super::{IsSortedBase, IsSortedStore};
 /// [`collect()`]: Collector::collect
 /// [`Output`]: CollectorBase::Output
 /// [`Break(())`]: ControlFlow::Break
-pub struct IsSorted<T> {
-    base: IsSortedBase<T, Store>,
+pub struct IsSortedByKey<K, F> {
+    base: IsSortedBase<K, Store<F>>,
 }
 
-struct Store;
+struct Store<F> {
+    f: F,
+}
 
-impl<T> IsSorted<T>
-where
-    T: PartialOrd,
-{
-    /// Creates a new instance of this collector.
-    #[inline]
-    pub fn new() -> Self {
-        assert_collector::<_, T>(Self {
-            base: IsSortedBase::new(Store),
+impl<T> IsSorted<T> {
+    /// Creates a new instance of [`IsSortedByKey`] with a given key extraction function.
+    pub fn by_key<K, F>(f: F) -> IsSortedByKey<K, F>
+    where
+        F: FnMut(T) -> K,
+        K: PartialOrd,
+    {
+        assert_collector::<_, T>(IsSortedByKey {
+            base: IsSortedBase::new(Store { f }),
         })
     }
 }
 
-impl<T> CollectorBase for IsSorted<T> {
+impl<K, F> CollectorBase for IsSortedByKey<K, F> {
     type Output = bool;
 
     #[inline]
@@ -75,9 +80,10 @@ impl<T> CollectorBase for IsSorted<T> {
     }
 }
 
-impl<T> Collector<T> for IsSorted<T>
+impl<T, F, K> Collector<T> for IsSortedByKey<K, F>
 where
-    T: PartialOrd,
+    F: FnMut(T) -> K,
+    K: PartialOrd,
 {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
@@ -95,39 +101,39 @@ where
     }
 }
 
-impl<T: PartialOrd> Default for IsSorted<T> {
-    #[inline]
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> Debug for IsSorted<T>
+impl<F, K> Debug for IsSortedByKey<K, F>
 where
-    T: Debug,
+    K: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("IsSorted")
-            .field("state", &self.base.debug_state(|_, _| {}))
+        f.debug_struct("IsSortedByKey")
+            .field(
+                "state",
+                &self.base.debug_state(|ds, _| {
+                    ds.field("f", &std::any::type_name::<F>());
+                }),
+            )
             .finish()
     }
 }
 
-impl<T> IsSortedStore<T, T> for Store
+impl<F, T, K> IsSortedStore<T, K> for Store<F>
 where
-    T: PartialOrd,
+    F: FnMut(T) -> K,
+    K: PartialOrd,
 {
     #[inline]
-    fn map(&mut self, item: T) -> T {
-        item
+    fn map(&mut self, item: T) -> K {
+        (self.f)(item)
     }
 
     #[inline]
-    fn store(&mut self, prev: &mut T, item: T) -> bool {
-        if item < *prev {
+    fn store(&mut self, prev: &mut K, item: T) -> bool {
+        let item_key = self.map(item);
+        if item_key < *prev {
             false
         } else {
-            *prev = item;
+            *prev = item_key;
             true
         }
     }
@@ -141,6 +147,7 @@ mod proptests {
 
     use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
 
+    use super::super::IsSorted;
     use super::*;
 
     proptest! {
@@ -157,7 +164,7 @@ mod proptests {
         BasicCollectorTester {
             iter_factory: || nums.iter().copied(),
             collector_factory: || {
-                let mut collector = IsSorted::new();
+                let mut collector = IsSorted::by_key(i32::abs);
                 assert!(collector.collect_many(starting_num).is_continue());
                 collector
             },
@@ -165,10 +172,15 @@ mod proptests {
                 !starting_num
                     .into_iter()
                     .chain(nums.iter().copied())
-                    .is_sorted()
+                    .is_sorted_by_key(i32::abs)
             },
             pred: |mut iter, output, remaining| {
-                if starting_num.into_iter().chain(&mut iter).is_sorted() != output {
+                if starting_num
+                    .into_iter()
+                    .chain(&mut iter)
+                    .is_sorted_by_key(i32::abs)
+                    != output
+                {
                     Err(PredError::IncorrectOutput)
                 } else if iter.ne(remaining) {
                     Err(PredError::IncorrectIterConsumption)

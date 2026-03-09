@@ -16,6 +16,7 @@ mod comparator;
 mod is_sorted;
 mod is_sorted_base;
 mod is_sorted_by;
+mod is_sorted_by_key;
 mod max;
 mod max_by;
 mod max_by_key;
@@ -31,7 +32,6 @@ mod min_max_by;
 #[cfg(feature = "itertools")]
 mod min_max_by_key;
 mod value_key;
-// mod is_sorted_by_key;
 
 #[cfg(feature = "itertools")]
 pub use all_equal::*;
@@ -40,6 +40,7 @@ use comparator::*;
 pub use is_sorted::*;
 use is_sorted_base::*;
 pub use is_sorted_by::*;
+pub use is_sorted_by_key::*;
 pub use max::*;
 pub use max_by::*;
 pub use max_by_key::*;
