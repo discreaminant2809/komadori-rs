@@ -2,9 +2,13 @@
 
 ## 0.6.0
 
+### Added
+
+- `crate::iter::TryForEach`.
+
 ### Changed
 
-- API surface of `crate::cmp::TryFold`.
+- API surface of `crate::iter::TryFold`.
 
 ### Removed
 

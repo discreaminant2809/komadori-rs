@@ -12,9 +12,10 @@ use crate::{
 ///
 /// - [`new(init, f)`](TryFold::new): Starts with either a "success" or a "failure"
 ///   and continues accumulating as long as the closure returns a "success."
-///   The [`Output`] is a "success" if the closure never returns
-///   a "failure." Otherwise, accumulation stops and
-///   the [`Output`] becomes that "failure."
+///   The [`Output`] is a "success" if the initial value is a "success" and
+///   the closure **never** returns a "failure."
+///   Otherwise, accumulation stops and the [`Output`] becomes a "failure"
+///   (either from the initial value or from the closure).
 ///
 ///   With this constructor, you can control whether accumulation
 ///   stops from the start by providing a "failure" as `init`
@@ -22,7 +23,7 @@ use crate::{
 ///
 /// - [`with_output(output, f)`](TryFold::with_output): Starts with a "success"
 ///   and continues accumulating as long as the closure returns a "success."
-///   The [`Output`] is a "success" if the closure never returns
+///   The [`Output`] is a "success" if the closure **never** returns
 ///   a "failure." Otherwise, accumulation stops and
 ///   the [`Output`] becomes that "failure."
 ///
@@ -105,7 +106,7 @@ impl<A, F> TryFold<A, F>
 where
     A: Try,
 {
-    /// Creates a new instance of this collector with either a "sucess" or a "failure"
+    /// Creates a new instance of this collector with either a "success" or a "failure"
     /// and an accumulator.
     #[inline]
     pub fn new<T, R>(init: A, f: F) -> Self
@@ -234,6 +235,59 @@ where
     }
 }
 
+impl<A, F> Clone for TryFold<A, F>
+where
+    A: Try<Output: Clone, Residual: Clone>,
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.state.clone_from(&source.state);
+    }
+}
+
+impl<A, F> Clone for State<A, F>
+where
+    A: Try<Output: Clone, Residual: Clone>,
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Continue { accum, f } => Self::Continue {
+                accum: accum.clone(),
+                f: f.clone(),
+            },
+            Self::Break(residual) => Self::Break(residual.clone()),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        match (self, source) {
+            (
+                State::Continue { accum, f },
+                State::Continue {
+                    accum: source_accum,
+                    f: source_f,
+                },
+            ) => {
+                accum.clone_from(source_accum);
+                f.clone_from(source_f);
+            }
+
+            (State::Break(residual), State::Break(source_residual)) => {
+                residual.clone_from(source_residual)
+            }
+
+            (this, source) => *this = source.clone(),
+        }
+    }
+}
+
 #[cfg(all(test, feature = "std"))]
 mod proptests {
     use proptest::collection::vec as propvec;
@@ -315,15 +369,15 @@ mod proptests {
 }
 
 // This is to prove that `with_output` (traditional try_fold()) shouldn't be the default.
-fn _akjdas() {
-    use crate::prelude::*;
+// fn _akjdas() {
+//     use crate::prelude::*;
 
-    let sum = [10, 20, 30, 100, 40, 50]
-        .into_iter()
-        .feed_into(TryFold::new(Some(0_i8), |sum, num| {
-            *sum = sum.checked_add(num)?;
-            Some(())
-        }));
+//     let sum: Option<i8> = [10, 20, 30, 100, 40, 50]
+//         .into_iter()
+//         .feed_into(TryFold::with_output(0_i8, |sum: &mut i8, num| {
+//             *sum = sum.checked_add(num)?;
+//             Some(())
+//         }));
 
-    assert_eq!(sum, None);
-}
+//     assert_eq!(sum, None);
+// }

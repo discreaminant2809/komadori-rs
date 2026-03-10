@@ -28,6 +28,7 @@ mod last;
 mod position;
 mod reduce;
 mod try_fold;
+mod try_for_each;
 
 pub use all_any::*;
 pub use count::*;
@@ -42,3 +43,4 @@ pub use last::*;
 pub use position::*;
 pub use reduce::*;
 pub use try_fold::*;
+pub use try_for_each::*;
