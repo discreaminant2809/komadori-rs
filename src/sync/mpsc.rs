@@ -335,19 +335,7 @@ impl<'a, T> crate::collector::Collector<T> for SyncCollector<'a, T> {
     // The default implementations for other methods are sufficient.
 }
 
-impl<'a, T> Clone for Collector<'a, T> {
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
-
-impl<'a, T> Clone for SyncCollector<'a, T> {
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
-
-macro_rules! debug_impl {
+macro_rules! debug_clone_impl {
     ($ty_name:ident<$($lts:lifetime,)* $($generics:ident),*>) => {
         impl<T> std::fmt::Debug for $ty_name<$($lts,)* $($generics),*> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -356,10 +344,16 @@ macro_rules! debug_impl {
                     .finish()
             }
         }
+
+        impl<T> Clone for $ty_name<$($lts,)* $($generics),*> {
+            fn clone(&self) -> Self {
+                Self(Clone::clone(&self.0))
+            }
+        }
     };
 }
 
-debug_impl!(Collector<'_, T>);
-debug_impl!(SyncCollector<'_, T>);
-debug_impl!(IntoCollector<T>);
-debug_impl!(IntoSyncCollector<T>);
+debug_clone_impl!(Collector<'_, T>);
+debug_clone_impl!(SyncCollector<'_, T>);
+debug_clone_impl!(IntoCollector<T>);
+debug_clone_impl!(IntoSyncCollector<T>);

@@ -5,6 +5,7 @@ use crate::collector::{Collector, CollectorBase};
 /// A collector that calls a closure on each item before collecting.
 ///
 /// This `struct` is created by [`CollectorBase::inspect()`]. See its documentation for more.
+#[derive(Clone)]
 pub struct Inspect<C, F> {
     collector: C,
     f: F,

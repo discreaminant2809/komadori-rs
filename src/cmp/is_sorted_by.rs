@@ -51,10 +51,12 @@ use super::{IsSorted, IsSortedBase, IsSortedStore};
 /// [`collect()`]: Collector::collect
 /// [`Output`]: CollectorBase::Output
 /// [`Break(())`]: ControlFlow::Break
+#[derive(Clone)]
 pub struct IsSortedBy<T, F> {
     base: IsSortedBase<T, Store<F>>,
 }
 
+#[derive(Clone)]
 struct Store<F> {
     compare: F,
 }

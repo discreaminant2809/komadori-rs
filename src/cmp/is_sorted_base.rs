@@ -5,6 +5,7 @@ use std::{
 
 use crate::collector::{Collector, CollectorBase};
 
+#[derive(Clone)]
 pub struct IsSortedBase<T, S> {
     state: State<T, S>,
 }
@@ -26,6 +27,7 @@ pub(super) trait IsSortedStore<T, K> {
     }
 }
 
+#[derive(Clone)]
 enum State<K, S> {
     StillSorted { prev: Option<K>, store: S },
     NotSorted,

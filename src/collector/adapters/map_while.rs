@@ -5,6 +5,7 @@ use crate::collector::{Collector, CollectorBase};
 /// A collector that accumulates items as long as a predicate returns [`Some`].
 ///
 /// This `struct` is created by [`CollectorBase::map_while()`]. See its documentation for more.
+#[derive(Clone)]
 pub struct MapWhile<C, P> {
     collector: C,
     pred: P,

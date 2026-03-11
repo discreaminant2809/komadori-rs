@@ -6,6 +6,7 @@ use crate::collector::{Collector, CollectorBase};
 ///
 /// This `struct` is created by [`CollectorBase::filter_map()`].
 /// See its documentation for more.
+#[derive(Clone)]
 pub struct FilterMap<C, P> {
     collector: C,
     pred: P,

@@ -10,6 +10,10 @@
 
 - API surface of `crate::iter::TryFold`.
 
+### Fixed
+
+- Added missing `Clone` implementations.
+
 ### Removed
 
 - Many deprecated items.

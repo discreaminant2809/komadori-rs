@@ -47,10 +47,12 @@ use super::{IsSortedBase, IsSortedStore};
 /// [`collect()`]: Collector::collect
 /// [`Output`]: CollectorBase::Output
 /// [`Break(())`]: ControlFlow::Break
+#[derive(Clone)]
 pub struct IsSorted<T> {
     base: IsSortedBase<T, Store>,
 }
 
+#[derive(Clone)]
 struct Store;
 
 impl<T> IsSorted<T>
