@@ -50,6 +50,14 @@ name = "sum_find"
 harness = false
 
 [[bench]]
+name = "filter"
+harness = false
+
+[[bench]]
+name = "filter_sum_max"
+harness = false
+
+[[bench]]
 name = "min_max"
 required-features = ["itertools"]
 harness = false
