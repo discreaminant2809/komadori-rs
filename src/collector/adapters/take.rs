@@ -99,8 +99,6 @@ where
         if self.remaining <= lower_sh {
             let n = self.remaining;
             self.remaining = 0;
-            // Pass bug: we return the result directly,
-            // while no matter what, it's a stop.
             let _ = self.collector.collect_many(items.take(n));
             return ControlFlow::Break(());
         }
@@ -110,9 +108,6 @@ where
 
         // We don't know how many left after the lower bound,
         // so we carefully track the state with `inspect`.
-        //
-        // Pass bug: we return the result directly,
-        // while no matter what, it's a stop.
         let cf = self.collector.collect_many(
             items
                 .take(self.remaining)
