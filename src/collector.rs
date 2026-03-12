@@ -46,6 +46,8 @@
 //!
 //! All adapters are defined on [`CollectorBase`] and nowhere else.
 //!
+//! ## `tee()` adapter variants
+//!
 //! There are different adapters to "tee" items into multiple collectors
 //! (let each item be collected by multiple collectors).
 //! Conceptually, they differ in how the item is passed
@@ -64,6 +66,18 @@
 //! and the method name `tee_clone` expresses your intent of cloning clearly.
 //! It is recommended to check each adapter's documentation
 //! for detailed semantics and examples.
+//!
+//! Which one to use?
+//!
+//! - If the item type is `&T` or implements [`Copy`], use
+//!   [`tee()`](CollectorBase::tee).
+//! - If the item type is `&mut T`, use [`tee_mut()`](CollectorBase::tee_mut).
+//! - If the item type implements [`Clone`] and you **do** want to clone,
+//!   use [`tee_clone()`](CollectorBase::tee_clone).
+//!   This is similar to `clone().tee_funnel()`, except cloning is skipped
+//!   if one of the underlying collectors stops accumulating (more efficient).
+//!   If you do not want to clone, prefer the below.
+//! - Otherwise, use [`tee_funnel()`](CollectorBase::tee_funnel).
 //!
 //! # Implementing a collector
 //!
