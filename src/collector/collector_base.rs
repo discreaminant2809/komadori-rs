@@ -694,6 +694,7 @@ pub trait CollectorBase {
     /// assert!(collector.collect_many([1, 2, 3]).is_continue());
     /// assert_eq!(collector.finish(), [1, 2, 3]);
     /// ```
+    #[cfg(feature = "unstable")]
     #[inline]
     fn funnel(self) -> Funnel<Self>
     where
