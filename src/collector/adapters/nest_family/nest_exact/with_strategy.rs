@@ -64,10 +64,10 @@ where
 
         if self.inner.collect(item).is_break() {
             let inner = mem::replace(&mut self.inner, self.strategy.next_collector());
-            self.outer.collect(inner.finish())?;
+            self.outer.collect(inner.finish())
+        } else {
+            self.outer.break_hint()
         }
-
-        ControlFlow::Continue(())
     }
 
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {

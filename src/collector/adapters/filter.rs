@@ -48,15 +48,11 @@ where
         }
     }
 
-    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.collector
-            .collect_many(items.into_iter().filter(&mut self.pred))
-    }
-
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        self.collector
-            .collect_then_finish(items.into_iter().filter(self.pred))
-    }
+    // Removed the overriden implementations cuz the items here are being consumed
+    // without consulting the underlying collector's break hint during filtering.
+    // Yes, the performance degrades, but it's because of `try_for_each()` and/or
+    // LLVM noise (which could be fixed soon),
+    // and in multiple reduction it still works well and performs similarly to fold().
 }
 
 impl<C: Debug, F> Debug for Filter<C, F> {

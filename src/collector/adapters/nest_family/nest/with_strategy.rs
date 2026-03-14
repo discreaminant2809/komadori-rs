@@ -93,7 +93,7 @@ where
                     .finish(),
             )
         } else {
-            ControlFlow::Continue(())
+            self.outer.break_hint()
         }
     }
 

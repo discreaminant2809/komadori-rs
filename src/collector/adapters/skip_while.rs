@@ -61,23 +61,61 @@ where
         self.collector.break_hint()?;
 
         let mut items = items.into_iter();
-
-        let Some(first) = items.find(move |item| !pred(item)) else {
-            return self.collector.break_hint();
-        };
-
-        self.pred.take();
-        self.collector.collect(first)?;
-        self.collector.collect_many(items)
+        match items.by_ref().try_for_each({
+            let collector = &mut self.collector;
+            move |item| {
+                let skipping = pred(&item);
+                collector.break_hint().map_break(|_| None)?;
+                if skipping {
+                    ControlFlow::Continue(())
+                } else {
+                    ControlFlow::Break(Some(item))
+                }
+            }
+        }) {
+            // We've already checked for the break hint in the previous iteration.
+            // We may not need to check anymore
+            ControlFlow::Continue(_) => ControlFlow::Continue(()),
+            ControlFlow::Break(None) => ControlFlow::Break(()),
+            ControlFlow::Break(Some(first)) => {
+                self.pred.take();
+                self.collector.collect(first)?;
+                self.collector.collect_many(items)
+            }
+        }
     }
 
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        let items = items.into_iter();
+    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
+        let Some(mut pred) = self.pred else {
+            return self.collector.collect_then_finish(items);
+        };
 
-        if let Some(pred) = self.pred {
-            self.collector.collect_then_finish(items.skip_while(pred))
-        } else {
-            self.collector.collect_then_finish(items)
+        // Edge case:
+        if self.collector.break_hint().is_break() {
+            return self.collector.finish();
+        }
+
+        let mut items = items.into_iter();
+        match items.by_ref().try_for_each({
+            let collector = &mut self.collector;
+            move |item| {
+                let skipping = pred(&item);
+                collector.break_hint().map_break(|_| None)?;
+                if skipping {
+                    ControlFlow::Continue(())
+                } else {
+                    ControlFlow::Break(Some(item))
+                }
+            }
+        }) {
+            ControlFlow::Continue(_) | ControlFlow::Break(None) => self.collector.finish(),
+            ControlFlow::Break(Some(first)) => {
+                if self.collector.collect(first).is_break() {
+                    self.collector.finish()
+                } else {
+                    self.collector.collect_then_finish(items)
+                }
+            }
         }
     }
 }

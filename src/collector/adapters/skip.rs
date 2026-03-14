@@ -56,63 +56,91 @@ where
         // items (via `drop_n_items`) before forwarding to the underlying collector.
         self.break_hint()?;
 
-        // We should ensure that once the iterator ends, we never `next` it again.
-        // We don't want to resume it.
-
         let mut items = items.into_iter();
-        // We trust the implementation of `size_hint`.
         let (lower_sh, _) = items.size_hint();
 
         if self.remaining <= lower_sh {
-            let n = std::mem::replace(&mut self.remaining, 0);
-            return if drop_n_items(&mut items, n) {
-                self.collector.collect_many(items)
-            } else {
-                ControlFlow::Continue(())
-            };
+            items
+                .by_ref()
+                .take(std::mem::take(&mut self.remaining))
+                .try_for_each(|_| self.collector.break_hint())?;
+
+            return self.collector.collect_many(items);
         }
 
         self.remaining -= lower_sh;
+        items
+            .by_ref()
+            .take(lower_sh)
+            .try_for_each(|_| self.collector.break_hint())?;
 
-        // Be careful: beyond the lower bound,
-        // the iterator may end before skipping all `self.remaining`.
-        let mut is_some = drop_n_items(&mut items, lower_sh);
-        while is_some && self.remaining > 0 {
+        match items.by_ref().try_for_each(|_| {
+            self.collector
+                .break_hint()
+                .map_break(|_| ControlFlow::Break(()))?;
             self.remaining -= 1;
-            is_some = items.next().is_some();
-        }
-
-        if is_some {
-            self.collector.collect_many(items)
-        } else {
-            ControlFlow::Continue(())
+            if self.remaining == 0 {
+                ControlFlow::Break(ControlFlow::Continue(()))
+            } else {
+                ControlFlow::Continue(())
+            }
+        }) {
+            ControlFlow::Continue(_) => ControlFlow::Continue(()),
+            ControlFlow::Break(ControlFlow::Break(_)) => ControlFlow::Break(()),
+            ControlFlow::Break(ControlFlow::Continue(_)) => self.collector.collect_many(items),
         }
     }
 
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
+    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
         if self.break_hint().is_break() {
             return self.collector.finish();
         }
 
         let mut items = items.into_iter();
+        let (lower_sh, _) = items.size_hint();
 
-        // `Iterator::skip()` is more strict in TrustedLen implementation,
-        // so we manually skip items to preserve the len trustworthiness of the iterator.
-        if drop_n_items(&mut items, self.remaining) {
-            self.collector.collect_then_finish(items)
-        } else {
-            self.collector.finish()
+        if self.remaining <= lower_sh {
+            return if items
+                .by_ref()
+                .take(std::mem::take(&mut self.remaining))
+                .try_for_each(|_| self.collector.break_hint())
+                .is_break()
+            {
+                self.collector.finish()
+            } else {
+                self.collector.collect_then_finish(items)
+            };
         }
-    }
-}
 
-// Returns `true` if all n items were dropped (not ended earlier).
-// Should consult the returning `bool` to prevent the iterator from "resuming."
-fn drop_n_items(items: &mut impl Iterator, n: usize) -> bool {
-    if n > 0 {
-        items.nth(n - 1).is_some()
-    } else {
-        true
+        self.remaining -= lower_sh;
+        if items
+            .by_ref()
+            .take(lower_sh)
+            .try_for_each(|_| self.collector.break_hint())
+            .is_break()
+        {
+            return self.collector.finish();
+        }
+
+        match items.by_ref().try_for_each(|_| {
+            self.collector
+                .break_hint()
+                .map_break(|_| ControlFlow::Break(()))?;
+
+            self.remaining -= 1;
+            if self.remaining == 0 {
+                ControlFlow::Break(ControlFlow::Continue(()))
+            } else {
+                ControlFlow::Continue(())
+            }
+        }) {
+            ControlFlow::Continue(_) | ControlFlow::Break(ControlFlow::Break(_)) => {
+                self.collector.finish()
+            }
+            ControlFlow::Break(ControlFlow::Continue(_)) => {
+                self.collector.collect_then_finish(items)
+            }
+        }
     }
 }
 
