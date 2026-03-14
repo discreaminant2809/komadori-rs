@@ -8,14 +8,16 @@ use std::{fmt::Debug, ops::ControlFlow};
 /// If no items have been collected, its [`Output`](CollectorBase::Output) is `None`;
 /// otherwise, it returns `Some` containing the result of the reduction.
 ///
-/// This collector corresponds to [`Iterator::reduce()`].
+/// This collector corresponds to [`Iterator::reduce()`], except the closure is
+/// the "left" value mutated by the "right" value instead of the two values
+/// producing another value.
 ///
 /// # Examples
 ///
 /// ```
 /// use komadori::{prelude::*, iter::Reduce};
 ///
-/// let mut collector = Reduce::new(|accum, num| accum + num);
+/// let mut collector = Reduce::new(|accum, num| *accum += num);
 ///
 /// assert!(collector.collect(1).is_continue());
 /// assert!(collector.collect(3).is_continue());
@@ -29,7 +31,7 @@ use std::{fmt::Debug, ops::ControlFlow};
 /// ```
 /// use komadori::{prelude::*, iter::Reduce};
 ///
-/// assert_eq!(Reduce::new(|accum: i32, num| accum + num).finish(), None);
+/// assert_eq!(Reduce::new(|accum, num: i32| *accum += num).finish(), None);
 /// ```
 #[derive(Clone)]
 pub struct Reduce<T, F> {
@@ -39,7 +41,7 @@ pub struct Reduce<T, F> {
 
 impl<T, F> Reduce<T, F>
 where
-    F: FnMut(T, T) -> T,
+    F: FnMut(&mut T, T),
 {
     /// Crates a new instance of this collector with a given accumulator.
     #[inline]
@@ -59,31 +61,50 @@ impl<T, F> CollectorBase for Reduce<T, F> {
 
 impl<T, F> Collector<T> for Reduce<T, F>
 where
-    F: FnMut(T, T) -> T,
+    F: FnMut(&mut T, T),
 {
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        if let Some(accum) = self.accum.take() {
-            self.accum = Some((self.f)(accum, item));
-        } else {
-            self.accum = Some(item);
+        match &mut self.accum {
+            None => self.accum = Some(item),
+            Some(accum) => {
+                (self.f)(accum, item);
+            }
         };
 
         ControlFlow::Continue(())
     }
 
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.accum = self
-            .accum
-            .take()
-            .into_iter()
-            .chain(items)
-            .reduce(&mut self.f);
+        let mut items = items.into_iter();
+
+        let accum = match &mut self.accum {
+            None => {
+                let Some(accum) = items.next() else {
+                    return ControlFlow::Continue(());
+                };
+                self.accum.insert(accum)
+            }
+            Some(accum) => accum,
+        };
+
+        items.for_each({
+            let f = &mut self.f;
+            move |item| f(accum, item)
+        });
 
         ControlFlow::Continue(())
     }
 
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        self.accum.into_iter().chain(items).reduce(self.f)
+    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
+        let mut items = items.into_iter();
+
+        let mut accum = self.accum.or_else(|| items.next())?;
+        items.for_each({
+            let accum = &mut accum;
+            move |item| (self.f)(accum, item)
+        });
+
+        Some(accum)
     }
 }
 
@@ -117,7 +138,7 @@ mod proptests {
     fn all_collect_methods_impl(nums: Vec<i32>) -> TestCaseResult {
         BasicCollectorTester {
             iter_factory: || nums.iter().copied(),
-            collector_factory: || Reduce::new(|a, b| a ^ b),
+            collector_factory: || Reduce::new(|a, b| *a ^= b),
             should_break_pred: |_| false,
             pred: |iter, output, remaining| {
                 if iter.reduce(|a, b| a ^ b) != output {

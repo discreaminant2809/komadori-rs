@@ -38,7 +38,7 @@ name = "sum_max"
 harness = false
 
 [[bench]]
-name = "large_state"
+name = "fold_large_state"
 harness = false
 
 [[bench]]
@@ -55,6 +55,10 @@ harness = false
 
 [[bench]]
 name = "filter_sum_max"
+harness = false
+
+[[bench]]
+name = "reduce"
 harness = false
 
 [[bench]]

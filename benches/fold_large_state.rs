@@ -4,7 +4,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use komadori::{iter::Fold, prelude::*};
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 
-fn large_state(criterion: &mut Criterion) {
+fn fold_large_state(criterion: &mut Criterion) {
     let seed = 0;
     let mut rng = StdRng::seed_from_u64(seed);
 
@@ -15,7 +15,7 @@ fn large_state(criterion: &mut Criterion) {
     println!("Seed: {seed}");
     println!("First 10 elements: {:?}", &nums[..10]);
 
-    let mut group = criterion.benchmark_group("large_state");
+    let mut group = criterion.benchmark_group("fold_large_state");
 
     macro_rules! bench_fn {
         ($fn_name:ident) => {
@@ -40,7 +40,7 @@ criterion_group! {
         .warm_up_time(Duration::from_secs(5))
         .measurement_time(Duration::from_secs(30))
         .sample_size(300);
-    targets = large_state
+    targets = fold_large_state
 }
 criterion_main!(benches);
 

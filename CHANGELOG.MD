@@ -9,6 +9,8 @@
 ### Changed
 
 - API surface of `crate::iter::TryFold`.
+- API surface of `crate::iter::Reduce`.
+- `CollectorBase::funnel()` is demoted to the `unstable` feature.
 
 ### Fixed
 

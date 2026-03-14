@@ -4,10 +4,10 @@ use std::ops::ControlFlow;
 use itertools::Either;
 
 #[cfg(feature = "unstable")]
-use super::{AltBreakHint, Nest, NestExact, TeeWith};
+use super::{AltBreakHint, Funnel, Nest, NestExact, TeeWith};
 use super::{
-    Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Funnel,
-    Fuse, Inspect, IntoCollector, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip,
+    Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
+    Inspect, IntoCollector, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip,
     SkipWhile, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, Unbatching, Unzip,
     assert_collector, assert_collector_base,
 };
