@@ -28,12 +28,10 @@ where
         self.collector.finish()
     }
 
-    // Can't meaningfully override `break_hint()`,
-    // since the caller may do some other works than accumulating
-    // to the underlying collector.
-    // Even if the underlying collector has stopped since creation,
-    // the closure may actually return `Continue(())`,
-    // rendering the signal incorrect.
+    #[inline]
+    fn break_hint(&self) -> ControlFlow<()> {
+        self.collector.break_hint()
+    }
 }
 
 impl<C, T, F> Collector<T> for Unbatching<C, F>
@@ -53,6 +51,7 @@ impl<C: Debug, F> Debug for Unbatching<C, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Unbatching")
             .field("collector", &self.collector)
+            .field("f", &std::any::type_name::<F>())
             .finish()
     }
 }

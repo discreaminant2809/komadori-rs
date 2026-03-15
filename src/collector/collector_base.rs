@@ -881,6 +881,15 @@ pub trait CollectorBase {
     /// This adaptor is useful for behaviors that cannot be expressed
     /// through existing adaptors without cloning or intermediate allocations.
     ///
+    /// # Notes
+    ///
+    /// The closure should compose the stop signal of the underlying collector,
+    /// even if the underlying collector does not collect anything at all,
+    /// to signal a stop as soon as possible.
+    /// (In fact, [`break_hint()`](CollectorBase::break_hint)) implementation
+    /// of this collector returns whatever the underlying collector returns,
+    /// skipping the closure)
+    ///
     /// # Examples
     ///
     /// ```
