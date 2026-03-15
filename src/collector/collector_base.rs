@@ -156,6 +156,16 @@ pub trait CollectorBase {
     /// and [`break_hint()`](CollectorBase::break_hint) are
     /// guaranteed to return [`Break(())`].
     ///
+    /// # Notes
+    ///
+    /// Since this collector effectively caches the stop signal,
+    /// [`break_hint()`](Self::break_hint) may be lag behind
+    /// the underlying collector when called.
+    /// This might be an issue if the signal is obtained by side effects
+    /// (e.g. from an [`AtomicBool`](std::sync::atomic::AtomicBool) flag).
+    /// Even that, it only results in more item consumption, and other methods
+    /// still do update the cached signal correctly.
+    ///
     /// # Examples
     ///
     /// Without `fuse()`:
@@ -886,24 +896,32 @@ pub trait CollectorBase {
     /// The closure should compose the stop signal of the underlying collector,
     /// even if the underlying collector does not collect anything at all,
     /// to signal a stop as soon as possible.
-    /// (In fact, [`break_hint()`](CollectorBase::break_hint)) implementation
+    /// (In fact, [`break_hint()`](CollectorBase::break_hint) implementation
     /// of this collector returns whatever the underlying collector returns,
     /// skipping the closure)
     ///
     /// # Examples
     ///
     /// ```
-    /// use komadori::prelude::*;
+    /// use komadori::{prelude::*, cmp::Max};
+    /// use std::ops::ControlFlow;
     ///
-    /// let mut collector = Vec::<i32>::new()
-    ///     .into_collector()
-    ///     .unbatching(|v, arr: &[_]| v.collect_many(arr));
+    /// let mut curr_sum = 0;
+    /// let mut max_subarray_sum = Max::new()
+    ///     .unbatching(move |max_sum, num| {
+    ///         curr_sum += num;
+    ///         max_sum.collect(curr_sum)?;
+    ///         curr_sum = curr_sum.max(0);
+    ///         ControlFlow::Continue(())
+    ///     });
     ///
-    /// assert!(collector.collect(&[1, 2, 3]).is_continue());
-    /// assert!(collector.collect(&[4, 5]).is_continue());
-    /// assert!(collector.collect(&[6, 7, 8, 9]).is_continue());
+    /// assert!(
+    ///     max_subarray_sum
+    ///         .collect_many([2, -3, 4, -1, 2, 1, -5, 4])
+    ///         .is_continue()
+    /// );
     ///
-    /// assert_eq!(collector.finish(), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    /// assert_eq!(max_subarray_sum.finish(), Some(6));
     /// ```
     fn unbatching<F, T>(self, f: F) -> Unbatching<Self, F>
     where
