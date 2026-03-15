@@ -1,5 +1,6 @@
-# Feature powerset in `cargo hack` is opt-in.
-# Only enable when needed
+[config]
+default_to_workspace = false
+
 [tasks.test]
 command = "cargo"
 args = ["hack", "t", "--lib", "--feature-powerset"]
@@ -12,10 +13,6 @@ args = ["t", "--doc", "--all-features"]
 env = { RUSTDOCFLAGS="--cfg docsrs" }
 command = "cargo"
 args = ["watch", "-w", "src", "-x", "+nightly doc --all-features --no-deps"]
-
-[tasks.readme]
-command = "cargo"
-args = ["readme", "--output", "README.md"]
 
 [tasks.doc]
 env = { RUSTDOCFLAGS = "--cfg docsrs" }
@@ -34,7 +31,3 @@ args = ["hack", "tree", "-e", "normal,features", "-f", "\"{p} {f}\"", "--feature
 [tasks.semver]
 command = "cargo"
 args = ["semver-checks", "check-release"]
-
-[tasks.no_std]
-command = "cargo"
-args = []

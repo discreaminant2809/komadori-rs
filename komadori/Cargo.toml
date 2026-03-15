@@ -4,8 +4,8 @@ version = "0.6.0"
 edition = "2024"
 authors = ["Ayabin"]
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/discreaminant2809/komadori-rs"
 description = "Provides a composable, declarative way to consume an iterator"
-repository = "https://github.com/discreaminant2809/komadori-rs.git"
 readme = "README.md"
 categories = ["rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
 keywords = ["collector", "fold", "unzip", "composition", "iterator"]
@@ -28,10 +28,6 @@ itertools = ["dep:itertools"]
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
-
-[profile.bench]
-lto = "thin"
-codegen-units = 1
 
 [[bench]]
 name = "sum_max"

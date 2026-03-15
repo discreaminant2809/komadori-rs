@@ -1,0 +1,3 @@
+[tasks.readme]
+command = "cargo"
+args = ["readme", "--output", "README.md"]

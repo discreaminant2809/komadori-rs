@@ -1,4 +1,4 @@
-name: CI
+name: Main CI
 
 on:
   push:
@@ -76,24 +76,3 @@ jobs:
             --feature-powerset \
             --exclude-features std,default \
             --target thumbv7em-none-eabihf
-
-  # cargo-semver-checks seems to be very sensitive to Rust version change,
-  # we pin a specific version here until it works for the next version.
-  sem-ver-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          # The latest one that still works.
-          toolchain: 1.93.1
-
-      - name: Install cargo-semver-checks
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-semver-checks
-
-      - name: Check SemVer Violation
-        run: cargo semver-checks check-release

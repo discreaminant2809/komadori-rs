@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "komadori",
+    "komadori-rayon",
+]
+resolver = "2"
+
+[workspace.package]
+authors = ["Ayabin"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/discreaminant2809/komadori-rs"
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1
