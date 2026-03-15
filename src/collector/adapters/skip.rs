@@ -167,10 +167,23 @@ mod proptests {
             // 0 1 2 E 4 5 6 E 8 9
             nums1 in propvec(any::<i32>(), ..=3),
             nums2 in propvec(any::<i32>(), ..=4),
-            take_count in ..=9_usize,
-            skip_count in ..=9_usize,
+            (take_count, skip_count, starting_nums) in (..=9_usize, ..=9_usize)
+                .prop_flat_map(|(take_count, skip_count)| (
+                    Just(take_count), Just(skip_count),
+                    if take_count == 0 {
+                        Just(None).boxed()
+                    } else {
+                        let total = skip_count + take_count;
+
+                        // Less than the total, or else we can accidentally
+                        // make the collector stops.
+                        propvec(any::<i32>(), ..=(total - 1).min(2))
+                            .prop_map(Some)
+                            .boxed()
+                    }
+                )),
         ) {
-            all_collect_methods_impl(nums1, nums2, take_count,skip_count)?;
+            all_collect_methods_impl(nums1, nums2, take_count,skip_count, starting_nums)?;
         }
     }
 
@@ -179,6 +192,7 @@ mod proptests {
         nums2: Vec<i32>,
         take_count: usize,
         skip_count: usize,
+        starting_nums: Option<Vec<i32>>,
     ) -> TestCaseResult {
         BasicCollectorTester {
             iter_factory: || {
@@ -187,17 +201,32 @@ mod proptests {
                     .copied()
                     .chain(nums2.iter().copied().filter(|&num| num > 0))
             },
-            collector_factory: || vec![].into_collector().take(take_count).skip(skip_count),
+            collector_factory: || {
+                let mut collector = vec![].into_collector().take(take_count).skip(skip_count);
+                if let Some(starting_nums) = &starting_nums {
+                    assert!(
+                        collector
+                            .collect_many(starting_nums.iter().copied())
+                            .is_continue()
+                    );
+                }
+                collector
+            },
             should_break_pred: |iter| {
                 Dropping
                     .take(take_count)
-                    .collect_many(iter.skip(skip_count))
+                    .collect_many(
+                        (starting_nums.iter().flatten().copied().chain(iter)).skip(skip_count),
+                    )
                     .is_break()
             },
             pred: |mut iter, output, remaining| {
                 if output
-                    != iter
-                        .by_ref()
+                    != starting_nums
+                        .iter()
+                        .flatten()
+                        .copied()
+                        .chain(&mut iter)
                         .skip(skip_count)
                         .take(take_count)
                         .collect::<Vec<_>>()

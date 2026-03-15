@@ -135,6 +135,7 @@ where
 #[cfg(all(test, feature = "std"))]
 mod proptests {
     use proptest::collection::vec as propvec;
+    use proptest::option::of as prop_opt;
     use proptest::prelude::*;
     use proptest::test_runner::TestCaseResult;
 
@@ -150,31 +151,56 @@ mod proptests {
         #[test]
         fn all_collect_methods(
             nums in propvec(any::<i32>(), ..=3),
-            take_count in ..=5_usize,
+            (take_count, starting_num) in (..=5_usize)
+                .prop_flat_map(|take_count| (
+                    Just(take_count),
+                    if take_count > 1 {
+                        prop_opt(Just(0)).boxed()
+                    } else {
+                        Just(None).boxed()
+                    }
+                )),
         ) {
-            all_collect_methods_impl(nums, take_count)?;
+            all_collect_methods_impl(nums, take_count, starting_num)?;
         }
     }
 
-    fn all_collect_methods_impl(nums: Vec<i32>, take_count: usize) -> TestCaseResult {
+    fn all_collect_methods_impl(
+        nums: Vec<i32>,
+        take_count: usize,
+        starting_num: Option<i32>,
+    ) -> TestCaseResult {
         BasicCollectorTester {
             iter_factory: || nums.iter().copied(),
             collector_factory: || {
-                vec![]
+                let mut collector = vec![]
                     .into_collector()
                     .take(take_count)
-                    .skip_while(skip_while_pred)
+                    .skip_while(skip_while_pred);
+
+                if let Some(starting_num) = starting_num {
+                    assert!(collector.collect(starting_num).is_continue());
+                    assert!(collector.pred.is_none());
+                }
+
+                collector
             },
             should_break_pred: |iter| {
                 Dropping
                     .take(take_count)
-                    .collect_many(iter.skip_while(skip_while_pred))
+                    .collect_many(
+                        starting_num
+                            .into_iter()
+                            .chain(iter)
+                            .skip_while(skip_while_pred),
+                    )
                     .is_break()
             },
             pred: |mut iter, output, remaining| {
                 if output
-                    != iter
-                        .by_ref()
+                    != starting_num
+                        .into_iter()
+                        .chain(&mut iter)
                         .skip_while(skip_while_pred)
                         .take(take_count)
                         .collect::<Vec<_>>()

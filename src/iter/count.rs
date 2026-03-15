@@ -94,18 +94,23 @@ mod proptests {
         #[test]
         fn all_collect_methods(
             count in ..=9_usize,
+            starting_count in ..=9_usize,
         ) {
-            all_collect_methods_impl(count)?;
+            all_collect_methods_impl(count, starting_count)?;
         }
     }
 
-    fn all_collect_methods_impl(count: usize) -> TestCaseResult {
+    fn all_collect_methods_impl(count: usize, starting_count: usize) -> TestCaseResult {
         BasicCollectorTester {
             iter_factory: || std::iter::repeat_n((), count),
-            collector_factory: Count::new,
+            collector_factory: || {
+                let mut collector = Count::new();
+                collector.count = starting_count;
+                collector
+            },
             should_break_pred: |_| false,
             pred: |iter, output, remaining| {
-                if iter.count() != output {
+                if starting_count + iter.count() != output {
                     Err(PredError::IncorrectOutput)
                 } else if remaining.next().is_some() {
                     Err(PredError::IncorrectIterConsumption)

@@ -119,6 +119,7 @@ impl<T: Debug, F> Debug for Reduce<T, F> {
 #[cfg(all(test, feature = "std"))]
 mod proptests {
     use proptest::collection::vec as propvec;
+    use proptest::option::of as prop_opt;
     use proptest::prelude::*;
     use proptest::test_runner::TestCaseResult;
 
@@ -130,18 +131,23 @@ mod proptests {
         #[test]
         fn all_collect_methods(
             nums in propvec(any::<i32>(), ..=9),
+            starting_num in prop_opt(any::<i32>()),
         ) {
-            all_collect_methods_impl(nums)?;
+            all_collect_methods_impl(nums, starting_num)?;
         }
     }
 
-    fn all_collect_methods_impl(nums: Vec<i32>) -> TestCaseResult {
+    fn all_collect_methods_impl(nums: Vec<i32>, starting_num: Option<i32>) -> TestCaseResult {
         BasicCollectorTester {
             iter_factory: || nums.iter().copied(),
-            collector_factory: || Reduce::new(|a, b| *a ^= b),
+            collector_factory: || {
+                let mut collector = Reduce::new(|a, b| *a ^= b);
+                assert!(collector.collect_many(starting_num).is_continue());
+                collector
+            },
             should_break_pred: |_| false,
             pred: |iter, output, remaining| {
-                if iter.reduce(|a, b| a ^ b) != output {
+                if starting_num.into_iter().chain(iter).reduce(|a, b| a ^ b) != output {
                     Err(PredError::IncorrectOutput)
                 } else if remaining.ne([]) {
                     Err(PredError::IncorrectIterConsumption)
