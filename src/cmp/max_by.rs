@@ -112,7 +112,10 @@ where
 
 impl<T: Debug, F> Debug for MaxBy<T, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MaxBy").field("max", &self.max).finish()
+        f.debug_struct("MaxBy")
+            .field("max", &self.max)
+            .field("f", &std::any::type_name::<F>())
+            .finish()
     }
 }
 

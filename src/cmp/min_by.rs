@@ -112,7 +112,10 @@ where
 
 impl<T: Debug, F> Debug for MinBy<T, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MinBy").field("min", &self.min).finish()
+        f.debug_struct("MinBy")
+            .field("min", &self.min)
+            .field("f", &std::any::type_name::<F>())
+            .finish()
     }
 }
 

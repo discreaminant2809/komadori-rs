@@ -202,10 +202,7 @@ where
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self.state {
-                    ControlFlow::Continue { .. } => f
-                        .debug_tuple("Continue")
-                        .field(&std::any::type_name::<F>())
-                        .finish(),
+                    ControlFlow::Continue { .. } => f.debug_struct("Continue").finish(),
                     ControlFlow::Break(residual) => f.debug_tuple("Break").field(residual).finish(),
                 }
             }
@@ -213,6 +210,7 @@ where
 
         f.debug_struct("TryForEach")
             .field("state", &DebugState { state: &self.state })
+            .field("f", &std::any::type_name::<F>())
             .finish()
     }
 }

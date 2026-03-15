@@ -112,6 +112,7 @@ impl<T: Debug, F> Debug for Reduce<T, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Reduce")
             .field("accum", &self.accum)
+            .field("f", &std::any::type_name::<F>())
             .finish()
     }
 }

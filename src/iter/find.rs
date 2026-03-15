@@ -136,7 +136,10 @@ impl<T: Debug, F> Debug for Find<T, F> {
             None
         };
 
-        f.debug_struct("Find").field("found", &item).finish()
+        f.debug_struct("Find")
+            .field("found", &item)
+            .field("f", &std::any::type_name::<F>())
+            .finish()
     }
 }
 

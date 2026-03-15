@@ -169,6 +169,7 @@ impl<CT: Debug, CF: Debug, F> Debug for Partition<CT, CF, F> {
         f.debug_struct("Partition")
             .field("collector_if_true", &self.collector_if_true)
             .field("collector_if_false", &self.collector_if_false)
+            .field("pred", &std::any::type_name::<F>())
             .finish()
     }
 }

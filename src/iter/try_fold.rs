@@ -215,6 +215,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TryFold")
             .field("state", &self.state)
+            .field("f", &std::any::type_name::<F>())
             .finish()
     }
 }
@@ -225,11 +226,9 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Continue { accum, .. } => f
-                .debug_struct("Continue")
-                .field("accum", accum)
-                .field("f", &std::any::type_name::<F>())
-                .finish(),
+            Self::Continue { accum, .. } => {
+                f.debug_struct("Continue").field("accum", accum).finish()
+            }
             Self::Break(residual) => f.debug_tuple("Break").field(residual).finish(),
         }
     }

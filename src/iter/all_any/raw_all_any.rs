@@ -56,6 +56,7 @@ impl<F, const ALL: bool> RawAllAny<F, ALL> {
             // So, we trick outside that we have a
             // "phantom" state tracking the accumulation result.
             .field(if ALL { "all" } else { "any" }, &self.get())
+            .field("f", &std::any::type_name::<F>())
             .finish()
     }
 

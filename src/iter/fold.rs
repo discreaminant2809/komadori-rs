@@ -76,7 +76,10 @@ where
 
 impl<A: Debug, F> Debug for Fold<A, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Fold").field("accum", &self.accum).finish()
+        f.debug_struct("Fold")
+            .field("accum", &self.accum)
+            .field("f", &std::any::type_name::<F>())
+            .finish()
     }
 }
 

@@ -59,6 +59,7 @@ impl<C: Debug, F> Debug for Map<C, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Map")
             .field("collector", &self.collector)
+            .field("f", &std::any::type_name::<F>())
             .finish()
     }
 }

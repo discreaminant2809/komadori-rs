@@ -137,6 +137,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FindMap")
             .field("state", &self.state)
+            .field("f", &std::any::type_name::<P>())
             .finish()
     }
 }
@@ -147,10 +148,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Searching(_) => f
-                .debug_tuple("Searching")
-                .field(&std::any::type_name::<P>())
-                .finish(),
+            Self::Searching(_) => f.debug_struct("Searching").finish(),
             Self::Found(res) => f.debug_tuple("Found").field(res).finish(),
         }
     }

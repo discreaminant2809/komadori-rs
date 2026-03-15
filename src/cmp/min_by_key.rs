@@ -105,6 +105,7 @@ impl<T: Debug, K: Debug, F> Debug for MinByKey<T, K, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MinByKey")
             .field("min_value_key", &self.value_key_collector.min)
+            .field("f", &std::any::type_name::<F>())
             .finish()
     }
 }

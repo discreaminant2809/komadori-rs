@@ -74,6 +74,7 @@ impl<C: Debug, F> Debug for TakeWhile<C, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TakeWhile")
             .field("collector", &self.collector)
+            .field("pred", &std::any::type_name::<F>())
             .finish()
     }
 }
