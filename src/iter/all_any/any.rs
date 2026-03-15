@@ -72,7 +72,7 @@ impl<F> CollectorBase for Any<F> {
 
     #[inline]
     fn finish(self) -> Self::Output {
-        self.get()
+        self.inner.get()
     }
 
     #[inline]

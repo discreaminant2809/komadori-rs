@@ -20,6 +20,9 @@
 ### Removed
 
 - Many deprecated items.
+- `crate::iter::Any::get()`.
+- `crate::iter::All::get()`.
+- `crate::iter::Count::get()`.
 
 ## 0.5.2
 

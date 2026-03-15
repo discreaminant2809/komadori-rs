@@ -39,12 +39,6 @@ impl Count {
         assert_collector_base(Count { count: 0 })
     }
 
-    /// Returns the current count.
-    #[inline]
-    pub const fn get(&self) -> usize {
-        self.count
-    }
-
     #[inline]
     fn increment(&mut self) {
         // We don't care about overflow.

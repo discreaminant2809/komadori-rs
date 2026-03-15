@@ -59,12 +59,6 @@ impl<F> All<F> {
             inner: RawAllAny::new(pred),
         })
     }
-
-    /// Returns the current result of the accumulation.
-    #[inline]
-    pub const fn get(&self) -> bool {
-        self.inner.get()
-    }
 }
 
 impl<F> CollectorBase for All<F> {
@@ -72,7 +66,7 @@ impl<F> CollectorBase for All<F> {
 
     #[inline]
     fn finish(self) -> Self::Output {
-        self.get()
+        self.inner.get()
     }
 
     #[inline]
