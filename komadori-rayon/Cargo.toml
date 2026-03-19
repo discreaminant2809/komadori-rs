@@ -9,3 +9,32 @@ repository = "https://github.com/discreaminant2809/komadori-rs"
 readme = "README.md"
 # categories = ["rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
 # keywords = ["collector", "fold", "unzip", "composition", "iterator"]
+
+[dependencies]
+komadori = { version = "0.6.0" }
+rayon = { version = "1.11.0", default-features = false, optional = true }
+
+[dev-dependencies]
+criterion = "0.8.2"
+rand = "0.10.0"
+
+[features]
+default = ["rayon"]
+rayon = ["dep:rayon"]
+unstable = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[[bench]]
+name = "btree_set"
+harness = false
+
+[[bench]]
+name = "vec"
+harness = false
+
+[[bench]]
+name = "two_vecs"
+harness = false
