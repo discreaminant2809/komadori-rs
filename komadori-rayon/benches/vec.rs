@@ -56,7 +56,8 @@ fn vec_rayon_indexed(nums: &[i32]) -> Vec<i32> {
 }
 
 fn vec_komadori_indexed(nums: &[i32]) -> Vec<i32> {
-    nums.par_iter().copied().feed_into(vec![])
+    // nums.par_iter().copied().feed_into(vec![])
+    todo!()
 }
 
 fn vec_rayon_unindexed(nums: &[i32]) -> Vec<i32> {
@@ -64,7 +65,8 @@ fn vec_rayon_unindexed(nums: &[i32]) -> Vec<i32> {
 }
 
 fn vec_komadori_unindexed(nums: &[i32]) -> Vec<i32> {
-    ForceUnindexed(nums.par_iter().copied()).feed_into(vec![])
+    // ForceUnindexed(nums.par_iter().copied()).feed_into(vec![])
+    todo!()
 }
 
 struct ForceUnindexed<I>(I);

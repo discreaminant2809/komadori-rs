@@ -1,8 +1,10 @@
-use std::ops::ControlFlow;
+use std::{marker::PhantomData, ops::ControlFlow};
+
+use komadori::prelude::*;
 
 use crate::collector::{
-    IndexedParallelCollector, IntoParallelCollectorBase, ParallelCollector, ParallelCollectorBase,
-    plumbing,
+    ParallelCollectorBase, UnindexedParallelCollectorBase,
+    plumbing::{DefineConsumer, DefineUnindexedConsumer},
 };
 
 ///
@@ -24,6 +26,13 @@ where
     }
 }
 
+impl<'this, C> DefineConsumer<'this> for Fuse<C>
+where
+    C: DefineConsumer<'this>,
+{
+    type Consumer = __adapter_fuse_internal::Consumer<<C as DefineConsumer<'this>>::Consumer>;
+}
+
 impl<C> ParallelCollectorBase for Fuse<C>
 where
     C: ParallelCollectorBase,
@@ -39,70 +48,255 @@ where
     fn break_hint(&self) -> ControlFlow<()> {
         self.break_hint
     }
+
+    fn parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        usize,
+        <Self as DefineConsumer<'a>>::Consumer,
+        impl FnOnce(
+            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
+        let (actual_len, consumer, committer) = self.collector.parts(len);
+        (
+            actual_len,
+            __adapter_fuse_internal::Consumer {
+                consumer,
+                break_hint: self.break_hint.into(),
+            },
+            committer,
+        )
+    }
+
+    fn with_consumer<R>(
+        self,
+        len: usize,
+        f: impl for<'a> FnOnce(
+            usize,
+            <Self as DefineConsumer<'a>>::Consumer,
+            PhantomData<&'a ()>,
+        ) -> (
+            R,
+            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
+        ),
+    ) -> (R, Self::Output) {
+        self.collector
+            .with_consumer(len, move |actual_len, consumer, _| {
+                f(
+                    actual_len,
+                    __adapter_fuse_internal::Consumer {
+                        consumer,
+                        break_hint: self.break_hint.into(),
+                    },
+                    PhantomData,
+                )
+            })
+    }
 }
 
-impl<C, T> IndexedParallelCollector<T> for Fuse<C>
+impl<'this, C> DefineUnindexedConsumer<'this> for Fuse<C>
 where
-    C: IndexedParallelCollector<T>,
+    C: DefineUnindexedConsumer<'this>,
 {
-    fn with_consumer<F>(&mut self, len: usize, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::ConsumerFnOnce<T>,
-    {
-        if self.break_hint.is_break() {
-            return ().into_par_collector().with_consumer(0, f);
-        }
+    type UnindexedConsumer =
+        __adapter_fuse_internal::Consumer<<C as DefineUnindexedConsumer<'this>>::UnindexedConsumer>;
+}
 
-        let (ret, cf) = self.collector.with_consumer(len, f);
-        self.break_hint = cf;
-        (ret, self.break_hint)
+impl<C> UnindexedParallelCollectorBase for Fuse<C>
+where
+    C: UnindexedParallelCollectorBase,
+{
+    fn parts_unindexed<'a>(
+            &'a mut self,
+        ) -> (
+            <Self as crate::collector::plumbing::DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+            impl FnOnce(
+                <<Self as crate::collector::plumbing::DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            ) -> ControlFlow<()>,
+    ){
+        let (consumer, committer) = self.collector.parts_unindexed();
+        (
+            __adapter_fuse_internal::Consumer {
+                consumer,
+                break_hint: self.break_hint.into(),
+            },
+            committer,
+        )
     }
 
-    fn with_consumer_then_finish<F>(self, len: usize, f: F) -> (F::Output, Self::Output)
-    where
-        F: plumbing::ConsumerFnOnce<T>,
-    {
-        if self.break_hint.is_break() {
-            (
-                ().into_par_collector().with_consumer_then_finish(0, f).0,
-                self.collector.finish(),
+    fn with_unindexed_consumer<R>(
+        self,
+        f: impl for<'a> FnOnce(
+            <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+            PhantomData<&'a ()>,
+        ) -> (
+            R,
+            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+        ),
+    ) -> (R, Self::Output) {
+        self.collector.with_unindexed_consumer(move |consumer, _| {
+            f(
+                __adapter_fuse_internal::Consumer {
+                    consumer,
+                    break_hint: self.break_hint.into(),
+                },
+                PhantomData,
             )
-        } else {
-            self.collector.with_consumer_then_finish(len, f)
-        }
+        })
     }
 }
 
-impl<C, T> ParallelCollector<T> for Fuse<C>
-where
-    C: ParallelCollector<T>,
-{
-    fn with_unindexed_consumer<F>(&mut self, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::UnindexedConsumerFnOnce<T>,
-    {
-        if self.break_hint.is_break() {
-            return ().into_par_collector().with_unindexed_consumer(f);
-        }
+#[doc(hidden)]
+pub mod __adapter_fuse_internal {
+    use std::{cell::Cell, ops::ControlFlow};
 
-        let (ret, cf) = self.collector.with_unindexed_consumer(f);
-        self.break_hint = cf;
-        (ret, self.break_hint)
+    use komadori::prelude::*;
+
+    use crate::collector::plumbing;
+
+    #[allow(missing_debug_implementations)]
+    pub struct Consumer<C> {
+        pub(super) consumer: C,
+        pub(super) break_hint: Cell<ControlFlow<()>>,
     }
 
-    fn with_unindexed_consumer_then_finish<F>(self, f: F) -> (F::Output, Self::Output)
+    // We have to roll out our own Fuse because we
+    // cannot set the cached hint inside komadori's Fuse.
+    #[allow(missing_debug_implementations)]
+    pub struct IntoCollector<C> {
+        collector: C,
+        break_hint: ControlFlow<()>,
+    }
+
+    impl<C> IntoCollectorBase for Consumer<C>
     where
-        F: plumbing::UnindexedConsumerFnOnce<T>,
+        C: IntoCollectorBase,
     {
-        if self.break_hint.is_break() {
+        type Output = C::Output;
+
+        type IntoCollector = IntoCollector<C::IntoCollector>;
+
+        #[inline]
+        fn into_collector(self) -> Self::IntoCollector {
+            IntoCollector {
+                collector: self.consumer.into_collector(),
+                break_hint: self.break_hint.get(),
+            }
+        }
+    }
+
+    impl<C> plumbing::ConsumerBase for Consumer<C>
+    where
+        C: plumbing::ConsumerBase,
+    {
+        type Combiner = C::Combiner;
+
+        #[inline]
+        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
+            let (consumer, combiner) = self.consumer.split_off_left_at(index);
+
+            let break_hint = (|| {
+                self.break_hint.get()?;
+                // Don't forget to re-assess the break hint of self!
+                self.break_hint.set(self.consumer.break_hint());
+                consumer.break_hint()
+            })();
+
             (
-                ().into_par_collector()
-                    .with_unindexed_consumer_then_finish(f)
-                    .0,
-                self.collector.finish(),
+                Self {
+                    break_hint: break_hint.into(),
+                    consumer,
+                },
+                combiner,
             )
-        } else {
-            self.collector.with_unindexed_consumer_then_finish(f)
+        }
+
+        #[inline]
+        fn break_hint(&self) -> ControlFlow<()> {
+            if self.break_hint.get().is_continue() {
+                self.break_hint.set(self.consumer.break_hint());
+            }
+
+            self.break_hint.get()
+        }
+    }
+
+    impl<C> plumbing::UnindexedConsumerBase for Consumer<C>
+    where
+        C: plumbing::UnindexedConsumerBase,
+    {
+        #[inline]
+        fn split_off_left(&self) -> Self {
+            let consumer = self.consumer.split_off_left();
+
+            let break_hint = (|| {
+                self.break_hint.get()?;
+                // Don't forget to re-assess the break hint of self!
+                self.break_hint.set(self.consumer.break_hint());
+                consumer.break_hint()
+            })();
+
+            Self {
+                break_hint: break_hint.into(),
+                consumer,
+            }
+        }
+
+        #[inline]
+        fn to_combiner(&self) -> Self::Combiner {
+            self.consumer.to_combiner()
+        }
+    }
+
+    impl<C> IntoCollector<C> {
+        #[inline]
+        fn collect_impl(&mut self, f: impl FnOnce(&mut C) -> ControlFlow<()>) -> ControlFlow<()> {
+            self.break_hint?;
+            self.break_hint = f(&mut self.collector);
+            self.break_hint
+        }
+    }
+
+    impl<C> CollectorBase for IntoCollector<C>
+    where
+        C: CollectorBase,
+    {
+        type Output = C::Output;
+
+        #[inline]
+        fn finish(self) -> Self::Output {
+            self.collector.finish()
+        }
+
+        #[inline]
+        fn break_hint(&self) -> ControlFlow<()> {
+            self.break_hint
+        }
+    }
+
+    impl<C, T> Collector<T> for IntoCollector<C>
+    where
+        C: Collector<T>,
+    {
+        #[inline]
+        fn collect(&mut self, item: T) -> ControlFlow<()> {
+            self.collect_impl(|collector| collector.collect(item))
+        }
+
+        #[inline]
+        fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+            self.collect_impl(|collector| collector.collect_many(items))
+        }
+
+        #[inline]
+        fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
+            if self.break_hint.is_break() {
+                self.finish()
+            } else {
+                self.collector.collect_then_finish(items)
+            }
         }
     }
 }

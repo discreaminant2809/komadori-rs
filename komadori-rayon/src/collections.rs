@@ -1,6 +1,5 @@
 //!
 
-mod btree_set;
-pub(crate) mod reservable;
-
-pub use btree_set::*;
+pub mod btree_set;
+#[doc(hidden)]
+pub mod linked_vec;

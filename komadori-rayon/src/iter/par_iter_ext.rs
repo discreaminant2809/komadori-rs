@@ -7,9 +7,9 @@ use rayon::{
 };
 
 use crate::collector::{
-    IndexedParallelCollector, IntoIndexedParallelCollector, IntoParallelCollector,
-    ParallelCollector,
-    plumbing::{Combiner, Consumer, ConsumerFnOnce, UnindexedConsumer, UnindexedConsumerFnOnce},
+    IntoParallelCollector, IntoUnindexedParallelCollector, ParallelCollectorBase,
+    UnindexedParallelCollectorBase,
+    plumbing::{Combiner, Consumer, UnindexedConsumer},
 };
 
 ///
@@ -17,19 +17,23 @@ pub trait ParallelIteratorExt: ParallelIterator {
     ///
     fn feed_into<C>(self, collector: C) -> C::Output
     where
-        C: IntoParallelCollector<Self::Item>,
+        C: IntoUnindexedParallelCollector<Self::Item>,
     {
         let collector = collector.into_par_collector();
 
         match self.opt_len() {
-            Some(len) => {
-                collector
-                    .with_consumer_then_finish(len, FeedIntoUnindexed { this: self })
-                    .1
-            }
             None => {
                 collector
-                    .with_unindexed_consumer_then_finish(FeedIntoUnindexed { this: self })
+                    .with_unindexed_consumer(|consumer, _| {
+                        ((), unindexed_slow_path(self, consumer))
+                    })
+                    .1
+            }
+            Some(len) => {
+                collector
+                    .with_consumer(len, |_, consumer, _| {
+                        ((), unindexed_fast_path(self, consumer))
+                    })
                     .1
             }
         }
@@ -39,11 +43,13 @@ pub trait ParallelIteratorExt: ParallelIterator {
     fn feed_into_indexed<C>(self, collector: C) -> C::Output
     where
         Self: IndexedParallelIterator,
-        C: IntoIndexedParallelCollector<Self::Item>,
+        C: IntoParallelCollector<Self::Item>,
     {
         collector
             .into_par_collector()
-            .with_consumer_then_finish(self.len(), FeedIntoIndexed { this: self })
+            .with_consumer(self.len(), move |actual_len, consumer, _| {
+                ((), indexed_path(self, consumer, actual_len))
+            })
             .1
     }
 }
@@ -86,99 +92,74 @@ macro_rules! define_consumer_adapter_and_impl_consumer {
     };
 }
 
-struct FeedIntoUnindexed<I> {
-    this: I,
-}
-
-impl<I> UnindexedConsumerFnOnce<I::Item> for FeedIntoUnindexed<I>
+fn unindexed_slow_path<C, I>(items: I, consumer: C) -> C::Output
 where
     I: ParallelIterator,
+    C: UnindexedConsumer<I::Item>,
 {
-    type Output = ();
+    define_consumer_adapter_and_impl_consumer!();
 
-    fn call_once<C>(self, consumer: C) -> (Self::Output, C::Output)
+    impl<C, T> RayonUnindexedConsumer<T> for ConsumerAdapter<C>
     where
-        C: UnindexedConsumer<I::Item>,
+        C: UnindexedConsumer<T>,
     {
-        define_consumer_adapter_and_impl_consumer!();
-
-        impl<C, T> RayonUnindexedConsumer<T> for ConsumerAdapter<C>
-        where
-            C: UnindexedConsumer<T>,
-        {
-            #[inline]
-            fn split_off_left(&self) -> Self {
-                Self {
-                    consumer: self.consumer.split_off_left(),
-                }
-            }
-
-            #[inline]
-            fn to_reducer(&self) -> Self::Reducer {
-                ReducerAdapter {
-                    combiner: self.consumer.to_combiner(),
-                }
+        #[inline]
+        fn split_off_left(&self) -> Self {
+            Self {
+                consumer: self.consumer.split_off_left(),
             }
         }
 
-        ((), self.this.drive_unindexed(ConsumerAdapter { consumer }))
-    }
-}
-
-impl<I> ConsumerFnOnce<I::Item> for FeedIntoUnindexed<I>
-where
-    I: ParallelIterator,
-{
-    type Output = ();
-
-    fn call_once<C>(self, _: Option<usize>, consumer: C) -> (Self::Output, C::Output)
-    where
-        C: Consumer<I::Item>,
-    {
-        define_consumer_adapter_and_impl_consumer!();
-
-        impl<C, T> RayonUnindexedConsumer<T> for ConsumerAdapter<C>
-        where
-            C: Consumer<T>,
-        {
-            fn split_off_left(&self) -> Self {
-                panic!("unindexed path used when opt_len() returned Some(len)")
-            }
-
-            fn to_reducer(&self) -> Self::Reducer {
-                panic!("unindexed path used when opt_len() returned Some(len)")
+        #[inline]
+        fn to_reducer(&self) -> Self::Reducer {
+            ReducerAdapter {
+                combiner: self.consumer.to_combiner(),
             }
         }
-
-        ((), self.this.drive_unindexed(ConsumerAdapter { consumer }))
     }
+
+    items.drive_unindexed(ConsumerAdapter { consumer })
+}
+
+fn unindexed_fast_path<C, I>(items: I, consumer: C) -> C::Output
+where
+    I: ParallelIterator,
+    C: Consumer<I::Item>,
+{
+    define_consumer_adapter_and_impl_consumer!();
+
+    impl<C, T> RayonUnindexedConsumer<T> for ConsumerAdapter<C>
+    where
+        C: Consumer<T>,
+    {
+        fn split_off_left(&self) -> Self {
+            panic!("unindexed path used when opt_len() returned Some(len)")
+        }
+
+        fn to_reducer(&self) -> Self::Reducer {
+            panic!("unindexed path used when opt_len() returned Some(len)")
+        }
+    }
+
+    items.drive_unindexed(ConsumerAdapter { consumer })
 }
 
 struct FeedIntoIndexed<I> {
     this: I,
 }
 
-impl<I> ConsumerFnOnce<I::Item> for FeedIntoIndexed<I>
+fn indexed_path<C, I>(items: I, consumer: C, actual_len: usize) -> C::Output
 where
     I: IndexedParallelIterator,
+    C: Consumer<I::Item>,
 {
-    type Output = ();
+    define_consumer_adapter_and_impl_consumer!();
 
-    fn call_once<C>(self, actual_len: Option<usize>, consumer: C) -> (Self::Output, C::Output)
-    where
-        C: Consumer<I::Item>,
-    {
-        define_consumer_adapter_and_impl_consumer!();
-
-        let consumer = ConsumerAdapter { consumer };
-        let output = match actual_len {
-            Some(actual_len) if actual_len < self.this.len() => {
-                self.this.take(actual_len).drive(consumer)
-            }
-            _ => self.this.drive(consumer),
-        };
-
-        ((), output)
+    let consumer = ConsumerAdapter { consumer };
+    if actual_len < items.len() {
+        items.take(actual_len).drive(consumer)
+    } else {
+        items.drive(consumer)
     }
 }
 

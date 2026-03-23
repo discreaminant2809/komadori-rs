@@ -1,5 +1,4 @@
 //!
 
-mod in_place_write;
-
-pub(crate) use in_place_write::*;
+#[doc(hidden)]
+pub mod in_place_write;

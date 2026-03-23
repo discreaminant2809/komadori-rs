@@ -1,4 +1,7 @@
-use super::{IndexedParallelCollector, ParallelCollector, ParallelCollectorBase};
+use super::{
+    ParallelCollector, ParallelCollectorBase, UnindexedParallelCollector,
+    UnindexedParallelCollectorBase,
+};
 
 ///
 pub trait IntoParallelCollectorBase {
@@ -13,22 +16,32 @@ pub trait IntoParallelCollectorBase {
 }
 
 ///
-pub trait IntoIndexedParallelCollector<T>:
-    IntoParallelCollectorBase<IntoParCollector: IndexedParallelCollector<T>>
-{
-}
-impl<C, T> IntoIndexedParallelCollector<T> for C where
-    C: IntoParallelCollectorBase<IntoParCollector: IndexedParallelCollector<T>>
-{
-}
-
-///
 pub trait IntoParallelCollector<T>:
     IntoParallelCollectorBase<IntoParCollector: ParallelCollector<T>>
 {
 }
 impl<C, T> IntoParallelCollector<T> for C where
     C: IntoParallelCollectorBase<IntoParCollector: ParallelCollector<T>>
+{
+}
+
+///
+pub trait IntoUnindexedParallelCollectorBase:
+    IntoParallelCollectorBase<IntoParCollector: UnindexedParallelCollectorBase>
+{
+}
+impl<C> IntoUnindexedParallelCollectorBase for C where
+    C: IntoParallelCollectorBase<IntoParCollector: UnindexedParallelCollectorBase>
+{
+}
+
+///
+pub trait IntoUnindexedParallelCollector<T>:
+    IntoUnindexedParallelCollectorBase<IntoParCollector: UnindexedParallelCollector<T>>
+{
+}
+impl<C, T> IntoUnindexedParallelCollector<T> for C where
+    C: IntoUnindexedParallelCollectorBase<IntoParCollector: UnindexedParallelCollector<T>>
 {
 }
 
@@ -46,7 +59,14 @@ where
     }
 }
 
-fn _unindexed_substitutable_to_indexed<T>(x: impl IntoParallelCollector<T>) {
-    fn check<T>(_x: impl IntoIndexedParallelCollector<T>) {}
-    check::<T>(x);
+fn _unindexed_substitutable_to_indexed<C, T>(x: C)
+where
+    C: IntoUnindexedParallelCollector<T>,
+{
+    fn check<C, T>(_: C)
+    where
+        C: IntoParallelCollector<T>,
+    {
+    }
+    check::<C, T>(x);
 }

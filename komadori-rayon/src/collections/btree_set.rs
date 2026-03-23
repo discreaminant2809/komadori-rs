@@ -1,12 +1,12 @@
+//!
+
 use std::{collections::BTreeSet, ops::ControlFlow};
 
-use crate::{
-    collections::reservable::produce_linked_vec,
-    collector::{
-        IndexedParallelCollector, IntoParallelCollectorBase, ParallelCollector,
-        ParallelCollectorBase, assert_par_collector, plumbing,
-    },
+use crate::collector::{
+    IntoParallelCollectorBase, ParallelCollectorBase, assert_par_collector, plumbing,
 };
+
+use super::linked_vec;
 
 ///
 #[derive(Debug, Clone)]
@@ -26,40 +26,40 @@ where
     }
 }
 
-impl<T> ParallelCollectorBase for IntoParCollector<T> {
+impl<'this, T> plumbing::DefineConsumer<'this> for IntoParCollector<T>
+where
+    T: Send,
+{
+    type Consumer = linked_vec::Consumer<T, ()>;
+}
+
+impl<T> ParallelCollectorBase for IntoParCollector<T>
+where
+    T: Ord + Send,
+{
     type Output = BTreeSet<T>;
 
     #[inline]
     fn finish(self) -> Self::Output {
         self.0
     }
-}
 
-impl<T> IndexedParallelCollector<T> for IntoParCollector<T>
-where
-    T: Ord + Send,
-{
-    fn with_consumer<F>(&mut self, len: usize, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::ConsumerFnOnce<T>,
-    {
-        todo!()
-    }
-}
+    fn parts<'a>(
+            &'a mut self,
+            len: usize,
+        ) -> (
+            usize,
+            <Self as plumbing::DefineConsumer<'a>>::Consumer,
+            impl FnOnce(
+                <<Self as plumbing::DefineConsumer<'a>>::Consumer as komadori::prelude::IntoCollectorBase>::Output,
+            ) -> ControlFlow<()>,
+    ){
+        (len, linked_vec::Consumer::new(), move |(chunks, _)| {
+            for chunk in chunks {
+                self.0.extend(chunk);
+            }
 
-impl<T> ParallelCollector<T> for IntoParCollector<T>
-where
-    T: Ord + Send,
-{
-    fn with_unindexed_consumer<F>(&mut self, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::UnindexedConsumerFnOnce<T>,
-    {
-        let (ret, chunks) = produce_linked_vec(f);
-        for chunk in chunks {
-            self.0.extend(chunk);
-        }
-
-        (ret, ControlFlow::Continue(()))
+            ControlFlow::Continue(())
+        })
     }
 }

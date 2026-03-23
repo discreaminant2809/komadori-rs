@@ -6,34 +6,21 @@ use std::{marker::PhantomData, mem::forget, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::collector::plumbing::{self, ConsumerBase, ConsumerFnOnce};
+use crate::collector::plumbing;
 
-/// # Safety
-///
-/// Must ensure that `start` is properly aligned, and the memory region
-/// from `start` to `start.add(len)` is not aliased and valid to write to.
-pub unsafe fn with_in_place_write<T, F>(start: *mut T, len: usize, f: F) -> F::Output
-where
-    T: Send,
-    F: ConsumerFnOnce<T>,
-{
-    let (ret, output) = f.call_once(
-        Some(len),
-        Consumer {
-            start: unsafe { SendPtr::new_unchecked(start) },
-            len,
-            _marker: PhantomData,
-        },
-    );
-
+pub(crate) fn commit<'a, T>(proof: WriteProof<'a, T>, expected_addr: *mut T, expected_len: usize) {
     assert_eq!(
-        output.len, len,
+        (proof.start.get(), proof.init_len),
+        (expected_addr, expected_len),
         "outputs were not fully reduced: expected (addr: {:?}, len: {}), got (addr: {:?}, len: {})",
-        start, len, output.start, output.len,
+        expected_addr,
+        expected_len,
+        proof.start,
+        proof.init_len,
     );
-    forget(output);
 
-    ret
+    // Release the ownership. Now the caller can use the memory again.
+    forget(proof);
 }
 
 /*
@@ -45,13 +32,32 @@ Ideas:
 - Finally, it's checked whether the number of writes matches the expectation.
  */
 
-struct Consumer<'a, T> {
+#[allow(missing_debug_implementations)]
+pub struct Consumer<'a, T> {
     start: SendPtr<T>,
     len: usize,
     _marker: PhantomData<&'a mut [T]>,
 }
 
-struct WriteProof<'a, T> {
+impl<T> Consumer<'_, T>
+where
+    T: Send,
+{
+    /// # Safety
+    ///
+    /// Must ensure that `start` is properly aligned, and the memory region
+    /// from `start` to `start.add(len)` is not aliased and valid to write to.
+    pub(crate) unsafe fn new(start: *mut T, len: usize) -> Self {
+        Consumer {
+            start: unsafe { SendPtr::new_unchecked(start) },
+            len,
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[allow(missing_debug_implementations)]
+pub struct WriteProof<'a, T> {
     start: SendPtr<T>,
     len: usize,
     init_len: usize,
@@ -63,7 +69,8 @@ struct WriteProof<'a, T> {
     _marker: PhantomData<fn(&'a mut [T]) -> &'a mut [T]>,
 }
 
-struct Combiner;
+#[allow(missing_debug_implementations)]
+pub struct Combiner(());
 
 impl<'a, T> IntoCollectorBase for Consumer<'a, T> {
     type Output = WriteProof<'a, T>;
@@ -81,7 +88,7 @@ impl<'a, T> IntoCollectorBase for Consumer<'a, T> {
     }
 }
 
-impl<'a, T> ConsumerBase for Consumer<'a, T>
+impl<'a, T> plumbing::ConsumerBase for Consumer<'a, T>
 where
     T: Send,
 {
@@ -105,38 +112,40 @@ where
                 len: index,
                 _marker: PhantomData,
             },
-            Combiner,
+            Combiner(()),
         )
     }
 }
 
 impl<'a, T> plumbing::Combiner<WriteProof<'a, T>> for Combiner {
     fn combine(self, left: &mut WriteProof<'a, T>, right: WriteProof<'a, T>) {
-        left.assert_fully_written();
-        right.assert_fully_written();
+        left.debug_assert_fully_written();
+        right.debug_assert_fully_written();
 
         let expected_addr = unsafe { left.start.add(left.init_len) };
         if expected_addr != right.start {
+            #[cfg(debug_assertions)]
             panic!(
-                "failed to combine two write proofs: expected address {expected:?}, got address {actual:?}",
-                expected = expected_addr,
-                actual = right.start,
+                "failed to combine write proofs: left address = {:?}, expected right address {:?}, got right address {:?}",
+                left.start, expected_addr, right.start,
             );
-        }
 
-        left.init_len += right.init_len;
-        left.len += right.len;
-        forget(right);
+            // If we're not in debug assertion, drop everything written in `right`.
+        } else {
+            left.init_len += right.init_len;
+            left.len += right.len;
+            forget(right);
+        }
     }
 }
 
 impl<'a, T> WriteProof<'a, T> {
-    fn assert_fully_written(&self) {
-        assert_eq!(
-            self.init_len,
-            self.len,
-            "have not fully written: starting address = {start:?}",
-            start = self.start,
+    #[inline]
+    fn debug_assert_fully_written(&self) {
+        debug_assert_eq!(
+            self.init_len, self.len,
+            "have not fully written: address = {:?}, expected len {}, got len {}",
+            self.start, self.len, self.init_len,
         );
     }
 
@@ -145,7 +154,7 @@ impl<'a, T> WriteProof<'a, T> {
     /// Must ensure that there's a space left to write to.
     /// In other words, init_len < len. Otherwise, may UB.
     unsafe fn collect_unchecked(&mut self, item: T) -> ControlFlow<()> {
-        debug_assert!(self.break_hint().is_continue(), "no spce left to write");
+        debug_assert!(self.break_hint().is_continue(), "no space left to write");
 
         unsafe {
             // SAFETY: We write at the index before the len.

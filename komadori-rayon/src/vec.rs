@@ -1,14 +1,12 @@
 //!
 
-use std::ops::ControlFlow;
+use std::{ops::ControlFlow, ptr::NonNull};
+
+use komadori::prelude::*;
 
 use crate::{
-    collections::reservable::with_linked_vec_len,
-    collector::{
-        IndexedParallelCollector, IntoParallelCollectorBase, ParallelCollector,
-        ParallelCollectorBase, ParallelCollectorByMut, assert_par_collector, plumbing,
-    },
-    slice::with_in_place_write,
+    collector::{IntoParallelCollectorBase, ParallelCollectorBase, assert_par_collector, plumbing},
+    slice::in_place_write,
 };
 
 ///
@@ -47,84 +45,127 @@ where
     }
 }
 
-impl<T> ParallelCollectorBase for IntoParCollector<T> {
+impl<'this, T> plumbing::DefineConsumer<'this> for IntoParCollector<T>
+where
+    T: Send,
+{
+    type Consumer = in_place_write::Consumer<'this, T>;
+}
+
+impl<T> ParallelCollectorBase for IntoParCollector<T>
+where
+    T: Send,
+{
     type Output = Vec<T>;
 
     #[inline]
     fn finish(self) -> Self::Output {
         self.0
     }
-}
 
-impl<T> IndexedParallelCollector<T> for IntoParCollector<T>
-where
-    T: Send,
-{
-    fn with_consumer<F>(&mut self, len: usize, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::ConsumerFnOnce<T>,
-    {
-        self.0.par_collector_mut().with_consumer(len, f)
+    fn parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        usize,
+        <Self as plumbing::DefineConsumer<'a>>::Consumer,
+        impl FnOnce(
+            <<Self as plumbing::DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
+        self.0.reserve(len);
+
+        // We must use `base` of the original vec (not `self`) for the committer
+        // so that we don't alias with the region we're writing to.
+        let being_written = self.0.as_mut_ptr_range().end;
+        let mut this = NonNull::from_mut(&mut self.0);
+
+        (
+            len,
+            unsafe { in_place_write::Consumer::new(being_written, len) },
+            move |write_proof| {
+                in_place_write::commit(write_proof, being_written, len);
+
+                unsafe {
+                    // SAFETY: `this` is `self`, which is a `Vec`.
+                    // We've release the ownership of the written part,
+                    // so we can reclaim the provenance over the `Vec` here.
+                    let this = this.as_mut();
+
+                    // SAFETY: we've fully written to the memory in
+                    // `this.as_mut_ptr_range().end..this.as_mut_ptr_range().end + len`
+                    this.set_len(this.len() + len);
+                }
+
+                ControlFlow::Continue(())
+            },
+        )
     }
 }
 
-impl<T> ParallelCollector<T> for IntoParCollector<T>
+impl<'this, 'v, T> plumbing::DefineConsumer<'this> for ParCollectorMut<'v, T>
 where
     T: Send,
 {
-    fn with_unindexed_consumer<F>(&mut self, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::UnindexedConsumerFnOnce<T>,
-    {
-        self.0.par_collector_mut().with_unindexed_consumer(f)
-    }
+    type Consumer = in_place_write::Consumer<'this, T>;
 }
 
-impl<'a, T> ParallelCollectorBase for ParCollectorMut<'a, T> {
-    type Output = &'a mut Vec<T>;
+impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    type Output = &'v mut Vec<T>;
 
     #[inline]
     fn finish(self) -> Self::Output {
         self.0
     }
-}
 
-impl<'a, T> IndexedParallelCollector<T> for ParCollectorMut<'a, T>
-where
-    T: Send,
-{
-    fn with_consumer<F>(&mut self, len: usize, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::ConsumerFnOnce<T>,
-    {
-        self.0.reserve(len);
-        let ret = unsafe { with_in_place_write(self.0.as_mut_ptr_range().end, len, f) };
-        unsafe {
-            // SAFETY: The region we reserved has been fully written
-            // (or else it would have already panicked)
-            self.0.set_len(self.0.len() + len);
-        }
+    fn parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        usize,
+        <Self as plumbing::DefineConsumer<'a>>::Consumer,
+        impl FnOnce(
+            <<Self as plumbing::DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
+        // NOTE: from outside, the lifetime of `parts` is still bounded to
+        // the collector, but here, the mutable reference to the collector is
+        // conceptually dropped after `let mut this = ...` (to avoid aliasing).
+        // It ensures that the caller cannot obtain another instance of `parts`
+        // without fully consuming the previous `parts`, while the implementation
+        // remains flexible.
+        let this = &mut *self.0;
 
-        (ret, ControlFlow::Continue(()))
-    }
-}
+        this.reserve(len);
 
-impl<'a, T> ParallelCollector<T> for ParCollectorMut<'a, T>
-where
-    T: Send,
-{
-    fn with_unindexed_consumer<F>(&mut self, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::UnindexedConsumerFnOnce<T>,
-    {
-        let (ret, chunks, len) = with_linked_vec_len(f);
+        // We must use `base` of the original vec (not `self`) for the committer
+        // so that we don't alias with the region we're writing to.
+        let being_written = this.as_mut_ptr_range().end;
+        let mut this = NonNull::from_mut(this);
 
-        self.0.reserve(len);
-        for mut chunk in chunks {
-            self.0.append(&mut chunk);
-        }
+        (
+            len,
+            unsafe { in_place_write::Consumer::new(being_written, len) },
+            move |write_proof| {
+                in_place_write::commit(write_proof, being_written, len);
 
-        (ret, ControlFlow::Continue(()))
+                unsafe {
+                    // SAFETY: `this` is `self`, which is a `Vec`.
+                    // We've release the ownership of the written part,
+                    // so we can reclaim the provenance over the `Vec` here.
+                    let this = this.as_mut();
+
+                    // SAFETY: we've fully written to the memory in
+                    // `this.as_mut_ptr_range().end..this.as_mut_ptr_range().end + len`
+                    this.set_len(this.len() + len);
+                }
+
+                ControlFlow::Continue(())
+            },
+        )
     }
 }
 
@@ -135,5 +176,17 @@ where
     #[inline]
     fn default() -> Self {
         Vec::default().into_par_collector()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::prelude::*;
+
+    #[test]
+    fn miri_no_alias_for_collector_mut() {
+        let mut nums = vec![1, 2, 3];
+        let mut collector = nums.par_collector_mut();
+        let _ = std::hint::black_box(collector.parts(3));
     }
 }

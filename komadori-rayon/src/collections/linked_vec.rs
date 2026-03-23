@@ -2,37 +2,7 @@ use std::{collections::LinkedList, marker::PhantomData, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::collector::plumbing::{
-    self, ConsumerBase, UnindexedConsumer, UnindexedConsumerBase, UnindexedConsumerFnOnce,
-};
-
-pub fn produce_linked_vec<F, T>(f: F) -> (F::Output, LinkedList<Vec<T>>)
-where
-    T: Send,
-    F: UnindexedConsumerFnOnce<T>,
-{
-    let (ret, (chunks, _)) = f.call_once(linked_vec_consumer::<_, ()>());
-    (ret, chunks)
-}
-
-pub fn with_linked_vec_len<F, T>(f: F) -> (F::Output, LinkedList<Vec<T>>, usize)
-where
-    T: Send,
-    F: UnindexedConsumerFnOnce<T>,
-{
-    let (ret, (chunks, len)) = f.call_once(linked_vec_consumer::<_, usize>());
-    (ret, chunks, len)
-}
-
-fn linked_vec_consumer<T, L>() -> impl UnindexedConsumer<T, Output = (LinkedList<Vec<T>>, L)>
-where
-    T: Send,
-    L: LenCarrier + Send,
-{
-    Consumer {
-        _marker: PhantomData,
-    }
-}
+use crate::collector::plumbing;
 
 trait LenCarrier {
     fn new(len: usize) -> Self;
@@ -59,16 +29,28 @@ impl LenCarrier for () {
     fn combine(&mut self, _: Self) {}
 }
 
-struct Consumer<T, L> {
+#[allow(missing_debug_implementations)]
+pub struct Consumer<T, L> {
     _marker: PhantomData<(T, L)>,
 }
 
-struct IntoCollector<T, L> {
+#[allow(missing_debug_implementations)]
+pub struct IntoCollector<T, L> {
     chunk: Vec<T>,
     _marker: PhantomData<L>,
 }
 
-struct Combiner;
+#[allow(missing_debug_implementations)]
+pub struct Combiner(());
+
+impl<T, L> Consumer<T, L> {
+    #[inline]
+    pub(crate) fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
 
 impl<T, L> IntoCollectorBase for Consumer<T, L>
 where
@@ -87,7 +69,7 @@ where
     }
 }
 
-impl<T, L> ConsumerBase for Consumer<T, L>
+impl<T, L> plumbing::ConsumerBase for Consumer<T, L>
 where
     T: Send,
     L: LenCarrier + Send,
@@ -96,11 +78,12 @@ where
 
     #[inline]
     fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
+        use plumbing::UnindexedConsumerBase;
         (self.split_off_left(), self.to_combiner())
     }
 }
 
-impl<T, L> UnindexedConsumerBase for Consumer<T, L>
+impl<T, L> plumbing::UnindexedConsumerBase for Consumer<T, L>
 where
     T: Send,
     L: LenCarrier + Send,
@@ -114,7 +97,7 @@ where
 
     #[inline]
     fn to_combiner(&self) -> Self::Combiner {
-        Combiner
+        Combiner(())
     }
 }
 

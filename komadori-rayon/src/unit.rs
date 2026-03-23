@@ -5,15 +5,15 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use crate::collector::{
-    IndexedParallelCollector, IntoParallelCollectorBase, ParallelCollector, ParallelCollectorBase,
-    plumbing,
+    IndexedParallelCollector, IndexedParallelCollectorBase, IntoIndexedParallelCollectorBase,
+    ParallelCollector, plumbing,
 };
 
 ///
 #[derive(Debug, Clone, Default)]
 pub struct ParCollector(());
 
-impl IntoParallelCollectorBase for () {
+impl IntoIndexedParallelCollectorBase for () {
     type Output = ();
 
     type IntoParCollector = ParCollector;
@@ -24,7 +24,7 @@ impl IntoParallelCollectorBase for () {
     }
 }
 
-impl IntoParallelCollectorBase for &() {
+impl IntoIndexedParallelCollectorBase for &() {
     type Output = ();
 
     type IntoParCollector = ParCollector;
@@ -35,7 +35,7 @@ impl IntoParallelCollectorBase for &() {
     }
 }
 
-impl ParallelCollectorBase for ParCollector {
+impl IndexedParallelCollectorBase for ParCollector {
     type Output = ();
 
     #[inline]
@@ -81,7 +81,7 @@ impl IntoCollectorBase for Consumer {
     }
 }
 
-impl plumbing::ConsumerBase for Consumer {
+impl plumbing::IndexedConsumerBase for Consumer {
     type Combiner = Combiner;
 
     #[inline]
@@ -95,7 +95,7 @@ impl plumbing::ConsumerBase for Consumer {
     }
 }
 
-impl plumbing::UnindexedConsumerBase for Consumer {
+impl plumbing::ConsumerBase for Consumer {
     #[inline]
     fn split_off_left(&self) -> Self {
         Self

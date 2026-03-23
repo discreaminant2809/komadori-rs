@@ -54,7 +54,8 @@ fn btree_set_rayon_unindexed(nums: &[i32]) -> BTreeSet<i32> {
 }
 
 fn btree_set_komadori_unindexed(nums: &[i32]) -> BTreeSet<i32> {
-    ForceUnindexed(nums.par_iter().copied()).feed_into(BTreeSet::new())
+    // ForceUnindexed(nums.par_iter().copied()).feed_into(BTreeSet::new())
+    todo!()
 }
 
 struct ForceUnindexed<I>(I);
