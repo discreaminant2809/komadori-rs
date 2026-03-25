@@ -1,7 +1,6 @@
 use std::{collections::BTreeSet, hint::black_box, time::Duration};
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use komadori_rayon::prelude::*;
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 
@@ -54,6 +53,7 @@ fn btree_set_rayon_unindexed(nums: &[i32]) -> BTreeSet<i32> {
 }
 
 fn btree_set_komadori_unindexed(nums: &[i32]) -> BTreeSet<i32> {
+    let _ = nums;
     // ForceUnindexed(nums.par_iter().copied()).feed_into(BTreeSet::new())
     todo!()
 }

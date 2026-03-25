@@ -7,7 +7,12 @@ use crate::collector::{
     plumbing::{DefineConsumer, DefineUnindexedConsumer},
 };
 
+/// A parallel collector that can "safely" collect even after
+/// the underlying collector has stopped accumulating,
+/// without triggering undesired behaviors.
 ///
+/// This `struct` is created by [`ParallelCollectorBase::fuse()`].
+/// See its documentation for more.
 #[derive(Debug, Clone)]
 pub struct Fuse<C> {
     collector: C,

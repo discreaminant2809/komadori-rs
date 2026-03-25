@@ -5,7 +5,7 @@ use komadori::prelude::*;
 use super::plumbing::{Consumer, DefineConsumer};
 use super::{Fuse, IntoParallelCollectorBase, Tee, assert_par_collector_base};
 
-/// An indexed parallel collector.
+/// An (indexed) parallel collector.
 ///
 /// This trait also defines the output and the way to finish and return that output.
 pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {

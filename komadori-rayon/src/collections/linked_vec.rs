@@ -44,6 +44,7 @@ pub struct IntoCollector<T, L> {
 pub struct Combiner(());
 
 impl<T, L> Consumer<T, L> {
+    #[allow(unused)]
     #[inline]
     pub(crate) fn new() -> Self {
         Self {

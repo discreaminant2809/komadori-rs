@@ -9,7 +9,10 @@ use crate::collector::{
 
 use super::{__adapter_tee_internal, Fuse, TeeBase, Teer};
 
+/// A parallel collector that lets both collectors collect the same item.
 ///
+/// This `struct` is created by [`ParallelCollectorBase::tee()`].
+/// See its documentation for more.
 #[derive(Debug, Clone)]
 pub struct Tee<C1, C2> {
     base: TeeBase<C1, C2, CopyTeer>,
@@ -164,7 +167,7 @@ where
     fn no_tee_collect_then_finish<O>(
         &mut self,
         items: impl IntoIterator<Item = T>,
-        collector: komadori::collector::Fuse<impl Collector<T, Output = O>>,
+        collector: impl Collector<T, Output = O>,
     ) -> O {
         collector.collect_then_finish(items)
     }

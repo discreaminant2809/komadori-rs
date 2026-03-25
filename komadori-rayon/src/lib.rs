@@ -1,4 +1,4 @@
-//!
+//! Provides composable parallel reductions.
 
 #![forbid(missing_docs)]
 #![deny(missing_debug_implementations)]

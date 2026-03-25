@@ -52,7 +52,7 @@
 //!
 //! Earlier, it is said that a consumer is borrowed from the parallel collector,
 //! and consumer types vary between parallel collectors, and they share the fact
-//! that they hold a lifetime. Is it not a perfect use case of generic assosciated
+//! that they hold a lifetime. Is it a perfect use case of generic assosciated
 //! types (GAT), right? In an ideal world when
 //! [this limitation](https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
 //! did not exist, we could use them and the API surface would look more elegant
@@ -79,11 +79,12 @@
 //! the number of writes match the expectation, and for the unindexed path,
 //! the job is to concatenate those small [`Vec`] chunks into the bigger [`Vec`].
 //!
-//! Its type is a return-position `impl` trait (RPIT)
-//! because knowing the type does not help much whatsoever, and since it does not
-//! partitipate in the "delayed item commitment" trick above, it should be completely
-//! hidden. Implementors can define a committer with simply... a closure!
-//! Also, RPIT does also work as a GAT that borrow from the paralle collector,
+//! Its type is a return-position `impl` trait in trait (RPITIT)
+//! because knowing the type and putting bounds on it do not make sense whatsoever,
+//! and since it does not partitipate in the "delayed item commitment" trick above,
+//! it should be completely hidden.
+//! Implementors can define a committer with simply... a closure!
+//! Also, RPITIT does also work as a GAT that borrow from the paralle collector,
 //! so it can hold a mutable reference to the paralle collector too!
 //!
 //! # Where are `bridge()` and its friends?
@@ -108,24 +109,33 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-/// See: <https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats>.
+/// Defines the (indexed) consumer type used by an indexed parallel collector.
+///
+/// Implementors should implement this for every lifetime outlived by the implemented type.
+/// [`ParallelCollectorBase`](super::ParallelCollectorBase) extends this trait
+/// with *any* lifetimes, so it is pointless to not doing so.
 pub trait DefineConsumer<'this, Binder: self_binder::Sealed = self_binder::Binder<'this, Self>>:
     Sized
 {
-    ///
+    /// Which (indexed) consumer being produced?
     type Consumer: ConsumerBase;
 }
 
+/// Defines the unindexed consumer type used by an unindexed parallel collector.
 ///
+/// Implementors should implement this for every lifetime outlived by the implemented type.
+/// [`UnindexedParallelCollectorBase`](super::UnindexedParallelCollectorBase)
+/// extends this trait with *any* lifetimes, so it is pointless to not doing so.
 pub trait DefineUnindexedConsumer<
     'this,
     Binder: self_binder::Sealed = self_binder::Binder<'this, Self>,
 >: Sized
 {
-    ///
+    /// Which unindexed consumer being produced?
     type UnindexedConsumer: UnindexedConsumerBase;
 }
 
+/// Used for the hack. Should not be able to be referred outside.
 mod self_binder {
     use std::marker::PhantomData;
 
@@ -135,41 +145,72 @@ mod self_binder {
     impl<'a, T> Sealed for Binder<'a, T> {}
 }
 
+/// An (indexed) consumer that can be split at a given index.
 ///
+/// A consumer is able to convert into a serial collector, hence
+/// [`: IntoCollectorBase`](IntoCollectorBase) exists.
+///
+/// After the two split consumers are processed to two outputs,
+/// you use a provided combiner to combine those two.
 pub trait ConsumerBase: IntoCollectorBase<Output: Send> + Send + Sized {
-    ///
+    /// Which combiner being produced?
     type Combiner: Combiner<Self::Output>;
 
-    ///
+    /// Produces the "left" consumer and a combiner. After calling this method,
+    /// this consumer should be treated as the "right" consumer,
+    /// effectively being split.
+    /// After both produce outputs, the outputs are combined
+    /// using that combiner.
     fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner);
 
+    /// Returns whether th serial collector stops accumulating
+    /// after being converted into.
     ///
+    /// Note that even if this method returns [`Break(())`](ControlFlow::Break),
+    /// the consumer can still be split freely.
+    /// It is a hint used for the driver to stop splitting further,
+    /// but adapters may still ignore the hint and split anyway.
     #[inline]
     fn break_hint(&self) -> ControlFlow<()> {
         ControlFlow::Continue(())
     }
 }
 
+/// An unindexed consumer that can be split freely without an index.
 ///
+/// After the two split consumers are processed to two outputs,
+/// you use a provided combiner to combine those two.
 pub trait UnindexedConsumerBase: ConsumerBase {
-    ///
+    /// Produces the "left" consumer. After calling this method,
+    /// this consumer should be treated as the "right" consumer,
+    /// effectively being split.
+    /// After both produce outputs, the outputs are combined
+    /// using the combiner produced by [`to_combiner()`](Self::to_combiner).
     fn split_off_left(&self) -> Self;
 
-    ///
+    /// Produces a combiner to combine the outputs
+    /// of the two split of the consumers.
     fn to_combiner(&self) -> Self::Combiner;
 }
 
-///
+/// A combiner used to combine the outputs of the two split of the consumers.
 pub trait Combiner<O> {
-    ///
+    /// Combines two outputs by merging the "right" output
+    /// into the "left" one.
     fn combine(self, left: &mut O, right: O);
 }
 
+/// Defines what item types are collected in an (indexed) consumer.
 ///
+/// You cannot implement this trait directly. You should instead define the item type
+/// of serial collectors produced by this consumer.
 pub trait Consumer<T>: ConsumerBase<IntoCollector: Collector<T>> {}
 impl<C, T> Consumer<T> for C where C: ConsumerBase<IntoCollector: Collector<T>> {}
 
+/// Defines what item types are collected in an unindexed consumer.
 ///
+/// You cannot implement this trait directly. You should instead define the item type
+/// of serial collectors produced by this consumer.
 pub trait UnindexedConsumer<T>: UnindexedConsumerBase<IntoCollector: Collector<T>> {}
 impl<C, T> UnindexedConsumer<T> for C where C: UnindexedConsumerBase<IntoCollector: Collector<T>> {}
 

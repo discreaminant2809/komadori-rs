@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use komadori::{collector::Fuse as SequentialFuse, prelude::*};
+use komadori::prelude::*;
 
 use crate::collector::{
     ParallelCollectorBase, UnindexedParallelCollectorBase,
@@ -75,7 +75,7 @@ pub(super) trait Teer<T>: Clone + Send {
     fn no_tee_collect_then_finish<O>(
         &mut self,
         items: impl IntoIterator<Item = T>,
-        collector: SequentialFuse<impl for<'a> Collector<Self::PassDown<'a>, Output = O>>,
+        collector: impl for<'a> Collector<Self::PassDown<'a>, Output = O>,
     ) -> O {
         let mut collector = collector;
         let _ = items
@@ -440,6 +440,59 @@ pub mod __adapter_tee_internal {
                 ControlFlow::Break(Which::Second) => {
                     self.teer.no_tee_collect_many(items, &mut self.collector1)
                 }
+            }
+        }
+
+        #[inline]
+        fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
+            match (
+                self.collector1.break_hint().is_break(),
+                self.collector2.break_hint().is_break(),
+            ) {
+                (true, true) => return self.finish(),
+                (false, true) => {
+                    return (
+                        self.teer.no_tee_collect_then_finish(items, self.collector1),
+                        self.collector2.finish(),
+                    );
+                }
+                (true, false) => {
+                    return (
+                        self.collector1.finish(),
+                        self.collector2.collect_then_finish(items),
+                    );
+                }
+                (false, false) => {}
+            }
+
+            let mut items = items.into_iter();
+
+            match items.try_for_each(|mut item| {
+                if self
+                    .collector1
+                    .collect(self.teer.pass_down(&mut item))
+                    .is_break()
+                {
+                    ControlFlow::Break(Which::First(item))
+                } else if self.collector2.collect(item).is_break() {
+                    ControlFlow::Break(Which::Second)
+                } else {
+                    ControlFlow::Continue(())
+                }
+            }) {
+                ControlFlow::Continue(_) => self.finish(),
+                ControlFlow::Break(Which::First(item)) => {
+                    // It's fused. We don't care.
+                    let _ = self.collector2.collect(item);
+                    (
+                        self.collector1.finish(),
+                        self.collector2.collect_then_finish(items),
+                    )
+                }
+                ControlFlow::Break(Which::Second) => (
+                    self.teer.no_tee_collect_then_finish(items, self.collector1),
+                    self.collector2.finish(),
+                ),
             }
         }
     }

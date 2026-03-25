@@ -1,7 +1,6 @@
 use std::{hint::black_box, time::Duration};
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use komadori_rayon::prelude::*;
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 
@@ -56,6 +55,7 @@ fn vec_rayon_indexed(nums: &[i32]) -> Vec<i32> {
 }
 
 fn vec_komadori_indexed(nums: &[i32]) -> Vec<i32> {
+    let _ = nums;
     // nums.par_iter().copied().feed_into(vec![])
     todo!()
 }
@@ -65,6 +65,7 @@ fn vec_rayon_unindexed(nums: &[i32]) -> Vec<i32> {
 }
 
 fn vec_komadori_unindexed(nums: &[i32]) -> Vec<i32> {
+    let _ = nums;
     // ForceUnindexed(nums.par_iter().copied()).feed_into(vec![])
     todo!()
 }
