@@ -1,7 +1,18 @@
+//! Parallel collectors for most "terminal" operations such as [`fold()`],
+//! [`any()`] and [`find()`], except some like [`min()`], [`max()`] and [`sum()`]
+//! which are in more appropriate modules.
 //!
+//! This module corresponds to [`std::iter`].
+//!
+//! [`fold()`]: Iterator::fold
+//! [`any()`]: Iterator::any
+//! [`find()`]: Iterator::find
+//! [`min()`]: Iterator::min
+//! [`max()`]: Iterator::max
+//! [`sum()`]: Iterator::sum
 
 #[cfg(feature = "rayon")]
-mod par_iter_ext;
+mod rayon_par_iter_ext;
 
 #[cfg(feature = "rayon")]
-pub use par_iter_ext::*;
+pub use rayon_par_iter_ext::*;

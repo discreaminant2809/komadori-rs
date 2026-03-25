@@ -76,19 +76,15 @@ where
     }
 
     #[inline]
-    fn with_consumer<R>(
-        self,
+    fn take_parts<'a>(
+        &'a mut self,
         len: usize,
-        f: impl for<'a> FnOnce(
-            usize,
-            <Self as DefineConsumer<'a>>::Consumer,
-            std::marker::PhantomData<&'a ()>,
-        ) -> (
-            R,
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ),
-    ) -> (R, Self::Output) {
-        self.base.with_consumer(len, f)
+    ) -> (
+        usize,
+        <Self as DefineConsumer<'a>>::Consumer,
+        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+    ) {
+        self.base.take_parts(len)
     }
 }
 
@@ -122,17 +118,15 @@ where
     }
 
     #[inline]
-    fn with_unindexed_consumer<R>(
-        self,
-        f: impl for<'a> FnOnce(
-            <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-            std::marker::PhantomData<&'a ()>,
-        ) -> (
-            R,
+    fn take_parts_unindexed<'a>(
+        &'a mut self,
+    ) -> (
+        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl FnOnce(
             <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
         ),
-    ) -> (R, Self::Output) {
-        self.base.with_unindexed_consumer(f)
+    ) {
+        self.base.take_parts_unindexed()
     }
 }
 

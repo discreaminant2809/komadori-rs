@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomData, ops::ControlFlow};
+use std::{fmt::Debug, ops::ControlFlow};
 
 use komadori::{collector::Fuse as SequentialFuse, prelude::*};
 
@@ -130,55 +130,35 @@ where
             <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        let (actual_len1, consumer1, committer1) = self.collector1.parts(len);
-        let (actual_len2, consumer2, committer2) = self.collector2.parts(len);
+        let (actual_len1, consumer1, commit1) = self.collector1.parts(len);
+        let (actual_len2, consumer2, commit2) = self.collector2.parts(len);
 
         (
             actual_len1.max(actual_len2),
             __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
-            |(o1, o2)| and_cf_breaks(committer1(o1), committer2(o2)),
+            |(o1, o2)| and_cf_breaks(commit1(o1), commit2(o2)),
         )
     }
 
-    fn with_consumer<R>(
-        self,
+    fn take_parts<'a>(
+        &'a mut self,
         len: usize,
-        f: impl for<'a> FnOnce(
-            usize,
-            <Self as DefineConsumer<'a>>::Consumer,
-            PhantomData<&'a ()>,
-        ) -> (
-            R,
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ),
-    ) -> (R, Self::Output) {
-        let TeeBase {
-            collector1,
-            collector2,
-            teer,
-        } = self;
+    ) -> (
+        usize,
+        <Self as DefineConsumer<'a>>::Consumer,
+        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+    ) {
+        let (actual_len1, consumer1, commit1) = self.collector1.take_parts(len);
+        let (actual_len2, consumer2, commit2) = self.collector2.take_parts(len);
 
-        let ((ret, output2), output1) =
-            collector1.with_consumer(len, move |actual_len1, consumer1, _| {
-                let ((ret, output1), output2) =
-                    collector2.with_consumer(len, move |actual_len2, consumer2, marker| {
-                        let (ret, (output1, output2)) = f(
-                            actual_len1.max(actual_len2),
-                            __adapter_tee_internal::Consumer::new(
-                                consumer1,
-                                consumer2,
-                                teer.clone(),
-                            ),
-                            marker,
-                        );
-
-                        ((ret, output1), output2)
-                    });
-
-                ((ret, output2), output1)
-            });
-
-        (ret, (output1, output2))
+        (
+            actual_len1.max(actual_len2),
+            __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
+            |(o1, o2)| {
+                commit1(o1);
+                commit2(o2);
+            },
+        )
     }
 }
 
@@ -209,26 +189,33 @@ where
             <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        let (consumer1, committer1) = self.collector1.parts_unindexed();
-        let (consumer2, committer2) = self.collector2.parts_unindexed();
+        let (consumer1, commit1) = self.collector1.parts_unindexed();
+        let (consumer2, commit2) = self.collector2.parts_unindexed();
 
         (
             __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
-            |(o1, o2)| and_cf_breaks(committer1(o1), committer2(o2)),
+            |(o1, o2)| and_cf_breaks(commit1(o1), commit2(o2)),
         )
     }
 
-    fn with_unindexed_consumer<R>(
-        self,
-        f: impl for<'a> FnOnce(
-            <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-            PhantomData<&'a ()>,
-        ) -> (
-            R,
+    fn take_parts_unindexed<'a>(
+        &'a mut self,
+    ) -> (
+        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl FnOnce(
             <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
         ),
-    ) -> (R, Self::Output) {
-        todo!()
+    ) {
+        let (consumer1, commit1) = self.collector1.take_parts_unindexed();
+        let (consumer2, commit2) = self.collector2.take_parts_unindexed();
+
+        (
+            __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
+            |(o1, o2)| {
+                commit1(o1);
+                commit2(o2);
+            },
+        )
     }
 }
 

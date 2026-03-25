@@ -2,8 +2,12 @@
 
 use std::{collections::BTreeSet, ops::ControlFlow};
 
+use komadori::prelude::*;
+
 use crate::collector::{
-    IntoParallelCollectorBase, ParallelCollectorBase, assert_par_collector, plumbing,
+    IntoParallelCollectorBase, ParallelCollectorBase, UnindexedParallelCollectorBase,
+    assert_par_collector,
+    plumbing::{DefineConsumer, DefineUnindexedConsumer},
 };
 
 use super::linked_vec;
@@ -26,11 +30,11 @@ where
     }
 }
 
-impl<'this, T> plumbing::DefineConsumer<'this> for IntoParCollector<T>
+impl<'this, T> DefineConsumer<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type Consumer = linked_vec::Consumer<T, ()>;
+    type Consumer = in_pla;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -45,16 +49,45 @@ where
     }
 
     fn parts<'a>(
-            &'a mut self,
-            len: usize,
-        ) -> (
-            usize,
-            <Self as plumbing::DefineConsumer<'a>>::Consumer,
-            impl FnOnce(
-                <<Self as plumbing::DefineConsumer<'a>>::Consumer as komadori::prelude::IntoCollectorBase>::Output,
-            ) -> ControlFlow<()>,
-    ){
+        &'a mut self,
+        len: usize,
+    ) -> (
+        usize,
+        <Self as DefineConsumer<'a>>::Consumer,
+        impl FnOnce(
+            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
         (len, linked_vec::Consumer::new(), move |(chunks, _)| {
+            for chunk in chunks {
+                self.0.extend(chunk);
+            }
+
+            ControlFlow::Continue(())
+        })
+    }
+}
+
+impl<'this, T> DefineUnindexedConsumer<'this> for IntoParCollector<T>
+where
+    T: Send,
+{
+    type UnindexedConsumer = linked_vec::Consumer<T, ()>;
+}
+
+impl<T> UnindexedParallelCollectorBase for IntoParCollector<T>
+where
+    T: Ord + Send,
+{
+    fn parts_unindexed<'a>(
+        &'a mut self,
+    ) -> (
+        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl FnOnce(
+            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
+        (linked_vec::Consumer::new(), move |(chunks, _)| {
             for chunk in chunks {
                 self.0.extend(chunk);
             }

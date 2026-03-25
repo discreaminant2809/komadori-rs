@@ -12,48 +12,76 @@ use crate::collector::{
     plumbing::{Combiner, Consumer, UnindexedConsumer},
 };
 
+/// Extends `rayon`'s [`ParallelIterator`] and [`IndexedParallelIterator`] with
+/// methods to work with parallel collectors.
 ///
-pub trait ParallelIteratorExt: ParallelIterator {
+/// This trait is automatically implemented for all `rayon`
+/// [`ParallelIterator`] and [`IndexedParallelIterator`] types.
+pub trait RayonParallelIteratorExt: ParallelIterator {
+    /// Feeds items from this iterator into the provided parallel collector
+    /// till the collector stops accumulating or the iterator is exhausted,
+    /// and returns the collector’s output.
     ///
+    /// The collector must be convertible to
+    /// [`UnindexedParallelCollector`](crate::collector::UnindexedParallelCollector).
+    /// If you have a collector that only works with the indexed path,
+    /// or you want the indexed path explicitly,
+    /// use [`feed_into_indexed()`](Self::feed_into_indexed) which can prevent
+    /// accidental fallback to the unindexed path and sometimes provide
+    /// better performance for more even splitting.
+    /// However, this method is already efficient enough since it can utilize
+    /// the indexed path whenever possible.
+    ///
+    /// To use this method, import the [`RayonParallelIteratorExt`] trait.
     fn feed_into<C>(self, collector: C) -> C::Output
     where
         C: IntoUnindexedParallelCollector<Self::Item>,
     {
-        let collector = collector.into_par_collector();
+        let mut collector = collector.into_par_collector();
 
         match self.opt_len() {
             None => {
-                collector
-                    .with_unindexed_consumer(|consumer, _| {
-                        ((), unindexed_slow_path(self, consumer))
-                    })
-                    .1
+                let (consumer, commit) = collector.take_parts_unindexed();
+                commit(unindexed_slow_path(self, consumer));
+                collector.finish()
             }
             Some(len) => {
-                collector
-                    .with_consumer(len, |_, consumer, _| {
-                        ((), unindexed_fast_path(self, consumer))
-                    })
-                    .1
+                // Sadly, we can't do anything usefully with the actual len
+                // for unindexed parallel iterator.
+                let (_, consumer, commit) = collector.take_parts(len);
+                commit(unindexed_fast_path(self, consumer));
+                collector.finish()
             }
         }
     }
 
+    /// Feeds items from this iterator into the provided parallel collector
+    /// till the collector stops accumulating or the iterator is exhausted,
+    /// and returns the collector’s output.
     ///
+    /// This is the indexed version of [`feed_into()`](Self::feed_into).
+    ///
+    /// The collector must be convertible to
+    /// [`ParallelCollector`](crate::collector::ParallelCollector).
+    /// If you do not strictly require the indexed path,
+    /// use [`feed_into()`](Self::feed_into),
+    /// which is already efficient enough since it can utilize
+    /// the indexed path whenever possible.
+    ///
+    /// To use this method, import the [`RayonParallelIteratorExt`] trait.
     fn feed_into_indexed<C>(self, collector: C) -> C::Output
     where
         Self: IndexedParallelIterator,
         C: IntoParallelCollector<Self::Item>,
     {
-        collector
-            .into_par_collector()
-            .with_consumer(self.len(), move |actual_len, consumer, _| {
-                ((), indexed_path(self, consumer, actual_len))
-            })
-            .1
+        let mut collector = collector.into_par_collector();
+
+        let (actual_len, consumer, commit) = collector.take_parts(self.len());
+        commit(indexed_path(self, consumer, actual_len));
+        collector.finish()
     }
 }
-impl<I> ParallelIteratorExt for I where I: ParallelIterator {}
+impl<I> RayonParallelIteratorExt for I where I: ParallelIterator {}
 
 macro_rules! define_consumer_adapter_and_impl_consumer {
     () => {
@@ -142,10 +170,6 @@ where
     }
 
     items.drive_unindexed(ConsumerAdapter { consumer })
-}
-
-struct FeedIntoIndexed<I> {
-    this: I,
 }
 
 fn indexed_path<C, I>(items: I, consumer: C, actual_len: usize) -> C::Output

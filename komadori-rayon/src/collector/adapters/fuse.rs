@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::ControlFlow};
+use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
@@ -59,40 +59,42 @@ where
             <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        let (actual_len, consumer, committer) = self.collector.parts(len);
+        let (actual_len, consumer, commit) = self.collector.parts(len);
         (
             actual_len,
             __adapter_fuse_internal::Consumer {
                 consumer,
                 break_hint: self.break_hint.into(),
             },
-            committer,
+            |output| {
+                let cf = commit(output);
+                if cf.is_break() {
+                    self.break_hint = cf;
+                }
+                self.break_hint
+            },
         )
     }
 
-    fn with_consumer<R>(
-        self,
+    fn take_parts<'a>(
+        &'a mut self,
         len: usize,
-        f: impl for<'a> FnOnce(
-            usize,
-            <Self as DefineConsumer<'a>>::Consumer,
-            PhantomData<&'a ()>,
-        ) -> (
-            R,
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ),
-    ) -> (R, Self::Output) {
-        self.collector
-            .with_consumer(len, move |actual_len, consumer, _| {
-                f(
-                    actual_len,
-                    __adapter_fuse_internal::Consumer {
-                        consumer,
-                        break_hint: self.break_hint.into(),
-                    },
-                    PhantomData,
-                )
-            })
+    ) -> (
+        usize,
+        <Self as DefineConsumer<'a>>::Consumer,
+        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+    ) {
+        let (actual_len, consumer, commit) = self.collector.take_parts(len);
+        (
+            actual_len,
+            __adapter_fuse_internal::Consumer {
+                consumer,
+                break_hint: self.break_hint.into(),
+            },
+            // We can't set the flag if we cannot obtain the signal from
+            // the committer.
+            commit,
+        )
     }
 }
 
@@ -116,35 +118,32 @@ where
                 <<Self as crate::collector::plumbing::DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
             ) -> ControlFlow<()>,
     ){
-        let (consumer, committer) = self.collector.parts_unindexed();
+        let (consumer, commit) = self.collector.parts_unindexed();
         (
             __adapter_fuse_internal::Consumer {
                 consumer,
                 break_hint: self.break_hint.into(),
             },
-            committer,
+            commit,
         )
     }
 
-    fn with_unindexed_consumer<R>(
-        self,
-        f: impl for<'a> FnOnce(
-            <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-            PhantomData<&'a ()>,
-        ) -> (
-            R,
+    fn take_parts_unindexed<'a>(
+        &'a mut self,
+    ) -> (
+        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl FnOnce(
             <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
         ),
-    ) -> (R, Self::Output) {
-        self.collector.with_unindexed_consumer(move |consumer, _| {
-            f(
-                __adapter_fuse_internal::Consumer {
-                    consumer,
-                    break_hint: self.break_hint.into(),
-                },
-                PhantomData,
-            )
-        })
+    ) {
+        let (consumer, commit) = self.collector.take_parts_unindexed();
+        (
+            __adapter_fuse_internal::Consumer {
+                consumer,
+                break_hint: self.break_hint.into(),
+            },
+            commit,
+        )
     }
 }
 

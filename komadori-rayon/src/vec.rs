@@ -1,4 +1,6 @@
+//! Parallel collectors for [`Vec`].
 //!
+//! This module corresponds to [`mod@std::vec`].
 
 use std::{ops::ControlFlow, ptr::NonNull};
 
@@ -9,11 +11,21 @@ use crate::{
     slice::in_place_write,
 };
 
+/// A parallel collector that pushes collected items into a [`Vec`].
+/// Its [`Output`] is [`Vec`].
 ///
+/// This struct is created by `Vec::into_par_collector()`.
+///
+/// [`Output`]: ParallelCollectorBase::Output
 #[derive(Debug, Clone)]
 pub struct IntoParCollector<T>(Vec<T>);
 
+/// A parallel collector that pushes collected items into a [`&mut Vec`](Vec).
+/// Its [`Output`] is [`&mut Vec`](Vec).
 ///
+/// This struct is created by `Vec::par_collector_mut()`.
+///
+/// [`Output`]: ParallelCollectorBase::Output
 #[derive(Debug)]
 pub struct ParCollectorMut<'a, T>(&'a mut Vec<T>);
 
