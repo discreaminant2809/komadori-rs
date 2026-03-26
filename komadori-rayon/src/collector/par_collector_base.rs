@@ -58,7 +58,7 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
     ///
     /// [`Break(())`]: ControlFlow::Break
     /// [`Continue(())`]: ControlFlow::Continue
-    /// [`filter()`]: Self::filter
+    /// [`filter()`]: super::UnindexedParallelCollectorBase::filter
     /// [`take_any_while()`]: Self::take_any_while
     #[inline]
     fn break_hint(&self) -> ControlFlow<()> {

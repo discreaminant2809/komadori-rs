@@ -126,6 +126,7 @@
 //! [`take_parts()`]: ParallelCollectorBase::take_parts
 //! [`parts_unindexed()`]: UnindexedParallelCollectorBase::parts_unindexed
 //! [`take_parts_unindexed()`]: UnindexedParallelCollectorBase::take_parts_unindexed
+//! [`filter()`]: UnindexedParallelCollectorBase::filter
 
 mod adapters;
 mod into_par_collector;

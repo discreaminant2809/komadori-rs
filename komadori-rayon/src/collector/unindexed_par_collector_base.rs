@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use super::{
-    ParallelCollectorBase,
+    Filter, ParallelCollectorBase, assert_unindexed_par_collector,
     plumbing::{Consumer, DefineUnindexedConsumer, UnindexedConsumer},
 };
 
@@ -55,6 +55,47 @@ pub trait UnindexedParallelCollectorBase:
         (consumer, |output| {
             let _ = commit(output);
         })
+    }
+
+    /// Creates a parallel collector that uses a closure to determine whether
+    /// an item should be accumulated.
+    ///
+    /// The underlying parallel collector only collects items for which
+    /// the given predicate returns `true`.
+    ///
+    /// Note that even if an item is not accumulated, this adapter will still return
+    /// [`Continue(())`] as long as the underlying parallel collector does.
+    /// If you want the collector to stop after the first `false`,
+    /// consider using [`take_any_while()`](Self::take_any_while) instead.
+    ///
+    /// `filter()` will **always** use the unindexed path, because
+    /// the number of items is now nondeterministic.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let evens = [1, 2, 4, 5]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .filter(|&x| x % 2 == 0)
+    ///     );
+    ///
+    /// assert_eq!(evens, [2, 4]);
+    /// ```
+    ///
+    /// [`Continue(())`]: ControlFlow::Continue
+    #[inline]
+    fn filter<P, T>(self, pred: P) -> Filter<Self, P>
+    where
+        Self: UnindexedParallelCollector<T>,
+        P: Fn(&T) -> bool + Sync,
+    {
+        assert_unindexed_par_collector::<_, T>(Filter::new(self, pred))
     }
 }
 
