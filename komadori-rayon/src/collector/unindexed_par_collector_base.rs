@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use super::{
-    Filter, ParallelCollectorBase, assert_unindexed_par_collector,
+    Filter, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
     plumbing::{Consumer, DefineUnindexedConsumer, UnindexedConsumer},
 };
 
@@ -96,6 +96,35 @@ pub trait UnindexedParallelCollectorBase:
         P: Fn(&T) -> bool + Sync,
     {
         assert_unindexed_par_collector::<_, T>(Filter::new(self, pred))
+    }
+
+    /// Creates a parallel collector that accumulates items until it encounters
+    /// an items that makess a given predicate `false` at *any* time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let result: Vec<_> = (0..100)
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .take_any_while(|x| *x < 50)
+    ///     );
+    ///
+    /// assert!(result.len() <= 50);
+    /// assert!(result.windows(2).all(|w| w[0] < w[1]));
+    /// ```
+    #[inline]
+    fn take_any_while<P, T>(self, pred: P) -> TakeAnyWhile<Self, P>
+    where
+        Self: UnindexedParallelCollector<T>,
+        P: Fn(&T) -> bool + Sync,
+    {
+        assert_unindexed_par_collector::<_, T>(TakeAnyWhile::new(self, pred))
     }
 }
 
