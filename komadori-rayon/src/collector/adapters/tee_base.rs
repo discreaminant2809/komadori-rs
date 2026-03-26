@@ -43,19 +43,34 @@ where
     }
 }
 
-pub(super) trait Teer<T>: Clone + Send {
+pub(super) trait DefinePassDown<
+    'this,
+    T,
+    Binder: self_binder::Sealed = self_binder::Binder<'this, T>,
+>
+{
+    type PassDown;
+}
+
+/// Used for the hack. Should not be able to be referred outside.
+mod self_binder {
+    use std::marker::PhantomData;
+
+    pub trait Sealed {}
+    #[allow(missing_debug_implementations)]
+    pub struct Binder<'a, T>(PhantomData<&'a mut T>);
+    impl<'a, T> Sealed for Binder<'a, T> {}
+}
+
+pub(super) trait Teer<T>: Clone + Send + for<'this> DefinePassDown<'this, T> {
     const ITEM_IS_COPY: bool = false;
 
-    type PassDown<'a>
-    where
-        T: 'a;
-
-    fn pass_down<'a>(&mut self, item: &'a mut T) -> Self::PassDown<'a>;
+    fn pass_down<'a>(&mut self, item: &'a mut T) -> <Self as DefinePassDown<'a, T>>::PassDown;
 
     #[inline]
     fn no_tee_collect(
         &mut self,
-        collector: &mut impl for<'a> Collector<Self::PassDown<'a>>,
+        collector: &mut impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown>,
         item: T,
     ) -> ControlFlow<()> {
         let mut item = item;
@@ -65,7 +80,7 @@ pub(super) trait Teer<T>: Clone + Send {
     fn no_tee_collect_many(
         &mut self,
         items: impl IntoIterator<Item = T>,
-        collector: &mut impl for<'a> Collector<Self::PassDown<'a>>,
+        collector: &mut impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown>,
     ) -> ControlFlow<()> {
         items
             .into_iter()
@@ -75,7 +90,7 @@ pub(super) trait Teer<T>: Clone + Send {
     fn no_tee_collect_then_finish<O>(
         &mut self,
         items: impl IntoIterator<Item = T>,
-        collector: impl for<'a> Collector<Self::PassDown<'a>, Output = O>,
+        collector: impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown, Output = O>,
     ) -> O {
         let mut collector = collector;
         let _ = items
@@ -235,6 +250,8 @@ pub mod __adapter_tee_internal {
 
     use crate::collector::plumbing;
 
+    use super::DefinePassDown;
+
     #[allow(missing_debug_implementations)]
     pub struct Consumer<C1, C2, TF> {
         consumer1: C1,
@@ -384,7 +401,7 @@ pub mod __adapter_tee_internal {
 
     impl<C1, C2, TF, T> Collector<T> for IntoCollector<C1, C2, TF>
     where
-        C1: for<'a> Collector<TF::PassDown<'a>>,
+        C1: for<'a> Collector<<TF as DefinePassDown<'a, T>>::PassDown>,
         C2: Collector<T>,
         TF: super::Teer<T>,
     {

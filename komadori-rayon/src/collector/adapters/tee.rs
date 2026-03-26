@@ -7,7 +7,7 @@ use crate::collector::{
     plumbing::{DefineConsumer, DefineUnindexedConsumer},
 };
 
-use super::{__adapter_tee_internal, Fuse, TeeBase, Teer};
+use super::{__adapter_tee_internal, DefinePassDown, Fuse, TeeBase, Teer};
 
 /// A parallel collector that lets both collectors collect the same item.
 ///
@@ -133,16 +133,18 @@ where
     }
 }
 
+impl<'this, T> DefinePassDown<'this, T> for CopyTeer
+where
+    T: Copy,
+{
+    type PassDown = T;
+}
+
 impl<T> Teer<T> for CopyTeer
 where
     T: Copy,
 {
     const ITEM_IS_COPY: bool = true;
-
-    type PassDown<'a>
-        = T
-    where
-        T: 'a;
 
     #[inline]
     fn pass_down(&mut self, item: &mut T) -> T {

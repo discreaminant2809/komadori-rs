@@ -28,7 +28,7 @@ pub trait UnindexedParallelCollectorBase:
     /// This method effectively "consumes" the collector.
     /// After calling this method, the collector is counted
     /// to have returned [`Break(())`](ControlFlow::Break)
-    /// and the only valid method to call is [`finish()`](Self::finish).
+    /// and the only valid method to call is [`finish()`](ParallelCollectorBase::finish).
     /// The behavior is unspecified if you call other methods than that method,
     /// including panicking or incorrect results.
     /// You can leverage it by "consuming" some states instead of cloning them

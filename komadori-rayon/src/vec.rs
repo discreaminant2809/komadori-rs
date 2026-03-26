@@ -7,7 +7,12 @@ use std::{ops::ControlFlow, ptr::NonNull};
 use komadori::prelude::*;
 
 use crate::{
-    collector::{IntoParallelCollectorBase, ParallelCollectorBase, assert_par_collector, plumbing},
+    collections::linked_vec,
+    collector::{
+        IntoParallelCollectorBase, ParallelCollectorBase, assert_unindexed_par_collector,
+        plumbing::{DefineConsumer, DefineUnindexedConsumer},
+    },
+    prelude::UnindexedParallelCollectorBase,
     slice::in_place_write,
 };
 
@@ -39,7 +44,7 @@ where
 
     #[inline]
     fn into_par_collector(self) -> Self::IntoParCollector {
-        assert_par_collector::<_, T>(IntoParCollector(self))
+        assert_unindexed_par_collector::<_, T>(IntoParCollector(self))
     }
 }
 
@@ -53,11 +58,11 @@ where
 
     #[inline]
     fn into_par_collector(self) -> Self::IntoParCollector {
-        assert_par_collector::<_, T>(ParCollectorMut(self))
+        assert_unindexed_par_collector::<_, T>(ParCollectorMut(self))
     }
 }
 
-impl<'this, T> plumbing::DefineConsumer<'this> for IntoParCollector<T>
+impl<'this, T> DefineConsumer<'this> for IntoParCollector<T>
 where
     T: Send,
 {
@@ -80,16 +85,21 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as plumbing::DefineConsumer<'a>>::Consumer,
+        <Self as DefineConsumer<'a>>::Consumer,
         impl FnOnce(
-            <<Self as plumbing::DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
+            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
         self.0.reserve(len);
 
         // We must use `base` of the original vec (not `self`) for the committer
         // so that we don't alias with the region we're writing to.
-        let being_written = self.0.as_mut_ptr_range().end;
+        // Note: DO NOT rewrite it as `as_mut_ptr_range().end`,
+        // since it's UB when being used later on MIRI.
+        let being_written = unsafe {
+            // SAFETY: the vec is `len()` long.
+            self.0.as_mut_ptr().add(self.0.len())
+        };
         let mut this = NonNull::from_mut(&mut self.0);
 
         (
@@ -115,7 +125,38 @@ where
     }
 }
 
-impl<'this, 'v, T> plumbing::DefineConsumer<'this> for ParCollectorMut<'v, T>
+impl<'this, T> DefineUnindexedConsumer<'this> for IntoParCollector<T>
+where
+    T: Send,
+{
+    type UnindexedConsumer = linked_vec::Consumer<T, usize>;
+}
+
+impl<T> UnindexedParallelCollectorBase for IntoParCollector<T>
+where
+    T: Send,
+{
+    fn parts_unindexed<'a>(
+        &'a mut self,
+    ) -> (
+        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl FnOnce(
+            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
+        (linked_vec::Consumer::new(), |(chunks, len)| {
+            self.0.reserve(len);
+
+            for mut chunk in chunks {
+                self.0.append(&mut chunk);
+            }
+
+            ControlFlow::Continue(())
+        })
+    }
+}
+
+impl<'this, 'v, T> DefineConsumer<'this> for ParCollectorMut<'v, T>
 where
     T: Send,
 {
@@ -138,9 +179,9 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as plumbing::DefineConsumer<'a>>::Consumer,
+        <Self as DefineConsumer<'a>>::Consumer,
         impl FnOnce(
-            <<Self as plumbing::DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
+            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
         // NOTE: from outside, the lifetime of `parts` is still bounded to
@@ -155,7 +196,12 @@ where
 
         // We must use `base` of the original vec (not `self`) for the committer
         // so that we don't alias with the region we're writing to.
-        let being_written = this.as_mut_ptr_range().end;
+        // Note: DO NOT rewrite it as `as_mut_ptr_range().end`,
+        // since it's UB when being used later on MIRI.
+        let being_written = unsafe {
+            // SAFETY: the vec is `len()` long.
+            this.as_mut_ptr().add(this.len())
+        };
         let mut this = NonNull::from_mut(this);
 
         (
@@ -181,6 +227,37 @@ where
     }
 }
 
+impl<'v, 'this, T> DefineUnindexedConsumer<'this> for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    type UnindexedConsumer = linked_vec::Consumer<T, usize>;
+}
+
+impl<'v, T> UnindexedParallelCollectorBase for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    fn parts_unindexed<'a>(
+        &'a mut self,
+    ) -> (
+        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl FnOnce(
+            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
+        (linked_vec::Consumer::new(), |(chunks, len)| {
+            self.0.reserve(len);
+
+            for mut chunk in chunks {
+                self.0.append(&mut chunk);
+            }
+
+            ControlFlow::Continue(())
+        })
+    }
+}
+
 impl<T> Default for IntoParCollector<T>
 where
     T: Send,
@@ -193,12 +270,20 @@ where
 
 #[cfg(test)]
 mod tests {
+    use komadori::prelude::{Collector, IntoCollectorBase};
+
     use crate::prelude::*;
 
     #[test]
     fn miri_no_alias_for_collector_mut() {
         let mut nums = vec![1, 2, 3];
         let mut collector = nums.par_collector_mut();
-        let _ = std::hint::black_box(collector.parts(3));
+
+        let (_, consumer, commit) = collector.take_parts(3);
+        let output = consumer.into_collector().collect_then_finish([4, 5, 6]);
+        commit(output);
+
+        collector.finish();
+        assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
     }
 }
