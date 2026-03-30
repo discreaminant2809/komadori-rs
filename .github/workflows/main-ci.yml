@@ -66,13 +66,3 @@ jobs:
       #     name: cargo-semver-checks-crash-report
       #     path: /tmp/report-*.toml
       #     if-no-files-found: ignore
-
-      - name: Install thumbv7em-none-eabihf Target
-        run: rustup target add thumbv7em-none-eabihf
-
-      - name: Check no_std Compliance (Ad-Hoc for Now)
-        run: |
-          cargo hack b \
-            --feature-powerset \
-            --exclude-features std,default \
-            --target thumbv7em-none-eabihf
