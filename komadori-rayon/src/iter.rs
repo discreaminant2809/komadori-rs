@@ -11,8 +11,10 @@
 //! [`max()`]: Iterator::max
 //! [`sum()`]: Iterator::sum
 
+mod par_count;
 #[cfg(feature = "rayon")]
 mod rayon_par_iter_ext;
 
+pub use par_count::*;
 #[cfg(feature = "rayon")]
 pub use rayon_par_iter_ext::*;

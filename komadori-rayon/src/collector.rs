@@ -145,7 +145,7 @@ pub use unindexed_par_collector_base::*;
 
 #[allow(unused)]
 #[inline(always)]
-pub(crate) fn assert_par_collector_base<C>(x: C) -> C
+pub(crate) const fn assert_par_collector_base<C>(x: C) -> C
 where
     C: ParallelCollectorBase,
 {
@@ -154,7 +154,7 @@ where
 
 #[allow(unused)]
 #[inline(always)]
-pub(crate) fn assert_unindexed_par_collector_base<C>(x: C) -> C
+pub(crate) const fn assert_unindexed_par_collector_base<C>(x: C) -> C
 where
     C: UnindexedParallelCollectorBase,
 {
@@ -163,7 +163,7 @@ where
 
 #[allow(unused)]
 #[inline(always)]
-pub(crate) fn assert_par_collector<C, T>(x: C) -> C
+pub(crate) const fn assert_par_collector<C, T>(x: C) -> C
 where
     C: ParallelCollector<T>,
 {
@@ -172,7 +172,7 @@ where
 
 #[allow(unused)]
 #[inline(always)]
-pub(crate) fn assert_unindexed_par_collector<C, T>(x: C) -> C
+pub(crate) const fn assert_unindexed_par_collector<C, T>(x: C) -> C
 where
     C: UnindexedParallelCollector<T>,
 {
