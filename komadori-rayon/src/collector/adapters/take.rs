@@ -11,7 +11,7 @@ use crate::collector::{
     plumbing::{DefineConsumer, DefineUnindexedConsumer},
 };
 
-/// Creates a parallel collector that stops accumulating after collecting `n` items,
+/// A parallel collector that stops accumulating after collecting `n` items,
 /// or fewer if the underlying collector stops sooner.
 ///
 /// This `struct` is created by [`ParallelCollectorBase::take()`].
