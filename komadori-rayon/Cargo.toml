@@ -16,6 +16,7 @@ rayon = { version = "1.11.0", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = "0.8.2"
+proptest = "1.11.0"
 rand = "0.10.0"
 
 [features]

@@ -13,4 +13,8 @@ pub mod iter;
 pub mod prelude;
 pub mod slice;
 // pub mod unit;
+#[cfg(test)]
+// Will be touched in the future
+#[allow(unused)]
+mod test_utils;
 pub mod vec;

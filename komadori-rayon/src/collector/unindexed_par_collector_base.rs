@@ -126,6 +126,8 @@ pub trait UnindexedParallelCollectorBase:
     {
         assert_unindexed_par_collector::<_, T>(TakeAnyWhile::new(self, pred))
     }
+
+    // fn take(self, n: usize) -
 }
 
 /// Defines what item types are collected in an unindexed parallel collector.

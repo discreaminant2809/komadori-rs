@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineConsumer};
-use super::{Fuse, IntoParallelCollectorBase, Tee, assert_par_collector_base};
+use super::{Fuse, IntoParallelCollectorBase, Take, Tee, assert_par_collector_base};
 
 /// An (indexed) parallel collector.
 ///
@@ -129,6 +129,92 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
         Self: Sized,
     {
         assert_par_collector_base(Fuse::new(self))
+    }
+
+    /// Creates a parallel collector that stops accumulating after collecting `n` items,
+    /// or fewer if the underlying collector stops sooner.
+    ///
+    /// When being fed a batch of `m` items and `m < n`
+    /// (where `n` is the remaining amount of items),
+    /// `take(n)` takes all `m` them and subtracts `m` to `n`.
+    /// Otherwise:
+    ///
+    /// - In the indexed path, `take(n)` only accumulates `n` first items
+    ///   in the batch (counted from the start of the batch sequentially),
+    ///   and drops the rest.
+    ///
+    /// - In the unindexed path, `take(n)` only accumulates `n` items
+    ///   *anywhere* in the batch, and drops the rest.
+    ///
+    ///   **Note**: By the current implementations, in this path,
+    ///   `take(n)` *may* collect slightly more items than it needs,
+    ///   but it still guarantees to only let the underlying collector
+    ///   collects only `n` items. The overreached items are currently
+    ///   simply dropped.
+    ///
+    /// Conceptually, `take(n)` behaves like both of `rayon`'s
+    /// [`take(n)`](rayon::iter::IndexedParallelIterator::take) and
+    /// [`take_any(n)`](rayon::iter::ParallelIterator::take_any),
+    /// depending on whether this is used in the indexed path
+    /// or the unindexed path, respectively. However, in the indexed path,
+    /// `take(n)` may (but not always) cause uneven split because parallel collectors
+    /// in this crate is nearly unaware of what feeds them.
+    /// It could be less a problem when the adapter is used alone without
+    /// teeing with other parallel collectors, however.
+    /// If uneven splitting causes problems in your case, consider
+    /// constraining your batches of items
+    /// using the returned `usize` in [`parts()`](Self::parts),
+    /// or actively constraining `n` items in the upstream
+    /// and avoiding this adapter if not being teed with anything else.
+    /// For `rayon` specifically,
+    /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
+    /// helps migrate this problem also.
+    ///
+    /// # Examples
+    ///
+    /// Indexed path:
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let nums = [1, 2, 3, 4, 5]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .take(3)
+    ///     );
+    ///
+    /// assert_eq!(nums.len(), 3);
+    /// assert_eq!(nums, [1, 2, 3]);
+    /// ```
+    ///
+    /// Unindexed path:
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    /// use std::collections::HashSet;
+    ///
+    /// let nums = (1..=10)
+    ///     .into_par_iter()
+    ///     .filter(|&x| x % 2 == 0)
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .take(3)
+    ///     );
+    ///
+    /// assert_eq!(nums.len(), 3);
+    /// assert!(
+    ///     HashSet::from_iter(nums)
+    ///         .is_subset(&HashSet::from([2, 4, 6, 8, 10]))
+    /// );
+    /// ```
+    #[inline]
+    fn take(self, n: usize) -> Take<Self> {
+        assert_par_collector_base(Take::new(self, n))
     }
 
     /// Creates a parallel collector that lets both collectors collect the same item.
