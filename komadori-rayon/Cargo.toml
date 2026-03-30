@@ -30,12 +30,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [[bench]]
 name = "btree_set"
+required-features = ["rayon"]
 harness = false
 
 [[bench]]
 name = "vec"
+required-features = ["rayon"]
 harness = false
 
 [[bench]]
 name = "two_vecs"
+required-features = ["rayon"]
 harness = false
