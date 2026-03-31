@@ -8,38 +8,38 @@ use super::{DefinePassDown, TeeBase, Teer};
 
 /// A parallel collector that lets both collectors collect the same item.
 ///
-/// This `struct` is created by [`ParallelCollectorBase::tee()`].
+/// This `struct` is created by [`ParallelCollectorBase::tee_clone()`].
 /// See its documentation for more.
-pub type Tee<C1, C2> = TeeBase<C1, C2, CopyTeer>;
+pub type TeeClone<C1, C2> = TeeBase<C1, C2, CloneTeer>;
 
-#[derive(Clone)]
-#[allow(missing_debug_implementations)]
-pub struct CopyTeer(());
-
-pub(in crate::collector) fn tee<C1, C2>(collector1: C1, collector2: C2) -> Tee<C1, C2>
+pub(in crate::collector) fn tee_clone<C1, C2>(collector1: C1, collector2: C2) -> TeeClone<C1, C2>
 where
     C1: ParallelCollectorBase,
     C2: ParallelCollectorBase,
 {
-    TeeBase::new(collector1, collector2, CopyTeer(()))
+    TeeBase::new(collector1, collector2, CloneTeer(()))
 }
 
-impl<'this, T> DefinePassDown<'this, T> for CopyTeer
+// `pub` to satisfy the compiler.
+// Users can't reach this anyway.
+#[derive(Clone)]
+#[allow(missing_debug_implementations)]
+pub struct CloneTeer(());
+
+impl<'this, T> DefinePassDown<'this, T> for CloneTeer
 where
-    T: Copy,
+    T: Clone,
 {
     type PassDown = T;
 }
 
-impl<T> Teer<T> for CopyTeer
+impl<T> Teer<T> for CloneTeer
 where
-    T: Copy,
+    T: Clone,
 {
-    const ITEM_IS_COPY: bool = true;
-
     #[inline]
     fn pass_down(&mut self, item: &mut T) -> T {
-        *item
+        item.clone()
     }
 
     #[inline]

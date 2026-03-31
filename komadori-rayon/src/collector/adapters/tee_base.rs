@@ -10,7 +10,7 @@ use crate::collector::{
 use super::Fuse;
 
 #[derive(Clone)]
-pub(super) struct TeeBase<C1, C2, TF> {
+pub struct TeeBase<C1, C2, TF> {
     collector1: Fuse<C1>,
     collector2: Fuse<C2>,
     teer: TF,
@@ -43,17 +43,12 @@ where
     }
 }
 
-pub(super) trait DefinePassDown<
-    'this,
-    T,
-    Binder: self_binder::Sealed = self_binder::Binder<'this, T>,
->
-{
+pub(super) trait DefinePassDown<'this, T, Binder: t_binder::Sealed = t_binder::Binder<'this, T>> {
     type PassDown;
 }
 
 /// Used for the hack. Should not be able to be referred outside.
-mod self_binder {
+mod t_binder {
     use std::marker::PhantomData;
 
     pub trait Sealed {}
@@ -243,7 +238,7 @@ fn and_cf_breaks(cf1: ControlFlow<()>, cf2: ControlFlow<()>) -> ControlFlow<()> 
 }
 
 #[doc(hidden)]
-pub mod __adapter_tee_internal {
+mod __adapter_tee_internal {
     use std::ops::ControlFlow;
 
     use komadori::prelude::*;

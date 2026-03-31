@@ -3,7 +3,9 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineConsumer};
-use super::{Fuse, IntoParallelCollectorBase, Take, Tee, assert_par_collector_base};
+use super::{
+    Fuse, IntoParallelCollectorBase, Take, Tee, TeeClone, assert_par_collector_base, tee, tee_clone,
+};
 
 /// An (indexed) parallel collector.
 ///
@@ -238,7 +240,33 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
         Self: Sized,
         C: IntoParallelCollectorBase,
     {
-        assert_par_collector_base(Tee::new(self, other.into_par_collector()))
+        assert_par_collector_base(tee(self, other.into_par_collector()))
+    }
+
+    /// Creates a parallel collector that lets both collectors collect the same item.
+    ///
+    /// For each item collected, the first collector collects the item
+    /// cloned with the [`Clone`] trait before the second collector collects it.
+    /// If one of them has stopped, the implementation will **not** clone
+    /// the item, and will instead feed it into the other for optimization.
+    ///
+    /// `tee_clone()` only stops when **both** collectors have stopped.
+    ///
+    /// If the item type of this adapter is `T`, both collectors must implement
+    /// [`ParallelCollector<T>`](super::ParallelCollector), and `T` must implement [`Clone`].
+    ///
+    /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
+    /// both underlying collectors, in order.
+    ///
+    /// See the [module-level documentation](crate::collector) for
+    /// when this adapter is used and other variants of `tee` adapters.
+    #[inline]
+    fn tee_clone<C>(self, other: C) -> TeeClone<Self, C::IntoParCollector>
+    where
+        Self: Sized,
+        C: IntoParallelCollectorBase,
+    {
+        assert_par_collector_base(tee_clone(self, other.into_par_collector()))
     }
 }
 
