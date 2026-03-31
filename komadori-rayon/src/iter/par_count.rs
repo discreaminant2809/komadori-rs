@@ -43,7 +43,7 @@ impl ParCount {
 }
 
 impl<'this> DefineConsumer<'this> for ParCount {
-    type Consumer = __count_internal::Consumer;
+    type Consumer = consumer::Consumer;
 }
 
 impl ParallelCollectorBase for ParCount {
@@ -70,7 +70,7 @@ impl ParallelCollectorBase for ParCount {
 }
 
 impl<'this> DefineUnindexedConsumer<'this> for ParCount {
-    type UnindexedConsumer = __count_internal::Consumer;
+    type UnindexedConsumer = consumer::Consumer;
 }
 
 impl UnindexedParallelCollectorBase for ParCount {
@@ -82,16 +82,15 @@ impl UnindexedParallelCollectorBase for ParCount {
             <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        (__count_internal::Consumer::new(), |count| {
+        (consumer::Consumer::new(), |count| {
             self.count += count;
             ControlFlow::Continue(())
         })
     }
 }
 
-#[doc(hidden)]
 #[allow(missing_debug_implementations)]
-mod __count_internal {
+mod consumer {
     use komadori::prelude::*;
 
     use crate::collector::plumbing::{self, UnindexedConsumerBase};

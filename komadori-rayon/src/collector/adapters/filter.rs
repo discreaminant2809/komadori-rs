@@ -95,7 +95,7 @@ where
     C: DefineUnindexedConsumer<'this>,
     P: Sync,
 {
-    type UnindexedConsumer = __adapter_filter_internal::Consumer<C::UnindexedConsumer, &'this P>;
+    type UnindexedConsumer = consumer::Consumer<C::UnindexedConsumer, &'this P>;
 }
 
 impl<C, P> UnindexedParallelCollectorBase for Filter<C, P>
@@ -112,10 +112,7 @@ where
         ) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        (
-            __adapter_filter_internal::Consumer::new(consumer, &self.pred),
-            commit,
-        )
+        (consumer::Consumer::new(consumer, &self.pred), commit)
     }
 
     fn take_parts_unindexed<'a>(
@@ -127,29 +124,21 @@ where
         ),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        (
-            __adapter_filter_internal::Consumer::new(consumer, &self.pred),
-            commit,
-        )
+        (consumer::Consumer::new(consumer, &self.pred), commit)
     }
 }
 
-#[doc(hidden)]
 #[allow(missing_debug_implementations)]
-pub mod __adapter_filter_internal {
+mod consumer {
     use std::ops::ControlFlow;
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{self, UnindexedConsumerBase};
 
     pub struct Consumer<C, P> {
         consumer: C,
         pred: P,
-    }
-
-    pub struct Combiner<C> {
-        combiner: C,
     }
 
     // Can't utilize from komadori's filter(), since it requires item type right away.
@@ -184,21 +173,14 @@ pub mod __adapter_filter_internal {
 
     impl<C, P> plumbing::ConsumerBase for Consumer<C, P>
     where
-        C: plumbing::ConsumerBase,
+        C: plumbing::UnindexedConsumerBase,
         P: Clone + Send,
     {
-        type Combiner = Combiner<C::Combiner>;
+        type Combiner = C::Combiner;
 
         #[inline]
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let (consumer, combiner) = self.consumer.split_off_left_at(index);
-            (
-                Self {
-                    consumer,
-                    pred: self.pred.clone(),
-                },
-                Combiner { combiner },
-            )
+        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
+            (self.split_off_left(), self.to_combiner())
         }
 
         #[inline]
@@ -239,19 +221,7 @@ pub mod __adapter_filter_internal {
 
         #[inline]
         fn to_combiner(&self) -> Self::Combiner {
-            Combiner {
-                combiner: self.consumer.to_combiner(),
-            }
-        }
-    }
-
-    impl<C, O> plumbing::Combiner<O> for Combiner<C>
-    where
-        C: plumbing::Combiner<O>,
-    {
-        #[inline]
-        fn combine(self, left: &mut O, right: O) {
-            self.combiner.combine(left, right);
+            self.consumer.to_combiner()
         }
     }
 

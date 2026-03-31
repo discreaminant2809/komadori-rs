@@ -73,7 +73,7 @@ impl<'this, T> DefineConsumer<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type Consumer = __internal::Consumer<T>;
+    type Consumer = consumer::Consumer<T>;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -107,7 +107,7 @@ impl<'this, T> DefineUnindexedConsumer<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type UnindexedConsumer = __internal::Consumer<T>;
+    type UnindexedConsumer = consumer::Consumer<T>;
 }
 
 impl<T> UnindexedParallelCollectorBase for IntoParCollector<T>
@@ -122,7 +122,7 @@ where
             <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        (__internal::Consumer::new(), |mut output| {
+        (consumer::Consumer::new(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         })
@@ -133,7 +133,7 @@ impl<'this, 'c, T> DefineConsumer<'this> for ParCollectorMut<'c, T>
 where
     T: Send,
 {
-    type Consumer = __internal::Consumer<T>;
+    type Consumer = consumer::Consumer<T>;
 }
 
 impl<'c, T> ParallelCollectorBase for ParCollectorMut<'c, T>
@@ -167,7 +167,7 @@ impl<'this, 'c, T> DefineUnindexedConsumer<'this> for ParCollectorMut<'c, T>
 where
     T: Send,
 {
-    type UnindexedConsumer = __internal::Consumer<T>;
+    type UnindexedConsumer = consumer::Consumer<T>;
 }
 
 impl<'c, T> UnindexedParallelCollectorBase for ParCollectorMut<'c, T>
@@ -182,16 +182,15 @@ where
             <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        (__internal::Consumer::new(), |mut output| {
+        (consumer::Consumer::new(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         })
     }
 }
 
-#[doc(hidden)]
 #[allow(missing_debug_implementations)]
-pub mod __internal {
+mod consumer {
     use std::{collections::LinkedList, ops::ControlFlow};
 
     use komadori::prelude::*;

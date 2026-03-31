@@ -101,7 +101,7 @@ where
     C2: DefineConsumer<'this>,
     TF: Send + Clone,
 {
-    type Consumer = __adapter_tee_internal::Consumer<
+    type Consumer = consumer::Consumer<
         <Fuse<C1> as DefineConsumer<'this>>::Consumer,
         <Fuse<C2> as DefineConsumer<'this>>::Consumer,
         TF,
@@ -145,7 +145,7 @@ where
 
         (
             actual_len1.max(actual_len2),
-            __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
+            consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| and_cf_breaks(commit1(o1), commit2(o2)),
         )
     }
@@ -163,7 +163,7 @@ where
 
         (
             actual_len1.max(actual_len2),
-            __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
+            consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| {
                 commit1(o1);
                 commit2(o2);
@@ -178,7 +178,7 @@ where
     C2: DefineUnindexedConsumer<'this>,
     TF: Send + Clone,
 {
-    type UnindexedConsumer = __adapter_tee_internal::Consumer<
+    type UnindexedConsumer = consumer::Consumer<
         <Fuse<C1> as DefineUnindexedConsumer<'this>>::UnindexedConsumer,
         <Fuse<C2> as DefineUnindexedConsumer<'this>>::UnindexedConsumer,
         TF,
@@ -203,7 +203,7 @@ where
         let (consumer2, commit2) = self.collector2.parts_unindexed();
 
         (
-            __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
+            consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| and_cf_breaks(commit1(o1), commit2(o2)),
         )
     }
@@ -220,7 +220,7 @@ where
         let (consumer2, commit2) = self.collector2.take_parts_unindexed();
 
         (
-            __adapter_tee_internal::Consumer::new(consumer1, consumer2, self.teer.clone()),
+            consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| {
                 commit1(o1);
                 commit2(o2);
@@ -237,8 +237,8 @@ fn and_cf_breaks(cf1: ControlFlow<()>, cf2: ControlFlow<()>) -> ControlFlow<()> 
     }
 }
 
-#[doc(hidden)]
-mod __adapter_tee_internal {
+#[allow(missing_debug_implementations)]
+mod consumer {
     use std::ops::ControlFlow;
 
     use komadori::prelude::*;
@@ -247,7 +247,6 @@ mod __adapter_tee_internal {
 
     use super::DefinePassDown;
 
-    #[allow(missing_debug_implementations)]
     pub struct Consumer<C1, C2, TF> {
         consumer1: C1,
         consumer2: C2,
@@ -266,7 +265,6 @@ mod __adapter_tee_internal {
         }
     }
 
-    #[allow(missing_debug_implementations)]
     pub struct Combiner<C1, C2> {
         combiner1: C1,
         combiner2: C2,
@@ -274,7 +272,6 @@ mod __adapter_tee_internal {
 
     // Unlike komadori's tee variants, the collectors here are obtained
     // from fused parallel collectors, which already guarantees fuse.
-    #[allow(missing_debug_implementations)]
     pub struct IntoCollector<C1, C2, TF> {
         collector1: C1,
         collector2: C2,

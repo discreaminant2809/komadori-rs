@@ -45,8 +45,8 @@
 //!
 //! Another difference is, unlike `rayon`, consumer types have to be `pub` to support
 //! that "delayed item commitment" trick. It is kind of a limitation for now.
-//! As of now, we require all consumer types to be `pub`, but also `#[doc(hidden)]` to
-//! not polute the API surface and become semver-friendly.
+//! As of now, we require all consumer types to be `pub`, but behind private modules to
+//! not polute the API surface and become more semver-friendly.
 //! Caller must **not** refer to those types directly since they do not follow the semver,
 //! but indirectly via [`DefineConsumer`] and [`DefineUnindexedConsumer`].
 //!

@@ -35,7 +35,7 @@ impl<'this, C> DefineConsumer<'this> for Take<C>
 where
     C: DefineConsumer<'this>,
 {
-    type Consumer = __adapter_take_indexed_internal::Consumer<C::Consumer>;
+    type Consumer = indexed_consumer::Consumer<C::Consumer>;
 }
 
 impl<C> ParallelCollectorBase for Take<C>
@@ -86,7 +86,7 @@ where
 
         (
             max_len,
-            __adapter_take_indexed_internal::Consumer::new(consumer, max_len),
+            indexed_consumer::Consumer::new(consumer, max_len),
             commit,
         )
     }
@@ -117,7 +117,7 @@ where
 
         (
             max_len,
-            __adapter_take_indexed_internal::Consumer::new(consumer, max_len),
+            indexed_consumer::Consumer::new(consumer, max_len),
             commit,
         )
     }
@@ -127,8 +127,7 @@ impl<'this, C> DefineUnindexedConsumer<'this> for Take<C>
 where
     C: DefineUnindexedConsumer<'this>,
 {
-    type UnindexedConsumer =
-        __adapter_take_unindexed_internal::Consumer<'this, C::UnindexedConsumer>;
+    type UnindexedConsumer = unindexed_consumer::Consumer<'this, C::UnindexedConsumer>;
 }
 
 impl<C> UnindexedParallelCollectorBase for Take<C>
@@ -145,7 +144,7 @@ where
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         (
-            __adapter_take_unindexed_internal::Consumer::new(consumer, &self.remaining),
+            unindexed_consumer::Consumer::new(consumer, &self.remaining),
             commit,
         )
     }
@@ -160,7 +159,7 @@ where
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         (
-            __adapter_take_unindexed_internal::Consumer::new(consumer, &self.remaining),
+            unindexed_consumer::Consumer::new(consumer, &self.remaining),
             commit,
         )
     }
@@ -184,10 +183,8 @@ where
     }
 }
 
-// impl<'this, C> DefineConsumer
-#[doc(hidden)]
 #[allow(missing_debug_implementations)]
-mod __adapter_take_indexed_internal {
+mod indexed_consumer {
     use std::ops::ControlFlow;
 
     use komadori::prelude::*;
@@ -247,9 +244,8 @@ mod __adapter_take_indexed_internal {
     }
 }
 
-#[doc(hidden)]
 #[allow(missing_debug_implementations)]
-mod __adapter_take_unindexed_internal {
+mod unindexed_consumer {
     use std::{
         ops::ControlFlow,
         sync::atomic::{AtomicUsize, Ordering},
@@ -298,7 +294,7 @@ mod __adapter_take_unindexed_internal {
 
     impl<C> plumbing::ConsumerBase for Consumer<'_, C>
     where
-        C: plumbing::UnindexedConsumerBase,
+        C: UnindexedConsumerBase,
     {
         type Combiner = C::Combiner;
 
@@ -316,9 +312,9 @@ mod __adapter_take_unindexed_internal {
         }
     }
 
-    impl<C> plumbing::UnindexedConsumerBase for Consumer<'_, C>
+    impl<C> UnindexedConsumerBase for Consumer<'_, C>
     where
-        C: plumbing::UnindexedConsumerBase,
+        C: UnindexedConsumerBase,
     {
         #[inline]
         fn split_off_left(&self) -> Self {

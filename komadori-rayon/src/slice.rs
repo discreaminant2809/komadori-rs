@@ -4,5 +4,4 @@
 //!
 //! This module corresponds to [`std::slice`].
 
-#[doc(hidden)]
-pub mod in_place_write;
+pub(crate) mod in_place_write;

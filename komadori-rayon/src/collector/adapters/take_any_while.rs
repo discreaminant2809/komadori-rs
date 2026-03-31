@@ -162,8 +162,7 @@ where
     C: DefineUnindexedConsumer<'this>,
     P: Sync,
 {
-    type UnindexedConsumer =
-        __adapter_take_any_while_internal::Consumer<'this, C::UnindexedConsumer, P>;
+    type UnindexedConsumer = consumer::Consumer<'this, C::UnindexedConsumer, P>;
 }
 
 impl<C, P> UnindexedParallelCollectorBase for TakeAnyWhile<C, P>
@@ -180,10 +179,7 @@ where
         ) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        (
-            __adapter_take_any_while_internal::Consumer::new(consumer, &self.take_pred),
-            commit,
-        )
+        (consumer::Consumer::new(consumer, &self.take_pred), commit)
     }
 
     fn take_parts_unindexed<'a>(
@@ -195,31 +191,23 @@ where
         ),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        (
-            __adapter_take_any_while_internal::Consumer::new(consumer, &self.take_pred),
-            commit,
-        )
+        (consumer::Consumer::new(consumer, &self.take_pred), commit)
     }
 }
 
-#[doc(hidden)]
 #[allow(missing_debug_implementations)]
-pub mod __adapter_take_any_while_internal {
+mod consumer {
     use std::ops::ControlFlow;
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{ConsumerBase, UnindexedConsumerBase};
 
     use super::TakePred;
 
     pub struct Consumer<'a, C, P> {
         consumer: C,
         take_pred: &'a TakePred<P>,
-    }
-
-    pub struct Combiner<C> {
-        combiner: C,
     }
 
     pub struct IntoCollector<'a, C, P> {
@@ -254,23 +242,16 @@ pub mod __adapter_take_any_while_internal {
         }
     }
 
-    impl<'a, C, P> plumbing::ConsumerBase for Consumer<'a, C, P>
+    impl<C, P> ConsumerBase for Consumer<'_, C, P>
     where
-        C: plumbing::ConsumerBase,
+        C: UnindexedConsumerBase,
         P: Sync,
     {
-        type Combiner = Combiner<C::Combiner>;
+        type Combiner = C::Combiner;
 
         #[inline]
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let (consumer, combiner) = self.consumer.split_off_left_at(index);
-            (
-                Self {
-                    consumer,
-                    take_pred: self.take_pred,
-                },
-                Combiner { combiner },
-            )
+        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
+            (self.split_off_left(), self.to_combiner())
         }
 
         #[inline]
@@ -280,9 +261,9 @@ pub mod __adapter_take_any_while_internal {
         }
     }
 
-    impl<C, P> plumbing::UnindexedConsumerBase for Consumer<'_, C, P>
+    impl<C, P> UnindexedConsumerBase for Consumer<'_, C, P>
     where
-        C: plumbing::UnindexedConsumerBase,
+        C: UnindexedConsumerBase,
         P: Sync,
     {
         #[inline]
@@ -295,19 +276,7 @@ pub mod __adapter_take_any_while_internal {
 
         #[inline]
         fn to_combiner(&self) -> Self::Combiner {
-            Combiner {
-                combiner: self.consumer.to_combiner(),
-            }
-        }
-    }
-
-    impl<C, O> plumbing::Combiner<O> for Combiner<C>
-    where
-        C: plumbing::Combiner<O>,
-    {
-        #[inline]
-        fn combine(self, left: &mut O, right: O) {
-            self.combiner.combine(left, right);
+            self.consumer.to_combiner()
         }
     }
 

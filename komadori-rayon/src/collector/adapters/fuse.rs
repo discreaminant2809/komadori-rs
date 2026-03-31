@@ -35,7 +35,7 @@ impl<'this, C> DefineConsumer<'this> for Fuse<C>
 where
     C: DefineConsumer<'this>,
 {
-    type Consumer = __adapter_fuse_internal::Consumer<<C as DefineConsumer<'this>>::Consumer>;
+    type Consumer = consumer::Consumer<<C as DefineConsumer<'this>>::Consumer>;
 }
 
 impl<C> ParallelCollectorBase for Fuse<C>
@@ -67,10 +67,7 @@ where
         let (actual_len, consumer, commit) = self.collector.parts(len);
         (
             actual_len,
-            __adapter_fuse_internal::Consumer {
-                consumer,
-                break_hint: self.break_hint.into(),
-            },
+            consumer::Consumer::new(consumer, self.break_hint),
             |output| {
                 let cf = commit(output);
                 if cf.is_break() {
@@ -92,10 +89,7 @@ where
         let (actual_len, consumer, commit) = self.collector.take_parts(len);
         (
             actual_len,
-            __adapter_fuse_internal::Consumer {
-                consumer,
-                break_hint: self.break_hint.into(),
-            },
+            consumer::Consumer::new(consumer, self.break_hint),
             // We can't set the flag if we cannot obtain the signal from
             // the committer.
             commit,
@@ -108,7 +102,7 @@ where
     C: DefineUnindexedConsumer<'this>,
 {
     type UnindexedConsumer =
-        __adapter_fuse_internal::Consumer<<C as DefineUnindexedConsumer<'this>>::UnindexedConsumer>;
+        consumer::Consumer<<C as DefineUnindexedConsumer<'this>>::UnindexedConsumer>;
 }
 
 impl<C> UnindexedParallelCollectorBase for Fuse<C>
@@ -125,11 +119,14 @@ where
     ){
         let (consumer, commit) = self.collector.parts_unindexed();
         (
-            __adapter_fuse_internal::Consumer {
-                consumer,
-                break_hint: self.break_hint.into(),
+            consumer::Consumer::new(consumer, self.break_hint),
+            |output| {
+                let cf = commit(output);
+                if cf.is_break() {
+                    self.break_hint = cf;
+                }
+                self.break_hint
             },
-            commit,
         )
     }
 
@@ -142,18 +139,11 @@ where
         ),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        (
-            __adapter_fuse_internal::Consumer {
-                consumer,
-                break_hint: self.break_hint.into(),
-            },
-            commit,
-        )
+        (consumer::Consumer::new(consumer, self.break_hint), commit)
     }
 }
 
-#[doc(hidden)]
-pub mod __adapter_fuse_internal {
+mod consumer {
     use std::{cell::Cell, ops::ControlFlow};
 
     use komadori::prelude::*;
@@ -174,6 +164,14 @@ pub mod __adapter_fuse_internal {
         break_hint: ControlFlow<()>,
     }
 
+    impl<C> Consumer<C> {
+        pub(super) fn new(consumer: C, break_hint: ControlFlow<()>) -> Self {
+            Self {
+                consumer,
+                break_hint: break_hint.into(),
+            }
+        }
+    }
     impl<C> IntoCollectorBase for Consumer<C>
     where
         C: IntoCollectorBase,

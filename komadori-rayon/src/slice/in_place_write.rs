@@ -1,3 +1,5 @@
+#![allow(missing_debug_implementations)]
+
 mod send_ptr;
 
 use send_ptr::*;
@@ -32,7 +34,6 @@ Ideas:
 - Finally, it's checked whether the number of writes matches the expectation.
  */
 
-#[allow(missing_debug_implementations)]
 pub struct Consumer<'a, T> {
     start: SendPtr<T>,
     len: usize,
@@ -56,7 +57,6 @@ where
     }
 }
 
-#[allow(missing_debug_implementations)]
 pub struct WriteProof<'a, T> {
     start: SendPtr<T>,
     len: usize,
@@ -69,7 +69,6 @@ pub struct WriteProof<'a, T> {
     _marker: PhantomData<fn(&'a mut [T]) -> &'a mut [T]>,
 }
 
-#[allow(missing_debug_implementations)]
 pub struct Combiner(());
 
 impl<'a, T> IntoCollectorBase for Consumer<'a, T> {

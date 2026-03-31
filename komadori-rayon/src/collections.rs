@@ -4,5 +4,4 @@
 
 // pub mod btree_set;
 pub mod linked_list;
-#[doc(hidden)]
-pub mod linked_vec;
+pub(crate) mod linked_vec;

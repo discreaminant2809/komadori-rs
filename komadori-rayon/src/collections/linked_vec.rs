@@ -1,3 +1,5 @@
+#![allow(missing_debug_implementations)]
+
 use std::{collections::LinkedList, marker::PhantomData, ops::ControlFlow};
 
 use komadori::prelude::*;
@@ -29,18 +31,15 @@ impl LenCarrier for () {
     fn combine(&mut self, _: Self) {}
 }
 
-#[allow(missing_debug_implementations)]
 pub struct Consumer<T, L> {
     _marker: PhantomData<(T, L)>,
 }
 
-#[allow(missing_debug_implementations)]
 pub struct IntoCollector<T, L> {
     chunk: Vec<T>,
     _marker: PhantomData<L>,
 }
 
-#[allow(missing_debug_implementations)]
 pub struct Combiner(());
 
 impl<T, L> Consumer<T, L> {
