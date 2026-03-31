@@ -32,6 +32,10 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack
 
+      - name: Add MIRI
+        if: matrix.rust == 'nightly'
+        run: rustup component add miri
+
       # - name: Install cargo-semver-checks
       #   if: matrix.rust == 'stable'
       #   uses: taiki-e/install-action@v2
@@ -43,6 +47,10 @@ jobs:
 
       - name: Run Tests
         run: cargo hack test --feature-powerset --lib
+
+      - name: Run Miri on Some Tests
+        if: matrix.rust == 'nightly'
+        run: cargo hack miri test --feature-powerset --lib "::miri_tests::"
 
       - name: Run Doc Tests
         run: cargo test --doc --all-features
@@ -58,11 +66,3 @@ jobs:
       # - name: Check SemVer Violation
       #   if: matrix.rust == 'stable'
       #   run: cargo semver-checks check-release
-
-      # - name: Upload cargo-semver-checks Crash Report
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: cargo-semver-checks-crash-report
-      #     path: /tmp/report-*.toml
-      #     if-no-files-found: ignore

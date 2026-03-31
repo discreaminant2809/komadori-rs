@@ -8,6 +8,41 @@ on:
   pull_request:
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, beta, nightly]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
+
+      # For "Check no_std Compliance"
+      - name: Install thumbv7em-none-eabihf Target
+        run: rustup target add thumbv7em-none-eabihf
+
+      - name: Check no_std Compliance (Ad-Hoc for Now)
+        run: |
+          cargo hack b \
+            --feature-powerset \
+            --exclude-features std,default \
+            --target thumbv7em-none-eabihf \
+            -p komadori
+
   # cargo-semver-checks seems to be very sensitive to Rust version change,
   # we pin a specific version here until it works for the next version.
   sem-ver-check:
@@ -21,9 +56,6 @@ jobs:
           # The latest one that still works for `cargo-semver-checks`.
           toolchain: 1.94.1
 
-      - name: Install cargo-hack
-        run: cargo install cargo-hack
-
       - name: Install cargo-semver-checks
         uses: taiki-e/install-action@v2
         with:
@@ -32,14 +64,10 @@ jobs:
       - name: Check SemVer Violation
         run: cargo semver-checks check-release -p komadori
 
-      # For "Check no_std Compliance"
-      - name: Install thumbv7em-none-eabihf Target
-        run: rustup target add thumbv7em-none-eabihf
-
-      - name: Check no_std Compliance (Ad-Hoc for Now)
-        run: |
-          cargo hack b \
-            --feature-powerset \
-            --exclude-features std,default \
-            --target thumbv7em-none-eabihf \
-            -p komadori
+      - name: Upload cargo-semver-checks Crash Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-semver-checks-crash-report
+          path: /tmp/report-*.toml
+          if-no-files-found: ignore

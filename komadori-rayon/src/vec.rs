@@ -269,13 +269,13 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+mod miri_tests {
     use komadori::prelude::{Collector, IntoCollectorBase};
 
     use crate::prelude::*;
 
     #[test]
-    fn miri_no_alias_for_collector_mut() {
+    fn no_alias_for_collector_mut() {
         let mut nums = vec![1, 2, 3];
         let mut collector = nums.par_collector_mut();
 
