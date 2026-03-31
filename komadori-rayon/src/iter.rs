@@ -12,9 +12,11 @@
 //! [`sum()`]: Iterator::sum
 
 mod par_count;
+mod par_reduce;
 #[cfg(feature = "rayon")]
 mod rayon_par_iter_ext;
 
 pub use par_count::*;
+pub use par_reduce::*;
 #[cfg(feature = "rayon")]
 pub use rayon_par_iter_ext::*;
