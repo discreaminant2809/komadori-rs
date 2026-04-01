@@ -5,6 +5,8 @@ mod take_any_while;
 mod tee;
 mod tee_base;
 mod tee_clone;
+mod tee_funnel;
+mod tee_mut;
 
 pub use filter::*;
 pub use fuse::*;
@@ -12,7 +14,11 @@ pub use take::*;
 pub use take_any_while::*;
 pub use tee::Tee;
 pub use tee_clone::TeeClone;
+pub use tee_funnel::TeeFunnel;
+pub use tee_mut::TeeMut;
 
 pub(super) use tee::tee;
 pub(super) use tee_base::*;
 pub(super) use tee_clone::tee_clone;
+pub(super) use tee_funnel::tee_funnel;
+pub(super) use tee_mut::tee_mut;

@@ -4,7 +4,8 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineConsumer};
 use super::{
-    Fuse, IntoParallelCollectorBase, Take, Tee, TeeClone, assert_par_collector_base, tee, tee_clone,
+    Fuse, IntoParallelCollectorBase, Take, Tee, TeeClone, TeeFunnel, TeeMut,
+    assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -267,6 +268,62 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
         C: IntoParallelCollectorBase,
     {
         assert_par_collector_base(tee_clone(self, other.into_par_collector()))
+    }
+
+    /// Creates a parallel collector that lets both collectors collect the same item.
+    ///
+    /// For each item collected, the first collector collects
+    /// the mutable reference of the item before the second collector also
+    /// collects the mutable reference of it.
+    ///
+    /// `tee_mut()` only stops when **both** collectors have stopped.
+    ///
+    /// If the item type of this adapter is `&'i mut T`,
+    /// the first collector must implement
+    /// [`for<'a> ParallelCollector<&'a mut T>`](super::ParallelCollector)
+    /// (a collector that can collect a mutable reference with any lifetime),
+    /// and the second collector must implement
+    /// [`ParallelCollector<&'i mut T>`](super::ParallelCollector).
+    ///
+    /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
+    /// both underlying collectors, in order.
+    ///
+    /// See the [module-level documentation](crate::collector) for
+    /// when this adapter is used and other variants of `tee` adapters.
+    #[inline]
+    fn tee_mut<C>(self, other: C) -> TeeMut<Self, C::IntoParCollector>
+    where
+        Self: Sized,
+        C: IntoParallelCollectorBase,
+    {
+        assert_par_collector_base(tee_mut(self, other.into_par_collector()))
+    }
+
+    /// Creates a parallel collector that lets both collectors collect the same item.
+    ///
+    /// For each item collected, the first collector collects
+    /// the mutable reference of the item before the second collector collects it.
+    ///
+    /// `tee_funnel()` only stops when **both** collectors have stopped.
+    ///
+    /// If the item type of this adapter is `T`,
+    /// the first collector must implement
+    /// [`for<'a> ParallelCollector<&'a mut T>`](super::ParallelCollector)
+    /// (a collector that can collect a mutable reference with any lifetime),
+    /// and the second collector must implement [`ParallelCollector<T>`](super::ParallelCollector).
+    ///
+    /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
+    /// both underlying collectors, in order.
+    ///
+    /// See the [module-level documentation](crate::collector) for
+    /// when this adapter is used and other variants of `tee` adapters.
+    #[inline]
+    fn tee_funnel<C>(self, other: C) -> TeeFunnel<Self, C::IntoParCollector>
+    where
+        Self: Sized,
+        C: IntoParallelCollectorBase,
+    {
+        assert_par_collector_base(tee_funnel(self, other.into_par_collector()))
     }
 }
 
