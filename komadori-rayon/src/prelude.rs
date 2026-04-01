@@ -17,3 +17,4 @@ pub use crate::collector::{
 };
 #[cfg(feature = "rayon")]
 pub use crate::iter::RayonParallelIteratorExt;
+pub use crate::ops::{IntoParProduct, IntoParSum};
