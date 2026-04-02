@@ -8,5 +8,7 @@
 //! This module corresponds to [`std::cmp`].
 
 mod max;
+mod min;
 
 pub use max::*;
+pub use min::*;

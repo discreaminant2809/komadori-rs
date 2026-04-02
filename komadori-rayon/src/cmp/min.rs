@@ -7,55 +7,55 @@ use crate::collector::{
     plumbing::{DefineConsumer, DefineUnindexedConsumer},
 };
 
-/// A parallel collector that computes the maximum value among the items it collects.
+/// A parallel collector that computes the minimum value among the items it collects.
 ///
 /// Its [`Output`](ParallelCollectorBase::Output) is `None` if it has not collected any items,
-/// or `Some` containing the maximum item otherwise.
+/// or `Some` containing the minimum item otherwise.
 ///
-/// This collector corresponds to [`Iterator::max()`].
+/// This collector corresponds to [`Iterator::min()`].
 ///
 /// # Examples
 ///
 /// ```
 /// use rayon::prelude::*;
-/// use komadori_rayon::{prelude::*, cmp::ParMax};
+/// use komadori_rayon::{prelude::*, cmp::ParMin};
 ///
-/// let max = [1, 3, 2, 5, 3]
+/// let min = [4, 5, 2, 4, 3]
 ///     .into_par_iter()
-///     .feed_into(ParMax::new());
+///     .feed_into(ParMin::new());
 ///
-/// assert_eq!(max, Some(5));
+/// assert_eq!(min, Some(2));
 /// ```
 ///
 /// The output is `None` if no items were collected.
 ///
 /// ```
 /// use rayon::prelude::*;
-/// use komadori_rayon::{prelude::*, cmp::ParMax};
+/// use komadori_rayon::{prelude::*, cmp::ParMin};
 ///
-/// let max = ([] as [i32; _])
+/// let min = ([] as [i32; _])
 ///     .into_par_iter()
-///     .feed_into(ParMax::new());
+///     .feed_into(ParMin::new());
 ///
-/// assert_eq!(max, None);
+/// assert_eq!(min, None);
 /// ```
 #[derive(Debug, Clone)]
-pub struct ParMax<T> {
-    max: Option<T>,
+pub struct ParMin<T> {
+    min: Option<T>,
 }
 
-impl<T> ParMax<T>
+impl<T> ParMin<T>
 where
     T: Ord + Send,
 {
     /// Creates a new instance of this parallel collector.
     #[inline]
     pub const fn new() -> Self {
-        assert_unindexed_par_collector::<_, T>(Self { max: None })
+        assert_unindexed_par_collector::<_, T>(Self { min: None })
     }
 }
 
-impl<T> Default for ParMax<T>
+impl<T> Default for ParMin<T>
 where
     T: Ord + Send,
 {
@@ -65,21 +65,21 @@ where
     }
 }
 
-impl<'this, T> DefineConsumer<'this> for ParMax<T>
+impl<'this, T> DefineConsumer<'this> for ParMin<T>
 where
     T: Ord + Send,
 {
     type Consumer = consumer::Consumer<T>;
 }
 
-impl<'this, T> DefineUnindexedConsumer<'this> for ParMax<T>
+impl<'this, T> DefineUnindexedConsumer<'this> for ParMin<T>
 where
     T: Ord + Send,
 {
     type UnindexedConsumer = consumer::Consumer<T>;
 }
 
-impl<T> ParallelCollectorBase for ParMax<T>
+impl<T> ParallelCollectorBase for ParMin<T>
 where
     T: Ord + Send,
 {
@@ -87,7 +87,7 @@ where
 
     #[inline]
     fn finish(self) -> Self::Output {
-        self.max
+        self.min
     }
 
     fn parts<'a>(
@@ -105,7 +105,7 @@ where
     }
 }
 
-impl<T> UnindexedParallelCollectorBase for ParMax<T>
+impl<T> UnindexedParallelCollectorBase for ParMin<T>
 where
     T: Ord + Send,
 {
@@ -118,7 +118,7 @@ where
         ) -> ControlFlow<()>,
     ) {
         (consumer::Consumer::new(), |output| {
-            combine(&mut self.max, output);
+            combine(&mut self.min, output);
             ControlFlow::Continue(())
         })
     }
@@ -128,7 +128,6 @@ where
 fn combine<T: Ord>(left: &mut Option<T>, right: Option<T>) {
     crate::iter::combine_opt(left, right, |left, right| {
         if right < *left {
-        } else {
             *left = right;
         }
     });
@@ -159,7 +158,7 @@ mod consumer {
     {
         type Output = Option<T>;
 
-        type IntoCollector = komadori::cmp::Max<T>;
+        type IntoCollector = komadori::cmp::Min<T>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
