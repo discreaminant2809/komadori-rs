@@ -20,3 +20,16 @@ pub use par_count::*;
 pub use par_reduce::*;
 #[cfg(feature = "rayon")]
 pub use rayon_par_iter_ext::*;
+
+#[inline]
+pub(crate) fn combine_opt<T>(
+    left: &mut Option<T>,
+    right: Option<T>,
+    combiner: impl FnOnce(&mut T, T),
+) {
+    match (left, right) {
+        (_, None) => {}
+        (left @ None, Some(right)) => *left = Some(right),
+        (Some(left), Some(right)) => combiner(left, right),
+    }
+}

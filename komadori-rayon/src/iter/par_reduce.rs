@@ -127,17 +127,9 @@ where
         ) -> std::ops::ControlFlow<()>,
     ) {
         (consumer::Consumer::new(&self.f), |output| {
-            combine(&self.f, &mut self.accum, output);
+            crate::iter::combine_opt(&mut self.accum, output, &self.f);
             ControlFlow::Continue(())
         })
-    }
-}
-
-fn combine<T>(f: impl FnOnce(&mut T, T), left: &mut Option<T>, right: Option<T>) {
-    match (left, right) {
-        (_, None) => {}
-        (left @ None, Some(right)) => *left = Some(right),
-        (Some(left), Some(right)) => f(left, right),
     }
 }
 
@@ -218,7 +210,7 @@ mod consumer {
     {
         #[inline]
         fn combine(self, left: &mut Option<T>, right: Option<T>) {
-            super::combine(self.f, left, right);
+            crate::iter::combine_opt(left, right, self.f);
         }
     }
 }
