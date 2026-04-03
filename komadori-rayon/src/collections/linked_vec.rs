@@ -100,6 +100,17 @@ where
     }
 }
 
+impl<T, L> plumbing::Combiner<(LinkedList<Vec<T>>, L)> for Combiner
+where
+    L: LenCarrier,
+{
+    #[inline]
+    fn combine(self, left: &mut (LinkedList<Vec<T>>, L), mut right: (LinkedList<Vec<T>>, L)) {
+        left.0.append(&mut right.0);
+        left.1.combine(right.1);
+    }
+}
+
 impl<T, L> CollectorBase for IntoCollector<T, L>
 where
     L: LenCarrier,
@@ -130,13 +141,38 @@ where
     }
 }
 
-impl<T, L> plumbing::Combiner<(LinkedList<Vec<T>>, L)> for Combiner
+impl<'i, T, L> Collector<&'i T> for IntoCollector<T, L>
 where
     L: LenCarrier,
+    T: Copy,
 {
     #[inline]
-    fn combine(self, left: &mut (LinkedList<Vec<T>>, L), mut right: (LinkedList<Vec<T>>, L)) {
-        left.0.append(&mut right.0);
-        left.1.combine(right.1);
+    fn collect(&mut self, &item: &'i T) -> ControlFlow<()> {
+        self.chunk.push(item);
+        ControlFlow::Continue(())
+    }
+
+    #[inline]
+    fn collect_many(&mut self, items: impl IntoIterator<Item = &'i T>) -> ControlFlow<()> {
+        self.chunk.extend(items);
+        ControlFlow::Continue(())
+    }
+}
+
+impl<'i, T, L> Collector<&'i mut T> for IntoCollector<T, L>
+where
+    L: LenCarrier,
+    T: Copy,
+{
+    #[inline]
+    fn collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
+        self.chunk.push(item);
+        ControlFlow::Continue(())
+    }
+
+    #[inline]
+    fn collect_many(&mut self, items: impl IntoIterator<Item = &'i mut T>) -> ControlFlow<()> {
+        self.chunk.extend(items.into_iter().map(|&mut item| item));
+        ControlFlow::Continue(())
     }
 }

@@ -191,7 +191,7 @@ where
 
 #[allow(missing_debug_implementations)]
 mod consumer {
-    use std::{collections::LinkedList, ops::ControlFlow};
+    use std::collections::LinkedList;
 
     use komadori::prelude::*;
 
@@ -208,26 +208,14 @@ mod consumer {
         }
     }
 
-    impl<T> CollectorBase for Consumer<T> {
+    impl<T> IntoCollectorBase for Consumer<T> {
         type Output = LinkedList<T>;
 
-        #[inline]
-        fn finish(self) -> Self::Output {
-            self.0
-        }
-    }
-
-    impl<T> Collector<T> for Consumer<T> {
-        #[inline]
-        fn collect(&mut self, item: T) -> ControlFlow<()> {
-            self.0.push_back(item);
-            ControlFlow::Continue(())
-        }
+        type IntoCollector = <LinkedList<T> as IntoCollectorBase>::IntoCollector;
 
         #[inline]
-        fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-            self.0.extend(items);
-            ControlFlow::Continue(())
+        fn into_collector(self) -> Self::IntoCollector {
+            self.0.into_collector()
         }
     }
 

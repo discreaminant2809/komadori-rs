@@ -192,6 +192,7 @@ impl<'a, T> CollectorBase for WriteProof<'a, T> {
         }
     }
 }
+
 impl<'a, T> Collector<T> for WriteProof<'a, T> {
     fn collect(&mut self, item: T) -> ControlFlow<()> {
         self.break_hint()?;
@@ -203,5 +204,45 @@ impl<'a, T> Collector<T> for WriteProof<'a, T> {
         items
             .into_iter()
             .try_for_each(|item| unsafe { self.collect_unchecked(item) })
+    }
+}
+
+impl<'a, 'i, T> Collector<&'i T> for WriteProof<'a, T>
+where
+    T: Copy,
+{
+    #[inline]
+    fn collect(&mut self, &item: &'i T) -> ControlFlow<()> {
+        self.collect(item)
+    }
+
+    #[inline]
+    fn collect_many(&mut self, items: impl IntoIterator<Item = &'i T>) -> ControlFlow<()> {
+        self.collect_many(items.into_iter().copied())
+    }
+
+    #[inline]
+    fn collect_then_finish(self, items: impl IntoIterator<Item = &'i T>) -> Self::Output {
+        self.collect_then_finish(items.into_iter().copied())
+    }
+}
+
+impl<'a, 'i, T> Collector<&'i mut T> for WriteProof<'a, T>
+where
+    T: Copy,
+{
+    #[inline]
+    fn collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
+        self.collect(item)
+    }
+
+    #[inline]
+    fn collect_many(&mut self, items: impl IntoIterator<Item = &'i mut T>) -> ControlFlow<()> {
+        self.collect_many(items.into_iter().map(|&mut item| item))
+    }
+
+    #[inline]
+    fn collect_then_finish(self, items: impl IntoIterator<Item = &'i mut T>) -> Self::Output {
+        self.collect_then_finish(items.into_iter().map(|&mut item| item))
     }
 }
