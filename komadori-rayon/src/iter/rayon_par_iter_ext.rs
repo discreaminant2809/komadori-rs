@@ -1,3 +1,5 @@
+mod bridge;
+
 use komadori::{collector::Fuse, prelude::*};
 use rayon::{
     iter::plumbing::{
@@ -28,7 +30,7 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
     /// or you want the indexed path explicitly,
     /// use [`feed_into_indexed()`](Self::feed_into_indexed) which can prevent
     /// accidental fallback to the unindexed path and sometimes provide
-    /// better performance for more even splitting.
+    /// better performance.
     /// However, this method is already efficient enough since it can utilize
     /// the indexed path whenever possible.
     ///
@@ -59,7 +61,8 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
     /// till the collector stops accumulating or the iterator is exhausted,
     /// and returns the collector’s output.
     ///
-    /// This is the indexed version of [`feed_into()`](Self::feed_into).
+    /// This is the indexed version of [`feed_into()`](Self::feed_into),
+    /// and is sometimes faster.
     ///
     /// The collector must be convertible to
     /// [`ParallelCollector`](crate::collector::ParallelCollector).
@@ -177,13 +180,10 @@ where
     I: IndexedParallelIterator,
     C: Consumer<I::Item>,
 {
-    define_consumer_adapter_and_impl_consumer!();
-
-    let consumer = ConsumerAdapter { consumer };
     if actual_len < items.len() {
-        items.take(actual_len).drive(consumer)
+        bridge::bridge(items.take(actual_len), consumer)
     } else {
-        items.drive(consumer)
+        bridge::bridge(items, consumer)
     }
 }
 

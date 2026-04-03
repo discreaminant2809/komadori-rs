@@ -147,22 +147,6 @@ impl<'a, T> WriteProof<'a, T> {
             self.start, self.len, self.init_len,
         );
     }
-
-    /// # Safety
-    ///
-    /// Must ensure that there's a space left to write to.
-    /// In other words, init_len < len. Otherwise, may UB.
-    unsafe fn collect_unchecked(&mut self, item: T) -> ControlFlow<()> {
-        debug_assert!(self.break_hint().is_continue(), "no space left to write");
-
-        unsafe {
-            // SAFETY: We write at the index before the len.
-            self.start.add(self.init_len).write(item);
-        }
-
-        self.init_len += 1;
-        self.break_hint()
-    }
 }
 
 impl<'a, T> Drop for WriteProof<'a, T> {
@@ -182,28 +166,19 @@ impl<'a, T> CollectorBase for WriteProof<'a, T> {
     fn finish(self) -> Self::Output {
         self
     }
-
-    #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        if self.init_len < self.len {
-            ControlFlow::Continue(())
-        } else {
-            ControlFlow::Break(())
-        }
-    }
 }
 
 impl<'a, T> Collector<T> for WriteProof<'a, T> {
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        self.break_hint()?;
-        unsafe { self.collect_unchecked(item) }
-    }
+        assert!(self.init_len < self.len, "no space left to write");
 
-    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.break_hint()?;
-        items
-            .into_iter()
-            .try_for_each(|item| unsafe { self.collect_unchecked(item) })
+        unsafe {
+            // SAFETY: We write at the index before the len.
+            self.start.add(self.init_len).write(item);
+        }
+
+        self.init_len += 1;
+        ControlFlow::Continue(())
     }
 }
 

@@ -99,13 +99,17 @@
 //! the "maximum len" the (indexed) parallel collector can actually affort.
 //! Implementations must **not** report a "maximum len" greater the given `len`,
 //! otherwise the behavior is unspecified.
-//! Furthermore, callers should limit the amount of item the serial iterator emits to feed into
-//! a serial collector obtained by a consumer of [`parts()`] and [`take_parts()`]
-//! (usually with `by_ref().take(n)` combo), unless that iterator is discarded
-//! afterwards. The limit amount should be exactly how large the serial collector
-//! would affort. Behaviors of using an "unguarded" iterator after being fed
-//! into a serial collector obtained by a consumer of [`parts()`] and [`take_parts()`]
-//! are unspecified.
+//!
+//! For a serial collector obtained by a consumer of [`parts()`] and [`take_parts()`],
+//! at a time, you must feed it at **most** the remaining amount
+//! the serial collector would affort.
+//! Furthermore, before the serial collector is finished, the remaining amount
+//! must be `0`.
+//! Behaviors of violating the above are unspecified.
+//! The consequence of this is that for such serial collectors,
+//! you do not need to check the break hint of
+//! [`break_hint()`](komadori::collector::CollectorBase::break_hint)
+//! [`collect()`] and [`collect_many()`]; you track outside instead.
 //!
 //! These loosenesses allows for optimizations (for example, omitting an internal "stopped” flag).
 //!
@@ -122,6 +126,8 @@
 //!
 //! [`Break(())`]: std::ops::ControlFlow::Break
 //! [`break_hint()`]: ParallelCollectorBase::break_hint
+//! [`collect()`]: komadori::collector::Collector::collect
+//! [`collect_many()`]: komadori::collector::Collector::collect_many
 //! [`parts()`]: ParallelCollectorBase::parts
 //! [`take_parts()`]: ParallelCollectorBase::take_parts
 //! [`parts_unindexed()`]: UnindexedParallelCollectorBase::parts_unindexed
