@@ -42,3 +42,8 @@ harness = false
 name = "two_vecs"
 required-features = ["rayon"]
 harness = false
+
+[[bench]]
+name = "max_vec"
+required-features = ["rayon"]
+harness = false

@@ -54,8 +54,7 @@ jobs:
 
       - name: Run Miri on Some Tests (debug-assertions=off)
         if: matrix.rust == 'nightly'
-        run: RUSTFLAGS="-C debug-assertions=off" \
-          cargo hack miri test --feature-powerset --lib "::miri_tests::"
+        run: RUSTFLAGS="-C debug-assertions=off" cargo hack miri test --feature-powerset --lib "::miri_tests::"
 
       - name: Run Doc Tests
         run: cargo test --doc --all-features
