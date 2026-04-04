@@ -4,7 +4,7 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineConsumer};
 use super::{
-    Fuse, IntoParallelCollectorBase, Take, Tee, TeeClone, TeeFunnel, TeeMut,
+    Fuse, IntoParallelCollectorBase, MapOutput, Take, Tee, TeeClone, TeeFunnel, TeeMut,
     assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
@@ -324,6 +324,38 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
         C: IntoParallelCollectorBase,
     {
         assert_par_collector_base(tee_funnel(self, other.into_par_collector()))
+    }
+
+    /// Creates a parallel collector that transforms the final accumulated result.
+    ///
+    /// This is used when your output gets "ugly" after a chain of adaptors,
+    /// or when you do not want to break your API by (accidentally) rearranging adaptors,
+    /// or when you just want a different output type for your collector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, iter::ParCount};
+    ///
+    /// let avg = [1, 6, 4, 2]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         0_i32.into_par_sum()
+    ///             .tee(ParCount::new())
+    ///             .map_output(|(sum, count)| {
+    ///                 (count != 0).then(|| sum as f64 / count as f64)
+    ///             })
+    ///     );
+    ///
+    /// assert_eq!(avg, Some(3.25));
+    /// ```
+    #[inline]
+    fn map_output<F, R>(self, f: F) -> MapOutput<Self, F>
+    where
+        F: FnOnce(Self::Output) -> R,
+    {
+        assert_par_collector_base(MapOutput::new(self, f))
     }
 }
 

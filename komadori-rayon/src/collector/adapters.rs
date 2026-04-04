@@ -1,5 +1,6 @@
 mod filter;
 mod fuse;
+mod map_output;
 mod take;
 mod take_any_while;
 mod tee;
@@ -10,6 +11,7 @@ mod tee_mut;
 
 pub use filter::*;
 pub use fuse::*;
+pub use map_output::*;
 pub use take::*;
 pub use take_any_while::*;
 pub use tee::Tee;
