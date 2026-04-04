@@ -1,10 +1,10 @@
-# komadori 0.6.0
+# komadori 0.7.0
 
 [![Crates.io Version](https://img.shields.io/crates/v/komadori.svg)](https://crates.io/crates/komadori)
 [![Docs.rs](https://img.shields.io/docsrs/komadori)](https://docs.rs/komadori)
 [![GitHub Repo](https://img.shields.io/badge/github-komadori--rs-blue?logo=github)](https://github.com/discreaminant2809/komadori-rs.git)
 
-Provides a composable, declarative way to consume an iterator.
+Multi-reduction library. Provides a composable, declarative way to consume an iterator.
 
 If [`Iterator`] is the "source half" of data pipeline, [`Collector`] is the "sink half" of the pipeline.
 
