@@ -1,3 +1,4 @@
+mod also;
 mod filter;
 mod fuse;
 mod map_output;
@@ -9,6 +10,7 @@ mod tee_clone;
 mod tee_funnel;
 mod tee_mut;
 
+pub use also::*;
 pub use filter::*;
 pub use fuse::*;
 pub use map_output::*;

@@ -3,7 +3,8 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use super::{
-    Filter, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
+    Also, Filter, IntoParallelCollectorBase, ParallelCollectorBase, TakeAnyWhile,
+    assert_unindexed_par_collector, assert_unindexed_par_collector_base,
     plumbing::{Consumer, DefineUnindexedConsumer, UnindexedConsumer},
 };
 
@@ -127,7 +128,15 @@ pub trait UnindexedParallelCollectorBase:
         assert_unindexed_par_collector::<_, T>(TakeAnyWhile::new(self, pred))
     }
 
-    // fn take(self, n: usize) -
+    /// Used when the indexed path of your parallel collector
+    /// is not efficient enough.
+    #[inline]
+    fn also_indexed<U>(self, indexed: U) -> Also<U::IntoParCollector, Self>
+    where
+        U: IntoParallelCollectorBase,
+    {
+        assert_unindexed_par_collector_base(Also::new(indexed.into_par_collector(), self))
+    }
 }
 
 /// Defines what item types are collected in an unindexed parallel collector.

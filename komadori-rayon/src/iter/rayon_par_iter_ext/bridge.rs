@@ -3,7 +3,7 @@
 //!
 //! See `max_vec` benchmark for why.
 //!
-//! Credit: [https://docs.rs/rayon/latest/src/rayon/iter/plumbing/mod.rs.html]
+//! Credit: <https://docs.rs/rayon/latest/src/rayon/iter/plumbing/mod.rs.html>
 
 use crate::collector::plumbing::{Combiner, Consumer};
 use komadori::prelude::{Collector, CollectorBase};

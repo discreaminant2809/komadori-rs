@@ -4,8 +4,9 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineConsumer};
 use super::{
-    Fuse, IntoParallelCollectorBase, MapOutput, Take, Tee, TeeClone, TeeFunnel, TeeMut,
-    assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
+    Also, Fuse, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, MapOutput, Take,
+    Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector_base,
+    assert_unindexed_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -356,6 +357,15 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
         F: FnOnce(Self::Output) -> R,
     {
         assert_par_collector_base(MapOutput::new(self, f))
+    }
+
+    /// Used when your parallel collector only supports the indexed path.
+    #[inline]
+    fn also_unindexed<U>(self, unindexed: U) -> Also<Self, U::IntoParCollector>
+    where
+        U: IntoUnindexedParallelCollectorBase,
+    {
+        assert_unindexed_par_collector_base(Also::new(self, unindexed.into_par_collector()))
     }
 }
 
