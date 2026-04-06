@@ -5,6 +5,7 @@
 ### Added
 
 - `CollectorBase::trying_options()`.
+- `CollectorBase::trying_results()`.
 
 ## 0.6.0
 

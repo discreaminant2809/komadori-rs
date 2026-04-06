@@ -3,8 +3,9 @@ use std::ops::ControlFlow;
 use crate::collector::{Collector, CollectorBase};
 
 /// A collector that sets the [`Output`] to [`None`] when
-/// [`None`] item is enonuntered for the first time,
-/// else the underlying collector collects the item inside [`Some(item)`](Some).
+/// a [`None`] item is encountered for the first time,
+/// else the underlying collector collects the `item` inside
+/// [`Some(item)`](Some).
 ///
 /// This `struct` is created by [`CollectorBase::trying_options()`].
 /// See its documentation for more.
@@ -62,23 +63,18 @@ where
         match &mut self.collector {
             None => ControlFlow::Break(()),
             Some(collector) => {
-                collector.break_hint()?;
-                items
-                    .into_iter()
-                    .try_for_each(move |item| {
-                        if let Some(item) = item {
-                            collector
-                                .collect(item)
-                                .map_break(|_| TryResult::UnderlyingBreak)
-                        } else {
-                            ControlFlow::Break(TryResult::NoneItem)
-                        }
-                    })
-                    .map_break(move |res| {
-                        if let TryResult::NoneItem = res {
-                            self.collector = None;
-                        }
-                    })
+                let mut any_none = false;
+                let cf = collector.collect_many(items.into_iter().map_while(|item| {
+                    any_none |= item.is_none();
+                    item
+                }));
+
+                if any_none {
+                    self.collector = None;
+                    ControlFlow::Break(())
+                } else {
+                    cf
+                }
             }
         }
     }
@@ -86,30 +82,15 @@ where
     #[inline]
     fn collect_then_finish(self, items: impl IntoIterator<Item = Option<T>>) -> Self::Output {
         let mut collector = self.collector?;
-        if collector.break_hint().is_break() {
-            return Some(collector.finish());
-        }
 
-        match items.into_iter().try_for_each(|item| {
-            if let Some(item) = item {
-                collector
-                    .collect(item)
-                    .map_break(|_| TryResult::UnderlyingBreak)
-            } else {
-                ControlFlow::Break(TryResult::NoneItem)
-            }
-        }) {
-            ControlFlow::Continue(_) | ControlFlow::Break(TryResult::UnderlyingBreak) => {
-                Some(collector.finish())
-            }
-            ControlFlow::Break(TryResult::NoneItem) => None,
-        }
+        let mut any_none = false;
+        let _ = collector.collect_many(items.into_iter().map_while(|item| {
+            any_none |= item.is_none();
+            item
+        }));
+
+        (!any_none).then(|| collector.finish())
     }
-}
-
-enum TryResult {
-    NoneItem,
-    UnderlyingBreak,
 }
 
 #[cfg(all(test, feature = "std"))]

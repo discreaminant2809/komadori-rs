@@ -8,8 +8,8 @@ use super::{AltBreakHint, Funnel, Nest, NestExact, TeeWith};
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
     Inspect, IntoCollector, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip,
-    SkipWhile, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, Unbatching, Unzip,
-    assert_collector, assert_collector_base,
+    SkipWhile, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults,
+    Unbatching, Unzip, assert_collector, assert_collector_base,
 };
 #[cfg(feature = "itertools")]
 use super::{PartitionMap, Update};
@@ -1250,11 +1250,15 @@ pub trait CollectorBase {
     }
 
     /// Creates a collector that sets the [`Output`] to [`None`] when
-    /// a [`None`] item is enonuntered for the first time,
-    /// else the underlying collector collects the item inside [`Some(item)`](Some).
+    /// a [`None`] item is encountered for the first time,
+    /// else the underlying collector collects the `item` inside
+    /// [`Some(item)`](Some).
     ///
     /// If the item type of the underlying collector is `T`, the item type of
     /// `trying_options()` is `Option<T>`.
+    ///
+    /// This is analogous to when you collect an iterator of [`Option<T>`]
+    /// to an `Option<Collection<T>>`.
     ///
     /// # Examples
     ///
@@ -1293,6 +1297,53 @@ pub trait CollectorBase {
         Self: Sized,
     {
         TryingOptions::new(self)
+    }
+
+    /// Creates a collector that sets the [`Output`] to [`Err(e)`](Err) when
+    /// an [`Err(e)`](Err) item is encountered for the first time,
+    /// else the underlying collector collects the `item` inside
+    /// [`Ok(item)`](Ok).
+    ///
+    /// This is analogous to when you collect an iterator of [`Result<T, E>`]
+    /// to a `Result<Collection<T>, E>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .trying_results::<&str>();
+    ///
+    /// assert!(collector.collect(Ok(1)).is_continue());
+    /// assert!(collector.collect(Ok(2)).is_continue());
+    /// assert!(collector.collect(Ok(3)).is_continue());
+    ///
+    /// assert_eq!(collector.finish(), Ok(vec![1, 2, 3]));
+    /// ```
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .trying_results();
+    ///
+    /// assert!(collector.collect(Ok(1)).is_continue());
+    /// assert!(collector.collect(Ok(2)).is_continue());
+    /// assert!(collector.collect(Err::<i32, _>("can't collect anymore")).is_break());
+    ///
+    /// assert_eq!(collector.finish(), Err("can't collect anymore"));
+    /// ```
+    ///
+    /// [`Output`]: CollectorBase::Output
+    #[inline]
+    fn trying_results<E>(self) -> TryingResults<Self, E>
+    where
+        Self: Sized,
+    {
+        TryingResults::new(self)
     }
 
     /// Creates a collector that alternates the behavior of [`break_hint()`](Self::break_hint).
