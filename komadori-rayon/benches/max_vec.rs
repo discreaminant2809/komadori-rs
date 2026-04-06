@@ -34,6 +34,7 @@ fn reduce(criterion: &mut Criterion) {
     bench_fn!(rayon_extend);
     bench_fn!(rayon_two_pass);
     bench_fn!(rayon_fold_reduce);
+    bench_fn!(rayon_atomic);
     bench_fn!(seq_one_pass);
 
     group.finish();
@@ -59,6 +60,21 @@ fn rayon_two_pass(nums: &[i32]) -> (i32, Vec<i32>) {
     let max = nums.par_iter().copied().max().unwrap();
     let v = nums.par_iter().copied().collect();
     (max, v)
+}
+
+fn rayon_atomic(nums: &[i32]) -> (i32, Vec<i32>) {
+    use std::sync::atomic::{AtomicI32, Ordering};
+
+    let max = AtomicI32::new(i32::MIN);
+    let v = nums
+        .par_iter()
+        .copied()
+        .inspect(|&num| {
+            max.fetch_max(num, Ordering::Relaxed);
+        })
+        .collect();
+
+    (max.into_inner(), v)
 }
 
 fn rayon_fold_reduce(nums: &[i32]) -> (i32, Vec<i32>) {
