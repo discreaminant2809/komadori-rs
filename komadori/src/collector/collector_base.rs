@@ -8,7 +8,7 @@ use super::{AltBreakHint, Funnel, Nest, NestExact, TeeWith};
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
     Inspect, IntoCollector, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip,
-    SkipWhile, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, Unbatching, Unzip,
+    SkipWhile, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, Unbatching, Unzip,
     assert_collector, assert_collector_base,
 };
 #[cfg(feature = "itertools")]
@@ -1247,6 +1247,52 @@ pub trait CollectorBase {
         P: FnMut(&T) -> bool,
     {
         SkipWhile::new(self, pred)
+    }
+
+    /// Creates a collector that sets the [`Output`] to [`None`] when
+    /// a [`None`] item is enonuntered for the first time,
+    /// else the underlying collector collects the item inside [`Some(item)`](Some).
+    ///
+    /// If the item type of the underlying collector is `T`, the item type of
+    /// `trying_options()` is `Option<T>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .trying_options();
+    ///
+    /// assert!(collector.collect(Some(1)).is_continue());
+    /// assert!(collector.collect(Some(2)).is_continue());
+    /// assert!(collector.collect(Some(3)).is_continue());
+    ///
+    /// assert_eq!(collector.finish(), Some(vec![1, 2, 3]));
+    /// ```
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .trying_options();
+    ///
+    /// assert!(collector.collect(Some(1)).is_continue());
+    /// assert!(collector.collect(Some(2)).is_continue());
+    /// assert!(collector.collect(None::<i32>).is_break());
+    ///
+    /// assert_eq!(collector.finish(), None);
+    /// ```
+    ///
+    /// [`Output`]: CollectorBase::Output
+    #[inline]
+    fn trying_options(self) -> TryingOptions<Self>
+    where
+        Self: Sized,
+    {
+        TryingOptions::new(self)
     }
 
     /// Creates a collector that alternates the behavior of [`break_hint()`](Self::break_hint).

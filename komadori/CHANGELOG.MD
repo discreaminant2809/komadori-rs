@@ -2,6 +2,10 @@
 
 ## 0.7.0
 
+### Added
+
+- `CollectorBase::trying_options()`.
+
 ## 0.6.0
 
 ### Added

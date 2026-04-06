@@ -30,6 +30,7 @@ mod tee_funnel;
 mod tee_mut;
 #[cfg(feature = "unstable")]
 mod tee_with;
+mod trying_options;
 mod unbatching;
 mod unzip;
 #[cfg(feature = "itertools")]
@@ -67,6 +68,7 @@ pub use tee_funnel::*;
 pub use tee_mut::*;
 #[cfg(feature = "unstable")]
 pub use tee_with::*;
+pub use trying_options::*;
 pub use unbatching::*;
 pub use unzip::*;
 #[cfg(feature = "itertools")]
