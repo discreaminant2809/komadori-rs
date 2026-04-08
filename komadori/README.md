@@ -87,7 +87,7 @@ use komadori::{prelude::*, cmp::Max};
 let nums = [1, 3, 2];
 let (sum, max) = nums
     .into_iter()
-    .feed_into(i32::adding().tee(Max::new()));
+    .feed_into(0_i32.into_sum().tee(Max::new()));
 
 assert_eq!(sum, 6);
 assert_eq!(max.unwrap(), 3);
@@ -130,7 +130,8 @@ use komadori::{prelude::*, iter::Last, clb_mut};
 
 let ((byte_read, received), last_seen) = socket_stream()
     .feed_into(
-        usize::adding()
+        0_usize
+            .into_sum()
             .map(
                 clb_mut!(|s: &mut String| -> usize { s.len() })
             )

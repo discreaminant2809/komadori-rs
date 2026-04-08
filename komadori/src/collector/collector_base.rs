@@ -667,7 +667,8 @@ pub trait CollectorBase {
     /// ```
     /// use komadori::{prelude::*, iter::Count};
     ///
-    /// let mut average = i32::adding()
+    /// let mut average = 0_i32
+    ///     .into_sum()
     ///     .tee(Count::new())
     ///     .map_output(|(sum, count)| {
     ///         (count != 0).then(|| sum as f64 / count as f64)

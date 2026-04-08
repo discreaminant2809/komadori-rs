@@ -1,20 +1,26 @@
 //! Numeric-related collectors.
 //!
-//! This module provides [`Adding`](crate::ops::Adding) and [`Muling`](crate::ops::Muling)
+//! This module provides [`IntoSum`](ops::IntoSum) and [`Muling`](crate::ops::Muling)
 //! collectors for numeric types in the standard library.
 //!
 //! This module corresponds to [`std::num`].
 
 use std::{num::Wrapping, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::{
+    collector::{Collector, CollectorBase, assert_collector},
+    ops,
+};
 
 /// A collector that adds every collected number.
 /// Its [`Output`](CollectorBase::Output) is the type
 /// that created this collector.
 ///
-/// This `struct` is created by `<Num>::adding()`, where `Num`
-/// is, currently, all integers and floating point numbers,
+/// Its [`Default`] implementation provides the "additive identity"
+/// of `Num`.
+///
+/// This `struct` is created by [`[number].into_sum()`](ops::IntoSum),
+/// where `[number]`'s type is, currently, all integers and floating point numbers,
 /// as well as [`Wrapping`].
 ///
 /// # Examples
@@ -22,7 +28,7 @@ use crate::collector::{Collector, CollectorBase, assert_collector};
 /// ```
 /// use komadori::prelude::*;
 ///
-/// let mut sum = i32::adding();
+/// let mut sum = 0_i32.into_sum();
 ///
 /// assert!(sum.collect(1).is_continue());
 /// assert!(sum.collect(&2).is_continue());
@@ -31,7 +37,7 @@ use crate::collector::{Collector, CollectorBase, assert_collector};
 /// assert_eq!(sum.finish(), 6);
 /// ```
 #[derive(Debug, Clone)]
-pub struct Adding<Num>(Num);
+pub struct IntoSum<Num>(Num);
 
 /// A collector that adds every collected number.
 /// Its [`Output`](CollectorBase::Output) is the type
@@ -59,25 +65,23 @@ pub struct Muling<Num>(Num);
 
 macro_rules! prim_adding_impl {
     ($pri_ty:ty, $identity:expr) => {
-        impl crate::ops::Adding for $pri_ty {
-            type Output = $pri_ty;
-
-            type Adding = Adding<$pri_ty>;
+        impl ops::IntoSum for $pri_ty {
+            type IntoSum = IntoSum<$pri_ty>;
 
             #[inline]
-            fn adding() -> Self::Adding {
-                Default::default()
+            fn into_sum(self) -> Self::IntoSum {
+                IntoSum(self)
             }
         }
 
-        impl Default for Adding<$pri_ty> {
+        impl Default for IntoSum<$pri_ty> {
             #[inline]
             fn default() -> Self {
-                assert_collector::<_, $pri_ty>(Adding($identity))
+                assert_collector::<_, $pri_ty>(IntoSum($identity))
             }
         }
 
-        impl CollectorBase for Adding<$pri_ty> {
+        impl CollectorBase for IntoSum<$pri_ty> {
             type Output = $pri_ty;
 
             #[inline]
@@ -86,7 +90,7 @@ macro_rules! prim_adding_impl {
             }
         }
 
-        impl Collector<$pri_ty> for Adding<$pri_ty> {
+        impl Collector<$pri_ty> for IntoSum<$pri_ty> {
             #[inline]
             fn collect(&mut self, item: $pri_ty) -> ControlFlow<()> {
                 self.0 += item;
@@ -112,7 +116,7 @@ macro_rules! prim_adding_impl {
             }
         }
 
-        impl<'a> Collector<&'a $pri_ty> for Adding<$pri_ty> {
+        impl<'a> Collector<&'a $pri_ty> for IntoSum<$pri_ty> {
             #[inline]
             fn collect(&mut self, &item: &'a $pri_ty) -> ControlFlow<()> {
                 self.0 += item;
@@ -138,7 +142,7 @@ macro_rules! prim_adding_impl {
             }
         }
 
-        impl<'a> Collector<&'a mut $pri_ty> for Adding<$pri_ty> {
+        impl<'a> Collector<&'a mut $pri_ty> for IntoSum<$pri_ty> {
             #[inline]
             fn collect(&mut self, &mut item: &'a mut $pri_ty) -> ControlFlow<()> {
                 self.0 += item;
@@ -319,7 +323,7 @@ mod proptests {
     fn all_collect_methods_adding_int_impl(nums: Vec<i32>) -> TestCaseResult {
         BasicCollectorTester {
             iter_factory: || nums.iter().copied(),
-            collector_factory: || i32::adding(),
+            collector_factory: || 0.into_sum(),
             should_break_pred: |_| false,
             pred: |iter, output, remaining| {
                 if iter.sum::<i32>() != output {

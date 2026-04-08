@@ -1,26 +1,19 @@
 use crate::collector::CollectorBase;
 
-/// Types that provide a [`Collector`] to calculate the sum of all collected items.
+/// Types that provide a collector to calculate the sum of all collected items,
+/// adding to a provided initial value.
 ///
-/// Implementors should provide an "identity value" as the [`Output`];
-/// in other words, the value produced by `T::adding().finish()`.
-/// For example, the identity value for a collector that adds integers is `0`.
-///
-/// Typically, the [`Output`] type is the same as the implementing type.
+/// This trait should not be used in bound, since you would block
+/// custom sum without using this trait (e.g. using adapters).
+/// Accepting a bland parallel collector as a parameter instead.
 ///
 /// See its implementors for examples.
 ///
 /// This trait corresponds to [`std::iter::Sum`].
-///
-/// [`Collector`]: crate::collector::Collector
-/// [`Output`]: CollectorBase::Output
-pub trait Adding {
-    /// The result type of the sum.
-    type Output;
+pub trait IntoSum {
+    /// Which sum collector being produced?
+    type IntoSum: CollectorBase;
 
-    /// The collector that calculates the sum of all collected items.
-    type Adding: CollectorBase<Output = Self::Output>;
-
-    /// Creates a new instance of [`Adding`](Adding::Adding) collector.
-    fn adding() -> Self::Adding;
+    /// Creates a new instance of a sum collector from an initial value.
+    fn into_sum(self) -> Self::IntoSum;
 }

@@ -6,6 +6,11 @@
 
 - `CollectorBase::trying_options()`.
 - `CollectorBase::trying_results()`.
+- `crate::ops::IntoSum`.
+
+### Removed
+
+- `crate::ops::Adding`.
 
 ## 0.6.0
 

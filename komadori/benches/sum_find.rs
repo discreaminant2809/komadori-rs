@@ -76,5 +76,5 @@ fn fold_find(nums: &[i32]) -> (i32, Option<i32>) {
 fn bc_find(nums: &[i32]) -> (i32, Option<i32>) {
     nums.iter()
         .copied()
-        .feed_into(i32::adding().tee(Find::new(|&num| num % 2 != 0)))
+        .feed_into(0_i32.into_sum().tee(Find::new(|&num| num % 2 != 0)))
 }

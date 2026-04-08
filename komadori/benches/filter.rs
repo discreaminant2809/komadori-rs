@@ -56,12 +56,12 @@ fn filter_iter(nums: &[i32]) -> i32 {
 
 #[unsafe(no_mangle)]
 fn filter_komadori(nums: &[i32]) -> i32 {
-    nums.iter().feed_into(i32::adding().filter(filter_fn))
+    nums.iter().feed_into(0_i32.into_sum().filter(filter_fn))
 }
 
 #[unsafe(no_mangle)]
 fn filter_komadori_each(nums: &[i32]) -> i32 {
-    let mut collector = i32::adding().filter(filter_fn);
+    let mut collector = 0_i32.into_sum().filter(filter_fn);
     for num in nums {
         let _ = collector.collect(num);
     }

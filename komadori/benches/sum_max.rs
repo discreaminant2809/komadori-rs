@@ -60,20 +60,23 @@ fn fold_wo_initial(nums: &[i32]) -> (i32, Option<i32>) {
 }
 
 fn bc_tee_with_fold(nums: &[i32]) -> (i32, i32) {
-    nums.iter()
-        .copied()
-        .feed_into(i32::adding().tee(Fold::new(i32::MIN, |max, num| *max = (*max).max(num))))
+    nums.iter().copied().feed_into(
+        0_i32
+            .into_sum()
+            .tee(Fold::new(i32::MIN, |max, num| *max = (*max).max(num))),
+    )
 }
 
 fn bc_tee_with_max(nums: &[i32]) -> (i32, Option<i32>) {
     nums.iter()
         .copied()
-        .feed_into(i32::adding().tee(Max::new()))
+        .feed_into(0_i32.into_sum().tee(Max::new()))
 }
 
 fn bc_tee_with_max_unwrap(nums: &[i32]) -> (i32, i32) {
     nums.iter().copied().feed_into(
-        i32::adding()
+        0_i32
+            .into_sum()
             .tee(Max::new())
             .map_output(|(sum, max)| (sum, max.unwrap_or(i32::MIN))),
     )

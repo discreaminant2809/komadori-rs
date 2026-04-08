@@ -64,5 +64,5 @@ fn filter_sum_max_iter(nums: &[i32]) -> (i32, Option<i32>) {
 fn filter_sum_max_komadori(nums: &[i32]) -> (i32, Option<i32>) {
     nums.iter()
         .copied()
-        .feed_into(i32::adding().filter(|&num| num % 2 == 0).tee(Max::new()))
+        .feed_into(0_i32.into_sum().filter(|&num| num % 2 == 0).tee(Max::new()))
 }

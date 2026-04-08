@@ -10,7 +10,7 @@ fn main() {}
 fn bc_tee_with_max(nums: &[i32]) -> (i32, Option<i32>) {
     nums.iter()
         .copied()
-        .feed_into(i32::adding().tee(Max::new()))
+        .feed_into(0_i32.into_sum().tee(Max::new()))
 }
 
 #[unsafe(no_mangle)]
@@ -95,7 +95,7 @@ fn bc_find_0(nums: &[i32]) -> Option<i32> {
 fn bc_sum_find(nums: &[i32]) -> (i32, Option<i32>) {
     nums.iter()
         .copied()
-        .feed_into(i32::adding().tee(Find::new(|&num| num % 2 != 0)))
+        .feed_into(0_i32.into_sum().tee(Find::new(|&num| num % 2 != 0)))
 }
 
 #[unsafe(no_mangle)]
