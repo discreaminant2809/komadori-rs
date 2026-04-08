@@ -1,6 +1,6 @@
 //! Numeric-related collectors.
 //!
-//! This module provides [`IntoSum`](ops::IntoSum) and [`Muling`](crate::ops::Muling)
+//! This module provides [`IntoSum`](ops::IntoSum) and [`IntoProduct`](crate::ops::IntoProduct)
 //! collectors for numeric types in the standard library.
 //!
 //! This module corresponds to [`std::num`].
@@ -39,12 +39,15 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct IntoSum<Num>(Num);
 
-/// A collector that adds every collected number.
+/// A collector that multipies every collected number.
 /// Its [`Output`](CollectorBase::Output) is the type
 /// that created this collector.
 ///
-/// This `struct` is created by `<Num>::muling()`, where `Num`
-/// is, currently, all integers and floating point numbers,
+/// Its [`Default`] implementation provides the "multiplicative identity"
+/// of `Num`.
+///
+/// This `struct` is created by [`[number].into_product()`](ops::IntoProduct),
+/// where `[number]`'s type is, currently, all integers and floating point numbers,
 /// as well as [`Wrapping`].
 ///
 /// # Examples
@@ -52,7 +55,8 @@ pub struct IntoSum<Num>(Num);
 /// ```
 /// use komadori::prelude::*;
 ///
-/// let mut product = i32::muling();
+/// // Be careful: 0 will nullify every number we multiply!
+/// let mut product = 1_i32.into_product();
 ///
 /// assert!(product.collect(-1).is_continue());
 /// assert!(product.collect(&2).is_continue());
@@ -61,8 +65,9 @@ pub struct IntoSum<Num>(Num);
 /// assert_eq!(product.finish(), -6);
 /// ```
 #[derive(Debug, Clone)]
-pub struct Muling<Num>(Num);
+pub struct IntoProduct<Num>(Num);
 
+#[rustfmt::skip]
 macro_rules! prim_adding_impl {
     ($pri_ty:ty, $identity:expr) => {
         impl ops::IntoSum for $pri_ty {
@@ -70,14 +75,22 @@ macro_rules! prim_adding_impl {
 
             #[inline]
             fn into_sum(self) -> Self::IntoSum {
-                IntoSum(self)
+                assert_collector::<_, $pri_ty>(
+                assert_collector::<_, &$pri_ty>(
+                assert_collector::<_, &mut $pri_ty>(
+                    IntoSum(self)
+                )))
             }
         }
 
         impl Default for IntoSum<$pri_ty> {
             #[inline]
             fn default() -> Self {
-                assert_collector::<_, $pri_ty>(IntoSum($identity))
+                assert_collector::<_, $pri_ty>(
+                assert_collector::<_, &$pri_ty>(
+                assert_collector::<_, &mut $pri_ty>(
+                    IntoSum($identity)
+                )))
             }
         }
 
@@ -170,27 +183,34 @@ macro_rules! prim_adding_impl {
     };
 }
 
+#[rustfmt::skip]
 macro_rules! prim_muling_impl {
     ($pri_ty:ty, $identity:expr) => {
-        impl crate::ops::Muling for $pri_ty {
-            type Output = $pri_ty;
-
-            type Muling = Muling<$pri_ty>;
+        impl ops::IntoProduct for $pri_ty {
+            type IntoProduct = IntoProduct<$pri_ty>;
 
             #[inline]
-            fn muling() -> Self::Muling {
-                Default::default()
+            fn into_product(self) -> Self::IntoProduct {
+                assert_collector::<_, $pri_ty>(
+                assert_collector::<_, &$pri_ty>(
+                assert_collector::<_, &mut $pri_ty>(
+                    IntoProduct(self)
+                )))
             }
         }
 
-        impl Default for Muling<$pri_ty> {
+        impl Default for IntoProduct<$pri_ty> {
             #[inline]
             fn default() -> Self {
-                assert_collector::<_, $pri_ty>(Muling($identity))
+                assert_collector::<_, $pri_ty>(
+                assert_collector::<_, &$pri_ty>(
+                assert_collector::<_, &mut $pri_ty>(
+                    IntoProduct($identity)
+                )))
             }
         }
 
-        impl CollectorBase for Muling<$pri_ty> {
+        impl CollectorBase for IntoProduct<$pri_ty> {
             type Output = $pri_ty;
 
             #[inline]
@@ -199,7 +219,7 @@ macro_rules! prim_muling_impl {
             }
         }
 
-        impl Collector<$pri_ty> for Muling<$pri_ty> {
+        impl Collector<$pri_ty> for IntoProduct<$pri_ty> {
             #[inline]
             fn collect(&mut self, item: $pri_ty) -> ControlFlow<()> {
                 self.0 *= item;
@@ -225,7 +245,7 @@ macro_rules! prim_muling_impl {
             }
         }
 
-        impl<'a> Collector<&'a $pri_ty> for Muling<$pri_ty> {
+        impl<'a> Collector<&'a $pri_ty> for IntoProduct<$pri_ty> {
             #[inline]
             fn collect(&mut self, &item: &'a $pri_ty) -> ControlFlow<()> {
                 self.0 *= item;
@@ -251,7 +271,7 @@ macro_rules! prim_muling_impl {
             }
         }
 
-        impl<'a> Collector<&'a mut $pri_ty> for Muling<$pri_ty> {
+        impl<'a> Collector<&'a mut $pri_ty> for IntoProduct<$pri_ty> {
             #[inline]
             fn collect(&mut self, &mut item: &'a mut $pri_ty) -> ControlFlow<()> {
                 self.0 *= item;
@@ -350,7 +370,7 @@ mod proptests {
     fn all_collect_methods_muling_int_impl(nums: Vec<i64>) -> TestCaseResult {
         BasicCollectorTester {
             iter_factory: || nums.iter().copied(),
-            collector_factory: || i64::muling(),
+            collector_factory: || 1_i64.into_product(),
             should_break_pred: |_| false,
             pred: |iter, output, remaining| {
                 if iter.product::<i64>() != output {
