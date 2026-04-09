@@ -73,7 +73,7 @@ pub trait CollectorBase {
     /// after the stop is signaled somewhere else,
     /// including through [`collect()`] or similar methods or this method itself,
     /// the behavior of this method is unspecified.
-    /// This may include returning [`Break(())`] even if the collector has conceptually stopped.
+    /// This may include returning [`Continue(())`] even if the collector has conceptually stopped.
     ///
     /// This method should be called once and only once before collecting
     /// items in a loop to avoid consuming one item prematurely.

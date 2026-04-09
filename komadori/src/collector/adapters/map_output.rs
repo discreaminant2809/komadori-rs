@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase};
 
-/// Creates a collector that transforms the final accumulated result.
+/// A collector that transforms the final accumulated result.
 ///
 /// This `struct` is created by [`CollectorBase::map_output()`]. See its documentation for more.
 #[derive(Clone)]

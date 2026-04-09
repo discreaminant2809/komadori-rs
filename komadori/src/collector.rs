@@ -33,7 +33,7 @@
 //!
 //! There are also specialized methods outside of this module for specific
 //! use cases, such as [`into_concat()`](crate::slice::Concat::into_concat)
-//! and [`adding()`](crate::ops::Adding::adding).
+//! and [`into_sum()`](crate::ops::IntoSum::into_sum).
 //!
 //! # Adapters
 //!
