@@ -2,9 +2,12 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase,
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
 use super::Fuse;
@@ -43,7 +46,7 @@ where
     }
 }
 
-pub(super) trait DefinePassDown<'this, T, Binder: t_binder::Sealed = t_binder::Binder<'this, T>> {
+pub(super) trait DefinePassDown<'this, T: ?Sized, Binder: t_binder::Sealed = t_binder::Binder<'this, T>> {
     type PassDown;
 }
 
@@ -53,8 +56,8 @@ mod t_binder {
 
     pub trait Sealed {}
     #[allow(missing_debug_implementations)]
-    pub struct Binder<'a, T>(PhantomData<&'a mut T>);
-    impl<'a, T> Sealed for Binder<'a, T> {}
+    pub struct Binder<'a, T: ?Sized>(PhantomData<&'a mut T>);
+    impl<'a, T: ?Sized> Sealed for Binder<'a, T> {}
 }
 
 pub(super) trait Teer<T>: Clone + Send + for<'this> DefinePassDown<'this, T> {
@@ -95,16 +98,37 @@ pub(super) trait Teer<T>: Clone + Send + for<'this> DefinePassDown<'this, T> {
     }
 }
 
-impl<'this, C1, C2, TF> DefineConsumer<'this> for TeeBase<C1, C2, TF>
+impl<'this, C1, C2, TF> DefineSerial<'this> for TeeBase<C1, C2, TF>
 where
-    C1: DefineConsumer<'this>,
-    C2: DefineConsumer<'this>,
+    C1: DefineSerial<'this>,
+    C2: DefineSerial<'this>,
     TF: Send + Clone,
 {
-    type Consumer = consumer::Consumer<
-        <Fuse<C1> as DefineConsumer<'this>>::Consumer,
-        <Fuse<C2> as DefineConsumer<'this>>::Consumer,
-        TF,
+    type Serial = unique::Serial<
+        'this,
+        Self,
+        consumer::Serial<
+            <Fuse<C1> as DefineSerial<'this>>::Serial,
+            <Fuse<C2> as DefineSerial<'this>>::Serial,
+            TF,
+        >,
+    >;
+}
+
+impl<'this, C1, C2, TF> DefineUnindexedSerial<'this> for TeeBase<C1, C2, TF>
+where
+    C1: DefineUnindexedSerial<'this>,
+    C2: DefineUnindexedSerial<'this>,
+    TF: Send + Clone,
+{
+    type UnindexedSerial = unique_unindexed::Serial<
+        'this,
+        Self,
+        consumer::Serial<
+            <Fuse<C1> as DefineUnindexedSerial<'this>>::UnindexedSerial,
+            <Fuse<C2> as DefineUnindexedSerial<'this>>::UnindexedSerial,
+            TF,
+        >,
     >;
 }
 
@@ -135,19 +159,20 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         let (actual_len1, consumer1, commit1) = self.collector1.parts(len);
         let (actual_len2, consumer2, commit2) = self.collector2.parts(len);
 
-        (
+        unique::uniquify((
             actual_len1.max(actual_len2),
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| and_cf_breaks(commit1(o1), commit2(o2)),
-        )
+        ))
     }
 
     fn take_parts<'a>(
@@ -155,34 +180,24 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
         let (actual_len1, consumer1, commit1) = self.collector1.take_parts(len);
         let (actual_len2, consumer2, commit2) = self.collector2.take_parts(len);
 
-        (
+        unique::take_uniquify((
             actual_len1.max(actual_len2),
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| {
                 commit1(o1);
                 commit2(o2);
             },
-        )
+        ))
     }
-}
-
-impl<'this, C1, C2, TF> DefineUnindexedConsumer<'this> for TeeBase<C1, C2, TF>
-where
-    C1: DefineUnindexedConsumer<'this>,
-    C2: DefineUnindexedConsumer<'this>,
-    TF: Send + Clone,
-{
-    type UnindexedConsumer = consumer::Consumer<
-        <Fuse<C1> as DefineUnindexedConsumer<'this>>::UnindexedConsumer,
-        <Fuse<C2> as DefineUnindexedConsumer<'this>>::UnindexedConsumer,
-        TF,
-    >;
 }
 
 impl<C1, C2, TF> UnindexedParallelCollectorBase for TeeBase<C1, C2, TF>
@@ -194,38 +209,42 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
         let (consumer1, commit1) = self.collector1.parts_unindexed();
         let (consumer2, commit2) = self.collector2.parts_unindexed();
 
-        (
+        unique_unindexed::uniquify((
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| and_cf_breaks(commit1(o1), commit2(o2)),
-        )
+        ))
     }
 
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-        impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
-        ),
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
         let (consumer1, commit1) = self.collector1.take_parts_unindexed();
         let (consumer2, commit2) = self.collector2.take_parts_unindexed();
 
-        (
+        unique_unindexed::take_uniquify((
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| {
                 commit1(o1);
                 commit2(o2);
             },
-        )
+        ))
     }
 }
 
@@ -272,7 +291,7 @@ mod consumer {
 
     // Unlike komadori's tee variants, the collectors here are obtained
     // from fused parallel collectors, which already guarantees fuse.
-    pub struct IntoCollector<C1, C2, TF> {
+    pub struct Serial<C1, C2, TF> {
         collector1: C1,
         collector2: C2,
         teer: TF,
@@ -285,11 +304,11 @@ mod consumer {
     {
         type Output = (C1::Output, C2::Output);
 
-        type IntoCollector = IntoCollector<C1::IntoCollector, C2::IntoCollector, TF>;
+        type IntoCollector = Serial<C1::IntoCollector, C2::IntoCollector, TF>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
-            IntoCollector {
+            Serial {
                 collector1: self.consumer1.into_collector(),
                 collector2: self.consumer2.into_collector(),
                 teer: self.teer,
@@ -297,10 +316,10 @@ mod consumer {
         }
     }
 
-    impl<C1, C2, TF> plumbing::ConsumerBase for Consumer<C1, C2, TF>
+    impl<C1, C2, TF> plumbing::Consumer for Consumer<C1, C2, TF>
     where
-        C1: plumbing::ConsumerBase,
-        C2: plumbing::ConsumerBase,
+        C1: plumbing::Consumer,
+        C2: plumbing::Consumer,
         TF: Clone + Send,
     {
         type Combiner = Combiner<C1::Combiner, C2::Combiner>;
@@ -316,10 +335,7 @@ mod consumer {
                     consumer2,
                     teer: self.teer.clone(),
                 },
-                Combiner {
-                    combiner1,
-                    combiner2,
-                },
+                Combiner { combiner1, combiner2 },
             )
         }
 
@@ -333,10 +349,10 @@ mod consumer {
         }
     }
 
-    impl<C1, C2, TF> plumbing::UnindexedConsumerBase for Consumer<C1, C2, TF>
+    impl<C1, C2, TF> plumbing::UnindexedConsumer for Consumer<C1, C2, TF>
     where
-        C1: plumbing::UnindexedConsumerBase,
-        C2: plumbing::UnindexedConsumerBase,
+        C1: plumbing::UnindexedConsumer,
+        C2: plumbing::UnindexedConsumer,
         TF: Clone + Send,
     {
         #[inline]
@@ -369,7 +385,7 @@ mod consumer {
         }
     }
 
-    impl<C1, C2, TF> CollectorBase for IntoCollector<C1, C2, TF>
+    impl<C1, C2, TF> CollectorBase for Serial<C1, C2, TF>
     where
         C1: CollectorBase,
         C2: CollectorBase,
@@ -391,7 +407,7 @@ mod consumer {
         }
     }
 
-    impl<C1, C2, TF, T> Collector<T> for IntoCollector<C1, C2, TF>
+    impl<C1, C2, TF, T> Collector<T> for Serial<C1, C2, TF>
     where
         C1: for<'a> Collector<<TF as DefinePassDown<'a, T>>::PassDown>,
         C2: Collector<T>,
@@ -429,11 +445,7 @@ mod consumer {
             let mut items = items.into_iter();
 
             match items.try_for_each(|mut item| {
-                if self
-                    .collector1
-                    .collect(self.teer.pass_down(&mut item))
-                    .is_break()
-                {
+                if self.collector1.collect(self.teer.pass_down(&mut item)).is_break() {
                     ControlFlow::Break(Which::First(item))
                 } else if self.collector2.collect(item).is_break() {
                     ControlFlow::Break(Which::Second)
@@ -477,11 +489,7 @@ mod consumer {
             let mut items = items.into_iter();
 
             match items.try_for_each(|mut item| {
-                if self
-                    .collector1
-                    .collect(self.teer.pass_down(&mut item))
-                    .is_break()
-                {
+                if self.collector1.collect(self.teer.pass_down(&mut item)).is_break() {
                     ControlFlow::Break(Which::First(item))
                 } else if self.collector2.collect(item).is_break() {
                     ControlFlow::Break(Which::Second)

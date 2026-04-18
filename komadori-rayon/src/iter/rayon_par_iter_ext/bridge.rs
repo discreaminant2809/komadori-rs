@@ -6,7 +6,7 @@
 //! Credit: <https://docs.rs/rayon/latest/src/rayon/iter/plumbing/mod.rs.html>
 
 use crate::collector::plumbing::{Combiner, Consumer};
-use komadori::prelude::{Collector, CollectorBase};
+use komadori::prelude::*;
 use rayon::{
     iter::{
         IndexedParallelIterator,
@@ -18,7 +18,7 @@ use rayon::{
 pub fn bridge<I, C>(par_iter: I, consumer: C) -> C::Output
 where
     I: IndexedParallelIterator,
-    C: Consumer<I::Item>,
+    C: Consumer<IntoCollector: Collector<I::Item>>,
 {
     let len = par_iter.len();
     return par_iter.with_producer(Callback { len, consumer });
@@ -28,14 +28,14 @@ where
         consumer: C,
     }
 
-    impl<C, I> ProducerCallback<I> for Callback<C>
+    impl<C, T> ProducerCallback<T> for Callback<C>
     where
-        C: Consumer<I>,
+        C: Consumer<IntoCollector: Collector<T>>,
     {
         type Output = C::Output;
         fn callback<P>(self, producer: P) -> C::Output
         where
-            P: Producer<Item = I>,
+            P: Producer<Item = T>,
         {
             bridge_producer_consumer(self.len, producer, self.consumer)
         }
@@ -45,7 +45,7 @@ where
 fn bridge_producer_consumer<P, C>(len: usize, producer: P, consumer: C) -> C::Output
 where
     P: Producer,
-    C: Consumer<P::Item>,
+    C: Consumer<IntoCollector: Collector<P::Item>>,
 {
     let splitter = LengthSplitter::new(producer.min_len(), producer.max_len(), len);
     return helper(len, false, splitter, producer, consumer);
@@ -59,26 +59,17 @@ where
     ) -> C::Output
     where
         P: Producer,
-        C: Consumer<P::Item>,
+        C: Consumer<IntoCollector: Collector<P::Item>>,
     {
         if consumer.break_hint().is_break() {
             consumer.into_collector().finish()
         } else if splitter.try_split(len, migrated) {
             let mid = len / 2;
             let (left_producer, right_producer) = producer.split_at(mid);
-            let ((left_consumer, combiner), right_consumer) =
-                (consumer.split_off_left_at(mid), consumer);
+            let ((left_consumer, combiner), right_consumer) = (consumer.split_off_left_at(mid), consumer);
 
             let (mut left_result, right_result) = join_context(
-                |context| {
-                    helper(
-                        mid,
-                        context.migrated(),
-                        splitter,
-                        left_producer,
-                        left_consumer,
-                    )
-                },
+                |context| helper(mid, context.migrated(), splitter, left_producer, left_consumer),
                 |context| {
                     helper(
                         len - mid,

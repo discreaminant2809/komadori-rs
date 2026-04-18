@@ -2,9 +2,12 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
 /// A parallel collector that computes the minimum value among the items it collects.
@@ -65,18 +68,18 @@ where
     }
 }
 
-impl<'this, T> DefineConsumer<'this> for ParMin<T>
+impl<'this, T> DefineSerial<'this> for ParMin<T>
 where
     T: Ord + Send,
 {
-    type Consumer = consumer::Consumer<T>;
+    type Serial = unique::Serial<'this, Self, consumer::Serial<T>>;
 }
 
-impl<'this, T> DefineUnindexedConsumer<'this> for ParMin<T>
+impl<'this, T> DefineUnindexedSerial<'this> for ParMin<T>
 where
     T: Ord + Send,
 {
-    type UnindexedConsumer = consumer::Consumer<T>;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, consumer::Serial<T>>;
 }
 
 impl<T> ParallelCollectorBase for ParMin<T>
@@ -95,13 +98,16 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.parts_unindexed();
-        (len, consumer, commit)
+        unique::uniquify((len, consumer::Consumer::new(), |output| {
+            combine(&mut self.min, output);
+            ControlFlow::Continue(())
+        }))
     }
 }
 
@@ -112,15 +118,18 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        (consumer::Consumer::new(), |output| {
+        unique_unindexed::uniquify((consumer::Consumer::new(), |output| {
             combine(&mut self.min, output);
             ControlFlow::Continue(())
-        })
+        }))
     }
 }
 
@@ -139,11 +148,13 @@ mod consumer {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumerBase};
+    use crate::collector::plumbing::{self, UnindexedConsumer};
 
     pub struct Consumer<T>(PhantomData<T>);
 
     pub struct Combiner(());
+
+    pub type Serial<T> = komadori::cmp::Min<T>;
 
     impl<T> Consumer<T> {
         #[inline]
@@ -158,7 +169,7 @@ mod consumer {
     {
         type Output = Option<T>;
 
-        type IntoCollector = komadori::cmp::Min<T>;
+        type IntoCollector = Serial<T>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
@@ -166,7 +177,7 @@ mod consumer {
         }
     }
 
-    impl<T> plumbing::ConsumerBase for Consumer<T>
+    impl<T> plumbing::Consumer for Consumer<T>
     where
         T: Ord + Send,
     {
@@ -178,7 +189,7 @@ mod consumer {
         }
     }
 
-    impl<T> UnindexedConsumerBase for Consumer<T>
+    impl<T> UnindexedConsumer for Consumer<T>
     where
         T: Ord + Send,
     {

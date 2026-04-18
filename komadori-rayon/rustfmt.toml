@@ -1,0 +1,3 @@
+# Due to `UnindexedParallelCollectorBase::parts_unindexed()` (so long).
+# We want rustfmt to still format it.
+max_width = 110

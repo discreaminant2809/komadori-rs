@@ -87,7 +87,7 @@ impl<'a, T> IntoCollectorBase for Consumer<'a, T> {
     }
 }
 
-impl<'a, T> plumbing::ConsumerBase for Consumer<'a, T>
+impl<'a, T> plumbing::Consumer for Consumer<'a, T>
 where
     T: Send,
 {

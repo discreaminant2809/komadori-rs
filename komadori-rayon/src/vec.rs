@@ -10,8 +10,9 @@ use crate::{
     collections::linked_vec,
     collector::{
         IntoParallelCollectorBase, ParallelCollectorBase, assert_unindexed_par_collector,
-        plumbing::{DefineConsumer, DefineUnindexedConsumer},
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
     },
+    helpers::{unique, unique_unindexed},
     prelude::UnindexedParallelCollectorBase,
     slice::in_place_write,
 };
@@ -62,11 +63,18 @@ where
     }
 }
 
-impl<'this, T> DefineConsumer<'this> for IntoParCollector<T>
+impl<'this, T> DefineSerial<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type Consumer = in_place_write::Consumer<'this, T>;
+    type Serial = unique::Serial<'this, Self, in_place_write::WriteProof<'this, T>>;
+}
+
+impl<'this, T> DefineUnindexedSerial<'this> for IntoParCollector<T>
+where
+    T: Send,
+{
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T, usize>>;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -85,10 +93,11 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         self.0.reserve(len);
 
@@ -102,7 +111,7 @@ where
         };
         let mut this = NonNull::from_mut(&mut self.0);
 
-        (
+        unique::uniquify((
             len,
             unsafe { in_place_write::Consumer::new(being_written, len) },
             move |write_proof| {
@@ -121,15 +130,8 @@ where
 
                 ControlFlow::Continue(())
             },
-        )
+        ))
     }
-}
-
-impl<'this, T> DefineUnindexedConsumer<'this> for IntoParCollector<T>
-where
-    T: Send,
-{
-    type UnindexedConsumer = linked_vec::Consumer<T, usize>;
 }
 
 impl<T> UnindexedParallelCollectorBase for IntoParCollector<T>
@@ -139,12 +141,15 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        (linked_vec::Consumer::new(), |(chunks, len)| {
+        unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
             self.0.reserve(len);
 
             for mut chunk in chunks {
@@ -152,15 +157,22 @@ where
             }
 
             ControlFlow::Continue(())
-        })
+        }))
     }
 }
 
-impl<'this, 'v, T> DefineConsumer<'this> for ParCollectorMut<'v, T>
+impl<'this, 'v, T> DefineSerial<'this> for ParCollectorMut<'v, T>
 where
     T: Send,
 {
-    type Consumer = in_place_write::Consumer<'this, T>;
+    type Serial = unique::Serial<'this, Self, in_place_write::WriteProof<'this, T>>;
+}
+
+impl<'v, 'this, T> DefineUnindexedSerial<'this> for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T, usize>>;
 }
 
 impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
@@ -179,10 +191,11 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         // NOTE: from outside, the lifetime of `parts` is still bounded to
         // the collector, but here, the mutable reference to the collector is
@@ -204,7 +217,7 @@ where
         };
         let mut this = NonNull::from_mut(this);
 
-        (
+        unique::uniquify((
             len,
             unsafe { in_place_write::Consumer::new(being_written, len) },
             move |write_proof| {
@@ -223,15 +236,8 @@ where
 
                 ControlFlow::Continue(())
             },
-        )
+        ))
     }
-}
-
-impl<'v, 'this, T> DefineUnindexedConsumer<'this> for ParCollectorMut<'v, T>
-where
-    T: Send,
-{
-    type UnindexedConsumer = linked_vec::Consumer<T, usize>;
 }
 
 impl<'v, T> UnindexedParallelCollectorBase for ParCollectorMut<'v, T>
@@ -241,12 +247,15 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        (linked_vec::Consumer::new(), |(chunks, len)| {
+        unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
             self.0.reserve(len);
 
             for mut chunk in chunks {
@@ -254,7 +263,7 @@ where
             }
 
             ControlFlow::Continue(())
-        })
+        }))
     }
 }
 

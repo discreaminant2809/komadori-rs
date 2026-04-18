@@ -2,17 +2,17 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use super::plumbing::{Consumer, DefineConsumer};
+use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Also, Fuse, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, MapOutput, Take,
-    Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector_base,
-    assert_unindexed_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
+    Also, Fuse, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, MapOutput, Take, Tee,
+    TeeClone, TeeFunnel, TeeMut, assert_par_collector_base, assert_unindexed_par_collector_base, tee,
+    tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
 ///
 /// This trait also defines the output and the way to finish and return that output.
-pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
+pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// The result this collector yields, via the
     /// [`finish()`](Self::finish) method.
     ///
@@ -30,10 +30,11 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     );
 
     /// Returns a hint whether this parallel collector has stopped accumulating.
@@ -96,8 +97,11 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
         let (actual_len, consumer, commit) = self.parts(len);
         (actual_len, consumer, |output| {
@@ -217,7 +221,10 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
     /// );
     /// ```
     #[inline]
-    fn take(self, n: usize) -> Take<Self> {
+    fn take(self, n: usize) -> Take<Self>
+    where
+        Self: Sized,
+    {
         assert_par_collector_base(Take::new(self, n))
     }
 
@@ -354,6 +361,7 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
     #[inline]
     fn map_output<F, R>(self, f: F) -> MapOutput<Self, F>
     where
+        Self: Sized,
         F: FnOnce(Self::Output) -> R,
     {
         assert_par_collector_base(MapOutput::new(self, f))
@@ -363,6 +371,7 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
     #[inline]
     fn also_unindexed<U>(self, unindexed: U) -> Also<Self, U::IntoParCollector>
     where
+        Self: Sized,
         U: IntoUnindexedParallelCollectorBase,
     {
         assert_unindexed_par_collector_base(Also::new(self, unindexed.into_par_collector()))
@@ -373,8 +382,8 @@ pub trait ParallelCollectorBase: for<'this> DefineConsumer<'this> {
 ///
 /// You cannot implement this trait directly. You should instead define the item type
 /// of serial collectors produced by consumers of this parallel collector.
-pub trait ParallelCollector<T>: ParallelCollectorBase<Consumer: Consumer<T>> {}
-impl<C, T> ParallelCollector<T> for C where C: ParallelCollectorBase<Consumer: Consumer<T>> {}
+pub trait ParallelCollector<T>: ParallelCollectorBase<Serial: Collector<T>> {}
+impl<C, T> ParallelCollector<T> for C where C: ParallelCollectorBase<Serial: Collector<T>> {}
 
 // For anyone wanna do this:
 // ```

@@ -2,9 +2,12 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase,
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
 /// A parallel collector that transforms the final accumulated result.
@@ -35,18 +38,18 @@ where
     }
 }
 
-impl<'this, C, F> DefineConsumer<'this> for MapOutput<C, F>
+impl<'this, C, F> DefineSerial<'this> for MapOutput<C, F>
 where
-    C: DefineConsumer<'this>,
+    C: DefineSerial<'this>,
 {
-    type Consumer = C::Consumer;
+    type Serial = unique::Serial<'this, Self, C::Serial>;
 }
 
-impl<'this, C, F> DefineUnindexedConsumer<'this> for MapOutput<C, F>
+impl<'this, C, F> DefineUnindexedSerial<'this> for MapOutput<C, F>
 where
-    C: DefineUnindexedConsumer<'this>,
+    C: DefineUnindexedSerial<'this>,
 {
-    type UnindexedConsumer = C::UnindexedConsumer;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, C::UnindexedSerial>;
 }
 
 impl<C, F, R> ParallelCollectorBase for MapOutput<C, F>
@@ -72,12 +75,13 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        self.collector.parts(len)
+        unique::uniquify(self.collector.parts(len))
     }
 
     #[inline]
@@ -86,10 +90,13 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        self.collector.take_parts(len)
+        unique::take_uniquify(self.collector.take_parts(len))
     }
 }
 
@@ -102,23 +109,27 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        self.collector.parts_unindexed()
+        unique_unindexed::uniquify(self.collector.parts_unindexed())
     }
 
     #[inline]
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-        impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
-        ),
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
-        self.collector.take_parts_unindexed()
+        unique_unindexed::take_uniquify(self.collector.take_parts_unindexed())
     }
 }

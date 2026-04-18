@@ -6,9 +6,12 @@ use std::{
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase,
+        plumbing::{DefineSerial, DefineUnindexedSerial},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
 /// A parallel collector that stops accumulating after collecting `n` items,
@@ -31,11 +34,19 @@ impl<C> Take<C> {
     }
 }
 
-impl<'this, C> DefineConsumer<'this> for Take<C>
+impl<'this, C> DefineSerial<'this> for Take<C>
 where
-    C: DefineConsumer<'this>,
+    C: DefineSerial<'this>,
 {
-    type Consumer = indexed_consumer::Consumer<C::Consumer>;
+    type Serial = unique::Serial<'this, Self, indexed::Serial<C::Serial>>;
+}
+
+impl<'this, C> DefineUnindexedSerial<'this> for Take<C>
+where
+    C: DefineUnindexedSerial<'this>,
+{
+    type UnindexedSerial =
+        unique_unindexed::Serial<'this, Self, unindexed::Serial<'this, C::UnindexedSerial>>;
 }
 
 impl<C> ParallelCollectorBase for Take<C>
@@ -63,10 +74,11 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl crate::collector::plumbing::Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         let remaining = self.remaining.get_mut();
         let max_len = if *remaining < len {
@@ -84,11 +96,7 @@ where
         // if appropriate.
         let max_len = inner_max_len.min(max_len);
 
-        (
-            max_len,
-            indexed_consumer::Consumer::new(consumer, max_len),
-            commit,
-        )
+        unique::uniquify((max_len, indexed::Consumer::new(consumer, max_len), commit))
     }
 
     fn take_parts<'a>(
@@ -96,8 +104,11 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+        impl crate::collector::plumbing::Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
         let remaining = self.remaining.get_mut();
         let max_len = if *remaining < len {
@@ -115,19 +126,8 @@ where
         // if appropriate.
         let max_len = inner_max_len.min(max_len);
 
-        (
-            max_len,
-            indexed_consumer::Consumer::new(consumer, max_len),
-            commit,
-        )
+        unique::take_uniquify((max_len, indexed::Consumer::new(consumer, max_len), commit))
     }
-}
-
-impl<'this, C> DefineUnindexedConsumer<'this> for Take<C>
-where
-    C: DefineUnindexedConsumer<'this>,
-{
-    type UnindexedConsumer = unindexed_consumer::Consumer<'this, C::UnindexedConsumer>;
 }
 
 impl<C> UnindexedParallelCollectorBase for Take<C>
@@ -137,31 +137,29 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl crate::collector::plumbing::UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        (
-            unindexed_consumer::Consumer::new(consumer, &self.remaining),
-            commit,
-        )
+        unique_unindexed::uniquify((unindexed::Consumer::new(consumer, &self.remaining), commit))
     }
 
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-        impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
-        ),
+        impl crate::collector::plumbing::UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        (
-            unindexed_consumer::Consumer::new(consumer, &self.remaining),
-            commit,
-        )
+        unique_unindexed::take_uniquify((unindexed::Consumer::new(consumer, &self.remaining), commit))
     }
 }
 
@@ -184,7 +182,7 @@ where
 }
 
 #[allow(missing_debug_implementations)]
-mod indexed_consumer {
+mod indexed {
     use std::ops::ControlFlow;
 
     use komadori::prelude::*;
@@ -203,13 +201,15 @@ mod indexed_consumer {
         }
     }
 
+    pub type Serial<C> = komadori::collector::Take<C>;
+
     impl<C> IntoCollectorBase for Consumer<C>
     where
         C: IntoCollectorBase,
     {
         type Output = C::Output;
 
-        type IntoCollector = komadori::collector::Take<C::IntoCollector>;
+        type IntoCollector = Serial<C::IntoCollector>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
@@ -220,9 +220,9 @@ mod indexed_consumer {
         }
     }
 
-    impl<C> plumbing::ConsumerBase for Consumer<C>
+    impl<C> plumbing::Consumer for Consumer<C>
     where
-        C: plumbing::ConsumerBase,
+        C: plumbing::Consumer,
     {
         type Combiner = C::Combiner;
 
@@ -245,7 +245,7 @@ mod indexed_consumer {
 }
 
 #[allow(missing_debug_implementations)]
-mod unindexed_consumer {
+mod unindexed {
     use std::{
         ops::ControlFlow,
         sync::atomic::{AtomicUsize, Ordering},
@@ -253,14 +253,14 @@ mod unindexed_consumer {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumerBase};
+    use crate::collector::plumbing::{self, UnindexedConsumer};
 
     pub struct Consumer<'a, C> {
         consumer: C,
         remaining: &'a AtomicUsize,
     }
 
-    pub struct IntoCollector<'a, C> {
+    pub struct Serial<'a, C> {
         collector: C,
         remaining: &'a AtomicUsize,
     }
@@ -268,10 +268,7 @@ mod unindexed_consumer {
     impl<'a, C> Consumer<'a, C> {
         #[inline]
         pub(super) fn new(consumer: C, remaining: &'a AtomicUsize) -> Self {
-            Self {
-                consumer,
-                remaining,
-            }
+            Self { consumer, remaining }
         }
     }
 
@@ -281,20 +278,20 @@ mod unindexed_consumer {
     {
         type Output = C::Output;
 
-        type IntoCollector = IntoCollector<'a, C::IntoCollector>;
+        type IntoCollector = Serial<'a, C::IntoCollector>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
-            IntoCollector {
+            Serial {
                 collector: self.consumer.into_collector(),
                 remaining: self.remaining,
             }
         }
     }
 
-    impl<C> plumbing::ConsumerBase for Consumer<'_, C>
+    impl<C> plumbing::Consumer for Consumer<'_, C>
     where
-        C: UnindexedConsumerBase,
+        C: UnindexedConsumer,
     {
         type Combiner = C::Combiner;
 
@@ -312,9 +309,9 @@ mod unindexed_consumer {
         }
     }
 
-    impl<C> UnindexedConsumerBase for Consumer<'_, C>
+    impl<C> UnindexedConsumer for Consumer<'_, C>
     where
-        C: UnindexedConsumerBase,
+        C: UnindexedConsumer,
     {
         #[inline]
         fn split_off_left(&self) -> Self {
@@ -330,7 +327,7 @@ mod unindexed_consumer {
         }
     }
 
-    impl<C> CollectorBase for IntoCollector<'_, C>
+    impl<C> CollectorBase for Serial<'_, C>
     where
         C: CollectorBase,
     {
@@ -353,7 +350,7 @@ mod unindexed_consumer {
 
     // The implementation is based on `rayon`
     // See: https://docs.rs/rayon/latest/src/rayon/iter/take_any.rs.html
-    impl<C, T> Collector<T> for IntoCollector<'_, C>
+    impl<C, T> Collector<T> for Serial<'_, C>
     where
         C: Collector<T>,
     {
@@ -369,22 +366,16 @@ mod unindexed_consumer {
         fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
             self.break_hint()?;
 
-            self.collector.collect_many(
-                items
-                    .into_iter()
-                    .take_while(|_| should_take(self.remaining)),
-            )
+            self.collector
+                .collect_many(items.into_iter().take_while(|_| should_take(self.remaining)))
         }
 
         fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
             if self.break_hint().is_break() {
                 self.collector.finish()
             } else {
-                self.collector.collect_then_finish(
-                    items
-                        .into_iter()
-                        .take_while(|_| should_take(self.remaining)),
-                )
+                self.collector
+                    .collect_then_finish(items.into_iter().take_while(|_| should_take(self.remaining)))
             }
         }
     }

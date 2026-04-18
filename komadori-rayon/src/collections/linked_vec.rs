@@ -35,7 +35,7 @@ pub struct Consumer<T, L> {
     _marker: PhantomData<(T, L)>,
 }
 
-pub struct IntoCollector<T, L> {
+pub struct Serial<T, L> {
     chunk: Vec<T>,
     _marker: PhantomData<L>,
 }
@@ -45,9 +45,7 @@ pub struct Combiner(());
 impl<T, L> Consumer<T, L> {
     #[inline]
     pub(crate) fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self { _marker: PhantomData }
     }
 }
 
@@ -57,18 +55,18 @@ where
 {
     type Output = (LinkedList<Vec<T>>, L);
 
-    type IntoCollector = IntoCollector<T, L>;
+    type IntoCollector = Serial<T, L>;
 
     #[inline]
     fn into_collector(self) -> Self::IntoCollector {
-        IntoCollector {
+        Serial {
             chunk: vec![],
             _marker: PhantomData,
         }
     }
 }
 
-impl<T, L> plumbing::ConsumerBase for Consumer<T, L>
+impl<T, L> plumbing::Consumer for Consumer<T, L>
 where
     T: Send,
     L: LenCarrier + Send,
@@ -77,21 +75,19 @@ where
 
     #[inline]
     fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-        use plumbing::UnindexedConsumerBase;
+        use plumbing::UnindexedConsumer;
         (self.split_off_left(), self.to_combiner())
     }
 }
 
-impl<T, L> plumbing::UnindexedConsumerBase for Consumer<T, L>
+impl<T, L> plumbing::UnindexedConsumer for Consumer<T, L>
 where
     T: Send,
     L: LenCarrier + Send,
 {
     #[inline]
     fn split_off_left(&self) -> Self {
-        Consumer {
-            _marker: PhantomData,
-        }
+        Consumer { _marker: PhantomData }
     }
 
     #[inline]
@@ -111,7 +107,7 @@ where
     }
 }
 
-impl<T, L> CollectorBase for IntoCollector<T, L>
+impl<T, L> CollectorBase for Serial<T, L>
 where
     L: LenCarrier,
 {
@@ -124,7 +120,7 @@ where
     }
 }
 
-impl<T, L> Collector<T> for IntoCollector<T, L>
+impl<T, L> Collector<T> for Serial<T, L>
 where
     L: LenCarrier,
 {
@@ -141,7 +137,7 @@ where
     }
 }
 
-impl<'i, T, L> Collector<&'i T> for IntoCollector<T, L>
+impl<'i, T, L> Collector<&'i T> for Serial<T, L>
 where
     L: LenCarrier,
     T: Copy,
@@ -159,7 +155,7 @@ where
     }
 }
 
-impl<'i, T, L> Collector<&'i mut T> for IntoCollector<T, L>
+impl<'i, T, L> Collector<&'i mut T> for Serial<T, L>
 where
     L: LenCarrier,
     T: Copy,

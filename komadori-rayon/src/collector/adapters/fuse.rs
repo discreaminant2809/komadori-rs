@@ -2,9 +2,12 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase,
+        plumbing::{DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
 /// A parallel collector that can "safely" collect even after
@@ -31,11 +34,22 @@ where
     }
 }
 
-impl<'this, C> DefineConsumer<'this> for Fuse<C>
+impl<'this, C> DefineSerial<'this> for Fuse<C>
 where
-    C: DefineConsumer<'this>,
+    C: DefineSerial<'this>,
 {
-    type Consumer = consumer::Consumer<<C as DefineConsumer<'this>>::Consumer>;
+    type Serial = unique::Serial<'this, Self, consumer::Serial<<C as DefineSerial<'this>>::Serial>>;
+}
+
+impl<'this, C> DefineUnindexedSerial<'this> for Fuse<C>
+where
+    C: DefineUnindexedSerial<'this>,
+{
+    type UnindexedSerial = unique_unindexed::Serial<
+        'this,
+        Self,
+        consumer::Serial<<C as DefineUnindexedSerial<'this>>::UnindexedSerial>,
+    >;
 }
 
 impl<C> ParallelCollectorBase for Fuse<C>
@@ -59,13 +73,14 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl crate::collector::plumbing::Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         let (actual_len, consumer, commit) = self.collector.parts(len);
-        (
+        unique::uniquify((
             actual_len,
             consumer::Consumer::new(consumer, self.break_hint),
             |output| {
@@ -75,7 +90,7 @@ where
                 }
                 self.break_hint
             },
-        )
+        ))
     }
 
     fn take_parts<'a>(
@@ -83,26 +98,21 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+        impl crate::collector::plumbing::Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
         let (actual_len, consumer, commit) = self.collector.take_parts(len);
-        (
+        unique::take_uniquify((
             actual_len,
             consumer::Consumer::new(consumer, self.break_hint),
             // We can't set the flag if we cannot obtain the signal from
             // the committer.
             commit,
-        )
+        ))
     }
-}
-
-impl<'this, C> DefineUnindexedConsumer<'this> for Fuse<C>
-where
-    C: DefineUnindexedConsumer<'this>,
-{
-    type UnindexedConsumer =
-        consumer::Consumer<<C as DefineUnindexedConsumer<'this>>::UnindexedConsumer>;
 }
 
 impl<C> UnindexedParallelCollectorBase for Fuse<C>
@@ -110,36 +120,37 @@ where
     C: UnindexedParallelCollectorBase,
 {
     fn parts_unindexed<'a>(
-            &'a mut self,
-        ) -> (
-            <Self as crate::collector::plumbing::DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-            impl FnOnce(
-                <<Self as crate::collector::plumbing::DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
-            ) -> ControlFlow<()>,
-    ){
+        &'a mut self,
+    ) -> (
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        (
-            consumer::Consumer::new(consumer, self.break_hint),
-            |output| {
-                let cf = commit(output);
-                if cf.is_break() {
-                    self.break_hint = cf;
-                }
-                self.break_hint
-            },
-        )
+        unique_unindexed::uniquify((consumer::Consumer::new(consumer, self.break_hint), |output| {
+            let cf = commit(output);
+            if cf.is_break() {
+                self.break_hint = cf;
+            }
+            self.break_hint
+        }))
     }
 
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-        impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
-        ),
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        (consumer::Consumer::new(consumer, self.break_hint), commit)
+        unique_unindexed::take_uniquify((consumer::Consumer::new(consumer, self.break_hint), commit))
     }
 }
 
@@ -159,7 +170,7 @@ mod consumer {
     // We have to roll out our own Fuse because we
     // cannot set the cached hint inside komadori's Fuse.
     #[allow(missing_debug_implementations)]
-    pub struct IntoCollector<C> {
+    pub struct Serial<C> {
         collector: C,
         break_hint: ControlFlow<()>,
     }
@@ -178,20 +189,20 @@ mod consumer {
     {
         type Output = C::Output;
 
-        type IntoCollector = IntoCollector<C::IntoCollector>;
+        type IntoCollector = Serial<C::IntoCollector>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
-            IntoCollector {
+            Serial {
                 collector: self.consumer.into_collector(),
                 break_hint: self.break_hint.get(),
             }
         }
     }
 
-    impl<C> plumbing::ConsumerBase for Consumer<C>
+    impl<C> plumbing::Consumer for Consumer<C>
     where
-        C: plumbing::ConsumerBase,
+        C: plumbing::Consumer,
     {
         type Combiner = C::Combiner;
 
@@ -225,9 +236,9 @@ mod consumer {
         }
     }
 
-    impl<C> plumbing::UnindexedConsumerBase for Consumer<C>
+    impl<C> plumbing::UnindexedConsumer for Consumer<C>
     where
-        C: plumbing::UnindexedConsumerBase,
+        C: plumbing::UnindexedConsumer,
     {
         #[inline]
         fn split_off_left(&self) -> Self {
@@ -252,7 +263,7 @@ mod consumer {
         }
     }
 
-    impl<C> IntoCollector<C> {
+    impl<C> Serial<C> {
         #[inline]
         fn collect_impl(&mut self, f: impl FnOnce(&mut C) -> ControlFlow<()>) -> ControlFlow<()> {
             self.break_hint?;
@@ -261,7 +272,7 @@ mod consumer {
         }
     }
 
-    impl<C> CollectorBase for IntoCollector<C>
+    impl<C> CollectorBase for Serial<C>
     where
         C: CollectorBase,
     {
@@ -278,7 +289,7 @@ mod consumer {
         }
     }
 
-    impl<C, T> Collector<T> for IntoCollector<C>
+    impl<C, T> Collector<T> for Serial<C>
     where
         C: Collector<T>,
     {

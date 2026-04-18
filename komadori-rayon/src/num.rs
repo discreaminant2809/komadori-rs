@@ -9,11 +9,14 @@ use std::{num::Wrapping, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
+        plumbing::{DefineSerial, DefineUnindexedSerial},
+    },
+    helpers::{unique, unique_unindexed},
+    ops,
 };
-use crate::ops;
 
 /// A parallel collector that adds every collected number.
 /// Its [`Output`](ParallelCollectorBase::Output) is the type
@@ -75,26 +78,22 @@ macro_rules! prim_sum_impl {
 
             #[inline]
             fn into_par_sum(self) -> Self::IntoParSum {
-                assert_unindexed_par_collector::<_, $PrimTy>(
-                assert_unindexed_par_collector::<_, &$PrimTy>(
-                assert_unindexed_par_collector::<_, &mut $PrimTy>(
-                    IntoParSum(self)
-                )))
+                assert_unindexed_par_collector::<_, $PrimTy>(assert_unindexed_par_collector::<_, &$PrimTy>(
+                    assert_unindexed_par_collector::<_, &mut $PrimTy>(IntoParSum(self)),
+                ))
             }
         }
 
         impl Default for IntoParSum<$PrimTy> {
             #[inline]
             fn default() -> Self {
-                assert_unindexed_par_collector::<_, $PrimTy>(
-                assert_unindexed_par_collector::<_, &$PrimTy>(
-                assert_unindexed_par_collector::<_, &mut $PrimTy>(
-                    IntoParSum($identity)
-                )))
+                assert_unindexed_par_collector::<_, $PrimTy>(assert_unindexed_par_collector::<_, &$PrimTy>(
+                    assert_unindexed_par_collector::<_, &mut $PrimTy>(IntoParSum($identity)),
+                ))
             }
         }
 
-        impl<'this> DefineConsumer<'this> for IntoParSum<$PrimTy> {
+        impl<'this> DefineSerial<'this> for IntoParSum<$PrimTy> {
             type Consumer = add_consumer::Consumer<$PrimTy>;
         }
 
@@ -150,22 +149,18 @@ macro_rules! prim_product_impl {
 
             #[inline]
             fn into_par_product(self) -> Self::IntoParProduct {
-                assert_unindexed_par_collector::<_, $PrimTy>(
-                assert_unindexed_par_collector::<_, &$PrimTy>(
-                assert_unindexed_par_collector::<_, &mut $PrimTy>(
-                    IntoParProduct(self)
-                )))
+                assert_unindexed_par_collector::<_, $PrimTy>(assert_unindexed_par_collector::<_, &$PrimTy>(
+                    assert_unindexed_par_collector::<_, &mut $PrimTy>(IntoParProduct(self)),
+                ))
             }
         }
 
         impl Default for IntoParProduct<$PrimTy> {
             #[inline]
             fn default() -> Self {
-                assert_unindexed_par_collector::<_, $PrimTy>(
-                assert_unindexed_par_collector::<_, &$PrimTy>(
-                assert_unindexed_par_collector::<_, &mut $PrimTy>(
-                    IntoParProduct($identity)
-                )))
+                assert_unindexed_par_collector::<_, $PrimTy>(assert_unindexed_par_collector::<_, &$PrimTy>(
+                    assert_unindexed_par_collector::<_, &mut $PrimTy>(IntoParProduct($identity)),
+                ))
             }
         }
 
@@ -245,7 +240,7 @@ mod add_consumer {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumerBase};
+    use crate::collector::plumbing::{self, UnindexedConsumer};
 
     pub struct Consumer<Num>(PhantomData<Num>);
 
@@ -319,7 +314,7 @@ mod mul_consumer {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumerBase};
+    use crate::collector::plumbing::{self, UnindexedConsumer};
 
     pub struct Consumer<Num>(PhantomData<Num>);
 

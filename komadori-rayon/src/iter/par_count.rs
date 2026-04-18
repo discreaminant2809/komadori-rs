@@ -2,9 +2,12 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector_base,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector_base,
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
 /// A parallel collector that counts how many items it collected.
@@ -42,8 +45,8 @@ impl ParCount {
     }
 }
 
-impl<'this> DefineConsumer<'this> for ParCount {
-    type Consumer = consumer::Consumer;
+impl<'this> DefineSerial<'this> for ParCount {
+    type Serial = unique::Serial<'this, Self, consumer::Serial>;
 }
 
 impl ParallelCollectorBase for ParCount {
@@ -59,33 +62,39 @@ impl ParallelCollectorBase for ParCount {
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> std::ops::ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.parts_unindexed();
-        (len, consumer, commit)
+        unique::uniquify((len, consumer::Consumer::new(), |count| {
+            self.count += count;
+            ControlFlow::Continue(())
+        }))
     }
 }
 
-impl<'this> DefineUnindexedConsumer<'this> for ParCount {
-    type UnindexedConsumer = consumer::Consumer;
+impl<'this> DefineUnindexedSerial<'this> for ParCount {
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, komadori::iter::Count>;
 }
 
 impl UnindexedParallelCollectorBase for ParCount {
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        (consumer::Consumer::new(), |count| {
+        unique_unindexed::uniquify((consumer::Consumer::new(), |count| {
             self.count += count;
             ControlFlow::Continue(())
-        })
+        }))
     }
 }
 
@@ -93,11 +102,13 @@ impl UnindexedParallelCollectorBase for ParCount {
 mod consumer {
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumerBase};
+    use crate::collector::plumbing::{self, UnindexedConsumer};
 
     pub struct Consumer(());
 
     pub struct Combiner(());
+
+    pub type Serial = komadori::iter::Count;
 
     impl Consumer {
         #[inline]
@@ -109,7 +120,7 @@ mod consumer {
     impl IntoCollectorBase for Consumer {
         type Output = usize;
 
-        type IntoCollector = komadori::iter::Count;
+        type IntoCollector = Serial;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
@@ -117,7 +128,7 @@ mod consumer {
         }
     }
 
-    impl plumbing::ConsumerBase for Consumer {
+    impl plumbing::Consumer for Consumer {
         type Combiner = Combiner;
 
         #[inline]
@@ -126,7 +137,7 @@ mod consumer {
         }
     }
 
-    impl plumbing::UnindexedConsumerBase for Consumer {
+    impl plumbing::UnindexedConsumer for Consumer {
         #[inline]
         fn split_off_left(&self) -> Self {
             Self::new()

@@ -5,21 +5,25 @@ use komadori::prelude::*;
 use super::{
     Also, Filter, IntoParallelCollectorBase, ParallelCollectorBase, TakeAnyWhile,
     assert_unindexed_par_collector, assert_unindexed_par_collector_base,
-    plumbing::{Consumer, DefineUnindexedConsumer, UnindexedConsumer},
+    plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
 /// An unindexed parallel collector.
 pub trait UnindexedParallelCollectorBase:
-    ParallelCollectorBase + for<'this> DefineUnindexedConsumer<'this>
+    ParallelCollectorBase + for<'this> DefineUnindexedSerial<'this>
 {
     /// Prepares a space to accept *any* amount of items landing on anywhere,
     /// and returns "parts" needed to drive this parallel collector.
+    #[allow(clippy::type_complexity)]
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     );
 
@@ -44,13 +48,15 @@ pub trait UnindexedParallelCollectorBase:
     /// The signature is similar to [`parts_unindexed()`](Self::parts_unindexed),
     /// except the returning function which does not return
     /// a [`ControlFlow`].
+    #[allow(clippy::type_complexity)]
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-        impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
-        ),
+        impl UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
         let (consumer, commit) = self.parts_unindexed();
         (consumer, |output| {
@@ -93,7 +99,7 @@ pub trait UnindexedParallelCollectorBase:
     #[inline]
     fn filter<P, T>(self, pred: P) -> Filter<Self, P>
     where
-        Self: UnindexedParallelCollector<T>,
+        Self: UnindexedParallelCollector<T> + Sized,
         P: Fn(&T) -> bool + Sync,
     {
         assert_unindexed_par_collector::<_, T>(Filter::new(self, pred))
@@ -122,7 +128,7 @@ pub trait UnindexedParallelCollectorBase:
     #[inline]
     fn take_any_while<P, T>(self, pred: P) -> TakeAnyWhile<Self, P>
     where
-        Self: UnindexedParallelCollector<T>,
+        Self: UnindexedParallelCollector<T> + Sized,
         P: Fn(&T) -> bool + Sync,
     {
         assert_unindexed_par_collector::<_, T>(TakeAnyWhile::new(self, pred))
@@ -133,6 +139,7 @@ pub trait UnindexedParallelCollectorBase:
     #[inline]
     fn also_indexed<U>(self, indexed: U) -> Also<U::IntoParCollector, Self>
     where
+        Self: Sized,
         U: IntoParallelCollectorBase,
     {
         assert_unindexed_par_collector_base(Also::new(indexed.into_par_collector(), self))
@@ -144,14 +151,11 @@ pub trait UnindexedParallelCollectorBase:
 /// You cannot implement this trait directly. You should instead define the item type
 /// of serial collectors produced by consumers of this parallel collector.
 pub trait UnindexedParallelCollector<T>:
-    UnindexedParallelCollectorBase<Consumer: Consumer<T>, UnindexedConsumer: UnindexedConsumer<T>>
+    UnindexedParallelCollectorBase<Serial: Collector<T>, UnindexedSerial: Collector<T>>
 {
 }
 
 impl<C, T> UnindexedParallelCollector<T> for C where
-    C: UnindexedParallelCollectorBase<
-            Consumer: Consumer<T>,
-            UnindexedConsumer: UnindexedConsumer<T>,
-        >
+    C: UnindexedParallelCollectorBase<Serial: Collector<T>, UnindexedSerial: Collector<T>>
 {
 }

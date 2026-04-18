@@ -48,7 +48,7 @@ impl CoroutinePool {
     ) -> C::Output
     where
         P: Producer,
-        C: UnindexedConsumer<P::Item>,
+        C: UnindexedConsumer<IntoCollector: Collector<P::Item>>,
     {
         let state = Rc::new(RefCell::new(SharedState::default()));
 
@@ -116,7 +116,7 @@ async fn bridge_task<'a, P, C>(
 ) -> C::Output
 where
     P: Producer + 'a,
-    C: UnindexedConsumer<P::Item> + 'a,
+    C: UnindexedConsumer<IntoCollector: Collector<P::Item>> + 'a,
 {
     yield_now().await;
 
@@ -143,14 +143,9 @@ where
 
             let (left_work, right_work) = {
                 let mut state = state.borrow_mut();
-                let left_work =
-                    state.spawn(bridge_task(state_left, producer_left, consumer_left, *left));
-                let right_work = state.spawn(bridge_task(
-                    state_right,
-                    producer_right,
-                    consumer_right,
-                    *right,
-                ));
+                let left_work = state.spawn(bridge_task(state_left, producer_left, consumer_left, *left));
+                let right_work =
+                    state.spawn(bridge_task(state_right, producer_right, consumer_right, *right));
 
                 (left_work, right_work)
             };

@@ -94,7 +94,7 @@ macro_rules! define_consumer_adapter_and_impl_consumer {
 
         impl<C, T> RayonConsumer<T> for ConsumerAdapter<C>
         where
-            C: Consumer<T>,
+            C: Consumer<IntoCollector: Collector<T>>,
         {
             type Folder = FolderAdapter<C::IntoCollector>;
 
@@ -126,13 +126,13 @@ macro_rules! define_consumer_adapter_and_impl_consumer {
 fn unindexed_slow_path<C, I>(items: I, consumer: C) -> C::Output
 where
     I: ParallelIterator,
-    C: UnindexedConsumer<I::Item>,
+    C: UnindexedConsumer<IntoCollector: Collector<I::Item>>,
 {
     define_consumer_adapter_and_impl_consumer!();
 
     impl<C, T> RayonUnindexedConsumer<T> for ConsumerAdapter<C>
     where
-        C: UnindexedConsumer<T>,
+        C: UnindexedConsumer<IntoCollector: Collector<T>>,
     {
         #[inline]
         fn split_off_left(&self) -> Self {
@@ -155,13 +155,13 @@ where
 fn unindexed_fast_path<C, I>(items: I, consumer: C) -> C::Output
 where
     I: ParallelIterator,
-    C: Consumer<I::Item>,
+    C: Consumer<IntoCollector: Collector<I::Item>>,
 {
     define_consumer_adapter_and_impl_consumer!();
 
     impl<C, T> RayonUnindexedConsumer<T> for ConsumerAdapter<C>
     where
-        C: Consumer<T>,
+        C: Consumer<IntoCollector: Collector<T>>,
     {
         fn split_off_left(&self) -> Self {
             panic!("unindexed path used when opt_len() returned Some(len)")
@@ -178,7 +178,7 @@ where
 fn indexed_path<C, I>(items: I, consumer: C, actual_len: usize) -> C::Output
 where
     I: IndexedParallelIterator,
-    C: Consumer<I::Item>,
+    C: Consumer<IntoCollector: Collector<I::Item>>,
 {
     if actual_len < items.len() {
         bridge::bridge(items.take(actual_len), consumer)

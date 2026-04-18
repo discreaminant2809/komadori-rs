@@ -2,9 +2,12 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    ParallelCollectorBase, UnindexedParallelCollectorBase,
-    plumbing::{DefineConsumer, DefineUnindexedConsumer},
+use crate::{
+    collector::{
+        ParallelCollectorBase, UnindexedParallelCollectorBase,
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
 use super::Fuse;
@@ -34,18 +37,19 @@ where
     }
 }
 
-impl<'this, I, U> DefineConsumer<'this> for Also<I, U>
+impl<'this, I, U> DefineSerial<'this> for Also<I, U>
 where
-    I: DefineConsumer<'this>,
+    I: DefineSerial<'this>,
 {
-    type Consumer = <Fuse<I> as DefineConsumer<'this>>::Consumer;
+    type Serial = unique::Serial<'this, Self, <Fuse<I> as DefineSerial<'this>>::Serial>;
 }
 
-impl<'this, I, U> DefineUnindexedConsumer<'this> for Also<I, U>
+impl<'this, I, U> DefineUnindexedSerial<'this> for Also<I, U>
 where
-    U: DefineUnindexedConsumer<'this>,
+    U: DefineUnindexedSerial<'this>,
 {
-    type UnindexedConsumer = <Fuse<U> as DefineUnindexedConsumer<'this>>::UnindexedConsumer;
+    type UnindexedSerial =
+        unique_unindexed::Serial<'this, Self, <Fuse<U> as DefineUnindexedSerial<'this>>::UnindexedSerial>;
 }
 
 impl<I, U> ParallelCollectorBase for Also<I, U>
@@ -75,12 +79,13 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(
-            <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        self.indexed.parts(len)
+        unique::uniquify(self.indexed.parts(len))
     }
 
     #[inline]
@@ -89,10 +94,13 @@ where
         len: usize,
     ) -> (
         usize,
-        <Self as DefineConsumer<'a>>::Consumer,
-        impl FnOnce(<<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output),
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        self.indexed.take_parts(len)
+        unique::take_uniquify(self.indexed.take_parts(len))
     }
 }
 
@@ -105,23 +113,27 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+        impl crate::collector::plumbing::UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
         impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        self.unindexed.parts_unindexed()
+        unique_unindexed::uniquify(self.unindexed.parts_unindexed())
     }
 
     #[inline]
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
-        impl FnOnce(
-            <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
-        ),
+        impl crate::collector::plumbing::UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
-        self.unindexed.take_parts_unindexed()
+        unique_unindexed::take_uniquify(self.unindexed.take_parts_unindexed())
     }
 }
