@@ -11,9 +11,8 @@
 
 pub use crate::collector::{
     IntoParallelCollector, IntoParallelCollectorBase, IntoUnindexedParallelCollector,
-    IntoUnindexedParallelCollectorBase, ParallelCollector, ParallelCollectorBase,
-    ParallelCollectorByMut, ParallelCollectorByRef, UnindexedParallelCollector,
-    UnindexedParallelCollectorBase,
+    IntoUnindexedParallelCollectorBase, ParallelCollector, ParallelCollectorBase, ParallelCollectorByMut,
+    ParallelCollectorByRef, UnindexedParallelCollector, UnindexedParallelCollectorBase,
 };
 #[cfg(feature = "rayon")]
 pub use crate::iter::RayonParallelIteratorExt;

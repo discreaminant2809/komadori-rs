@@ -57,11 +57,11 @@ jobs:
         run: RUSTFLAGS="-C debug-assertions=off" cargo hack miri test --feature-powerset --lib "::miri_tests::"
 
       - name: Run Doc Tests
-        run: cargo test --doc --all-features
+        run: RUSTFLAGS="-D warnings" cargo test --doc --all-features
 
       - name: Check Formatting
         if: matrix.rust == 'stable'
-        run: cargo fmt --all -- --check
+        run: RUSTFLAGS="-D warnings" cargo fmt --all -- --check
 
       - name: Lint
         if: matrix.rust == 'stable'

@@ -1,6 +1,5 @@
 use super::{
-    ParallelCollector, ParallelCollectorBase, UnindexedParallelCollector,
-    UnindexedParallelCollectorBase,
+    ParallelCollector, ParallelCollectorBase, UnindexedParallelCollector, UnindexedParallelCollectorBase,
 };
 
 /// Conversion into a parallel collector.
