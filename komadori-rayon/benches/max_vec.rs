@@ -114,21 +114,13 @@ fn rayon_extend(nums: &[i32]) -> (i32, Vec<i32>) {
 }
 
 fn rayon_komadori(nums: &[i32]) -> (i32, Vec<i32>) {
-    let (max, v) = nums
-        .par_iter()
+    nums.par_iter()
         .copied()
-        // FIXED: use `map_output()` when it's implemented
-        .feed_into(ParMax::new().tee(vec![]));
-
-    (max.unwrap(), v)
+        .feed_into(ParMax::new().map_output(Option::unwrap).tee(vec![]))
 }
 
 fn rayon_komadori_indexed(nums: &[i32]) -> (i32, Vec<i32>) {
-    let (max, v) = nums
-        .par_iter()
+    nums.par_iter()
         .copied()
-        // FIXED: use `map_output()` when it's implemented
-        .feed_into_indexed(ParMax::new().tee(vec![]));
-
-    (max.unwrap(), v)
+        .feed_into_indexed(ParMax::new().map_output(Option::unwrap).tee(vec![]))
 }
