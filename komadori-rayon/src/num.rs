@@ -12,7 +12,7 @@ use komadori::prelude::*;
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
-        plumbing::{DefineSerial, DefineUnindexedSerial},
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
     },
     helpers::{unique, unique_unindexed},
     ops,
@@ -94,7 +94,11 @@ macro_rules! prim_sum_impl {
         }
 
         impl<'this> DefineSerial<'this> for IntoParSum<$PrimTy> {
-            type Consumer = add_consumer::Consumer<$PrimTy>;
+            type Serial = unique::Serial<'this, Self, sum::Serial<$PrimTy>>;
+        }
+
+        impl<'this> DefineUnindexedSerial<'this> for IntoParSum<$PrimTy> {
+            type UnindexedSerial = unique_unindexed::Serial<'this, Self, sum::Serial<$PrimTy>>;
         }
 
         impl ParallelCollectorBase for IntoParSum<$PrimTy> {
@@ -110,33 +114,35 @@ macro_rules! prim_sum_impl {
                 len: usize,
             ) -> (
                 usize,
-                <Self as DefineConsumer<'a>>::Consumer,
-                impl FnOnce(
-                    <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-                ) -> std::ops::ControlFlow<()>,
+                impl Consumer<
+                    IntoCollector = <Self as DefineSerial<'a>>::Serial,
+                    Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+                >,
+                impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
             ) {
-                let (consumer, commit) = self.parts_unindexed();
-                (len, consumer, commit)
+                unique::uniquify((len, sum::Consumer::new(), |count| {
+                    self.0 += count;
+                    ControlFlow::Continue(())
+                }))
             }
-        }
-
-        impl<'this> DefineUnindexedConsumer<'this> for IntoParSum<$PrimTy> {
-            type UnindexedConsumer = add_consumer::Consumer<$PrimTy>;
         }
 
         impl UnindexedParallelCollectorBase for IntoParSum<$PrimTy> {
             fn parts_unindexed<'a>(
                 &'a mut self,
             ) -> (
-                <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+                impl UnindexedConsumer<
+                    IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+                    Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+                >,
                 impl FnOnce(
-                    <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+                    <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
                 ) -> ControlFlow<()>,
             ) {
-                (add_consumer::Consumer::new(), |count| {
+                unique_unindexed::uniquify((sum::Consumer::new(), |count| {
                     self.0 += count;
                     ControlFlow::Continue(())
-                })
+                }))
             }
         }
     };
@@ -164,8 +170,12 @@ macro_rules! prim_product_impl {
             }
         }
 
-        impl<'this> DefineConsumer<'this> for IntoParProduct<$PrimTy> {
-            type Consumer = mul_consumer::Consumer<$PrimTy>;
+        impl<'this> DefineSerial<'this> for IntoParProduct<$PrimTy> {
+            type Serial = unique::Serial<'this, Self, product::Serial<$PrimTy>>;
+        }
+
+        impl<'this> DefineUnindexedSerial<'this> for IntoParProduct<$PrimTy> {
+            type UnindexedSerial = unique_unindexed::Serial<'this, Self, product::Serial<$PrimTy>>;
         }
 
         impl ParallelCollectorBase for IntoParProduct<$PrimTy> {
@@ -181,33 +191,35 @@ macro_rules! prim_product_impl {
                 len: usize,
             ) -> (
                 usize,
-                <Self as DefineConsumer<'a>>::Consumer,
-                impl FnOnce(
-                    <<Self as DefineConsumer<'a>>::Consumer as IntoCollectorBase>::Output,
-                ) -> std::ops::ControlFlow<()>,
+                impl Consumer<
+                    IntoCollector = <Self as DefineSerial<'a>>::Serial,
+                    Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+                >,
+                impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
             ) {
-                let (consumer, commit) = self.parts_unindexed();
-                (len, consumer, commit)
+                unique::uniquify((len, product::Consumer::new(), |count| {
+                    self.0 *= count;
+                    ControlFlow::Continue(())
+                }))
             }
-        }
-
-        impl<'this> DefineUnindexedConsumer<'this> for IntoParProduct<$PrimTy> {
-            type UnindexedConsumer = mul_consumer::Consumer<$PrimTy>;
         }
 
         impl UnindexedParallelCollectorBase for IntoParProduct<$PrimTy> {
             fn parts_unindexed<'a>(
                 &'a mut self,
             ) -> (
-                <Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer,
+                impl UnindexedConsumer<
+                    IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+                    Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+                >,
                 impl FnOnce(
-                    <<Self as DefineUnindexedConsumer<'a>>::UnindexedConsumer as IntoCollectorBase>::Output,
+                    <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
                 ) -> ControlFlow<()>,
             ) {
-                (mul_consumer::Consumer::new(), |count| {
+                unique_unindexed::uniquify((product::Consumer::new(), |count| {
                     self.0 *= count;
                     ControlFlow::Continue(())
-                })
+                }))
             }
         }
     };
@@ -235,8 +247,8 @@ macro_rules! float_impls {
 float_impls!(f32 f64);
 
 #[allow(missing_debug_implementations)]
-mod add_consumer {
-    use std::marker::PhantomData;
+mod sum {
+    use std::{marker::PhantomData, ops::AddAssign};
 
     use komadori::prelude::*;
 
@@ -246,6 +258,8 @@ mod add_consumer {
 
     pub struct Combiner(());
 
+    pub type Serial<Num> = komadori::num::Adding<Num>;
+
     impl<Num> Consumer<Num> {
         #[inline]
         pub(super) fn new() -> Self {
@@ -253,64 +267,61 @@ mod add_consumer {
         }
     }
 
-    macro_rules! prim_impl {
-        ($PrimTy:ty) => {
-            impl IntoCollectorBase for Consumer<$PrimTy> {
-                type Output = $PrimTy;
+    impl<PrimTy> IntoCollectorBase for Consumer<PrimTy>
+    where
+        PrimTy: Adding<Output = PrimTy>,
+    {
+        type Output = PrimTy;
 
-                type IntoCollector = komadori::num::Adding<$PrimTy>;
+        type IntoCollector = PrimTy::Adding;
 
-                #[inline]
-                fn into_collector(self) -> Self::IntoCollector {
-                    <$PrimTy>::adding()
-                }
-            }
-
-            impl plumbing::ConsumerBase for Consumer<$PrimTy> {
-                type Combiner = Combiner;
-
-                #[inline]
-                fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-                    (self.split_off_left(), self.to_combiner())
-                }
-            }
-
-            impl UnindexedConsumerBase for Consumer<$PrimTy> {
-                #[inline]
-                fn split_off_left(&self) -> Self {
-                    Self::new()
-                }
-
-                #[inline]
-                fn to_combiner(&self) -> Self::Combiner {
-                    Combiner(())
-                }
-            }
-
-            impl plumbing::Combiner<$PrimTy> for Combiner {
-                #[inline]
-                fn combine(self, left: &mut $PrimTy, right: $PrimTy) {
-                    *left += right;
-                }
-            }
-        };
+        #[inline]
+        fn into_collector(self) -> Self::IntoCollector {
+            <PrimTy>::adding()
+        }
     }
 
-    macro_rules! int_impls {
-        ($($IntTy:ty)*) => {$(
-            prim_impl!($IntTy);
-            prim_impl!(::std::num::Wrapping<$IntTy>);
-        )*};
+    impl<PrimTy> plumbing::Consumer for Consumer<PrimTy>
+    where
+        PrimTy: Adding<Output = PrimTy> + AddAssign + Send,
+    {
+        type Combiner = Combiner;
+
+        #[inline]
+        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
+            (self.split_off_left(), self.to_combiner())
+        }
     }
 
-    int_impls!(usize u8 u16 u32 u64 u128 isize i8 i16 i32 i64 i128);
-    prim_impl!(f32);
-    prim_impl!(f64);
+    impl<PrimTy> UnindexedConsumer for Consumer<PrimTy>
+    where
+        PrimTy: Adding<Output = PrimTy> + AddAssign + Send,
+    {
+        #[inline]
+        fn split_off_left(&self) -> Self {
+            Self::new()
+        }
+
+        #[inline]
+        fn to_combiner(&self) -> Self::Combiner {
+            Combiner(())
+        }
+    }
+
+    impl<PrimTy> plumbing::Combiner<PrimTy> for Combiner
+    where
+        PrimTy: AddAssign,
+    {
+        #[inline]
+        fn combine(self, left: &mut PrimTy, right: PrimTy) {
+            *left += right;
+        }
+    }
 }
 
 #[allow(missing_debug_implementations)]
-mod mul_consumer {
-    use std::marker::PhantomData;
+mod product {
+    use std::{marker::PhantomData, ops::MulAssign};
 
     use komadori::prelude::*;
 
@@ -320,6 +331,8 @@ mod mul_consumer {
 
     pub struct Combiner(());
 
+    pub type Serial<Num> = komadori::num::Muling<Num>;
+
     impl<Num> Consumer<Num> {
         #[inline]
         pub(super) fn new() -> Self {
@@ -327,57 +340,54 @@ mod mul_consumer {
         }
     }
 
-    macro_rules! prim_impl {
-        ($PrimTy:ty) => {
-            impl IntoCollectorBase for Consumer<$PrimTy> {
-                type Output = $PrimTy;
+    impl<PrimTy> IntoCollectorBase for Consumer<PrimTy>
+    where
+        PrimTy: Muling<Output = PrimTy>,
+    {
+        type Output = PrimTy;
 
-                type IntoCollector = komadori::num::Muling<$PrimTy>;
+        type IntoCollector = PrimTy::Muling;
 
-                #[inline]
-                fn into_collector(self) -> Self::IntoCollector {
-                    <$PrimTy>::muling()
-                }
-            }
-
-            impl plumbing::ConsumerBase for Consumer<$PrimTy> {
-                type Combiner = Combiner;
-
-                #[inline]
-                fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-                    (self.split_off_left(), self.to_combiner())
-                }
-            }
-
-            impl UnindexedConsumerBase for Consumer<$PrimTy> {
-                #[inline]
-                fn split_off_left(&self) -> Self {
-                    Self::new()
-                }
-
-                #[inline]
-                fn to_combiner(&self) -> Self::Combiner {
-                    Combiner(())
-                }
-            }
-
-            impl plumbing::Combiner<$PrimTy> for Combiner {
-                #[inline]
-                fn combine(self, left: &mut $PrimTy, right: $PrimTy) {
-                    *left *= right;
-                }
-            }
-        };
+        #[inline]
+        fn into_collector(self) -> Self::IntoCollector {
+            <PrimTy>::muling()
+        }
     }
 
-    macro_rules! int_impls {
-        ($($IntTy:ty)*) => {$(
-            prim_impl!($IntTy);
-            prim_impl!(::std::num::Wrapping<$IntTy>);
-        )*};
+    impl<PrimTy> plumbing::Consumer for Consumer<PrimTy>
+    where
+        PrimTy: Muling<Output = PrimTy> + MulAssign + Send,
+    {
+        type Combiner = Combiner;
+
+        #[inline]
+        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
+            (self.split_off_left(), self.to_combiner())
+        }
     }
 
-    int_impls!(usize u8 u16 u32 u64 u128 isize i8 i16 i32 i64 i128);
-    prim_impl!(f32);
-    prim_impl!(f64);
+    impl<PrimTy> UnindexedConsumer for Consumer<PrimTy>
+    where
+        PrimTy: Muling<Output = PrimTy> + MulAssign + Send,
+    {
+        #[inline]
+        fn split_off_left(&self) -> Self {
+            Self::new()
+        }
+
+        #[inline]
+        fn to_combiner(&self) -> Self::Combiner {
+            Combiner(())
+        }
+    }
+
+    impl<PrimTy> plumbing::Combiner<PrimTy> for Combiner
+    where
+        PrimTy: MulAssign,
+    {
+        #[inline]
+        fn combine(self, left: &mut PrimTy, right: PrimTy) {
+            *left *= right;
+        }
+    }
 }

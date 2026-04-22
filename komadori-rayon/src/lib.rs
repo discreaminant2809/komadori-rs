@@ -11,7 +11,7 @@ pub mod cmp;
 pub mod collections;
 pub mod collector;
 pub mod iter;
-// pub mod num;
+pub mod num;
 pub mod ops;
 pub mod prelude;
 pub mod slice;
