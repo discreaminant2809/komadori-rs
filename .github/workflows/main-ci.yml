@@ -67,6 +67,10 @@ jobs:
         if: matrix.rust == 'stable'
         run: RUSTFLAGS="-D warnings" cargo hack clippy --feature-powerset --all-targets
 
+      - name: Lint Doc
+        if: matrix.rust == 'nightly'
+        run: RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc --all-features --no-deps
+
       # - name: Check SemVer Violation
       #   if: matrix.rust == 'stable'
       #   run: cargo semver-checks check-release
