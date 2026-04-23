@@ -573,38 +573,30 @@ pub trait CollectorBase {
     /// ```
     /// use komadori::prelude::*;
     ///
-    /// struct User {
-    ///     id: u32,
-    ///     name: String,
-    ///     email: String,
+    /// #[derive(Debug, PartialEq)]
+    /// struct Vec3D {
+    ///     x: i32,
+    ///     y: i32,
+    ///     z: i32,
     /// }
     ///
-    /// let users = [
-    ///     User {
-    ///         id: 1,
-    ///         name: "Alice".to_owned(),
-    ///         email: "alice@mail.com".to_owned(),
-    ///     },
-    ///     User {
-    ///         id: 2,
-    ///         name: "Bob".to_owned(),
-    ///         email: "bob@mail.com".to_owned(),
-    ///     },
+    /// let vectors = [
+    ///     Vec3D { x: 1, y: 2, z: 3 },
+    ///     Vec3D { x: -1, y: 0, z: 1 },
+    ///     Vec3D { x: 2, y: 3, z: -5 },
     /// ];
     ///
-    /// let ((ids, names), emails) = users
+    /// let sum = vectors
     ///     .into_iter()
     ///     .feed_into(
-    ///         vec![]
-    ///             .into_collector()
-    ///             .unzip(vec![])
-    ///             .unzip(vec![])
-    ///             .map(|user: User| ((user.id, user.name), user.email)),
+    ///         0i32.into_sum()
+    ///             .unzip(0.into_sum())
+    ///             .unzip(0.into_sum())
+    ///             .map(|vector: Vec3D| ((vector.x, vector.y), vector.z))
+    ///             .map_output(|((x, y), z)| Vec3D { x, y, z }),
     ///     );
     ///
-    /// assert_eq!(ids, [1, 2]);
-    /// assert_eq!(names, vec!["Alice", "Bob"]);
-    /// assert_eq!(emails, vec!["alice@mail.com", "bob@mail.com"]);
+    /// assert_eq!(sum, Vec3D { x: 2, y: 5, z: -1 });
     /// ```
     #[inline]
     fn unzip<C>(self, other: C) -> Unzip<Self, C::IntoCollector>
