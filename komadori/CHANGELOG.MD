@@ -6,6 +6,7 @@
 
 - `CollectorBase::trying_options()`.
 - `CollectorBase::trying_results()`.
+- Unstable: `CollectorBase::then()`.
 - `crate::ops::IntoSum`.
 
 ### Removed

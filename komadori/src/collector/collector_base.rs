@@ -4,7 +4,7 @@ use std::ops::ControlFlow;
 use itertools::Either;
 
 #[cfg(feature = "unstable")]
-use super::{AltBreakHint, Funnel, Nest, NestExact, TeeWith};
+use super::{AltBreakHint, Funnel, Nest, NestExact, TeeWith, Then};
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
     Inspect, IntoCollector, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip,
@@ -1554,6 +1554,66 @@ pub trait CollectorBase {
         C: IntoCollectorBase<IntoCollector: Clone>,
     {
         assert_collector_base(NestExact::new(self, inner.into_collector()))
+    }
+
+    /// Creates a collector that feeds every item in the first collector until it stops accumulating,
+    /// then creates a second collector from the output of the first collector
+    /// and continues feeding the rest of the items into the second one.
+    ///
+    /// The output is the output of the first collector if it is not full,
+    /// otherwise the output of the second collector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::{prelude::*, iter::Fold};
+    /// use std::{collections::BinaryHeap, cmp::Reverse};
+    ///
+    /// fn top_k<C: IntoCollector<i32>>(
+    ///     k: usize,
+    ///     other: C,
+    /// ) -> impl Collector<i32, Output = (Vec<i32>, Option<C::Output>)> {
+    ///     Vec::with_capacity(k + 1) // One extra element for `Fold`
+    ///         .into_collector()
+    ///         .map(Reverse)
+    ///         .take(k)
+    ///         .map_output(|tops| (BinaryHeap::from(tops), None))
+    ///         .then(|(tops, _)| {
+    ///             Fold::new(tops, {
+    ///                 // The compiler is stupid so we get to write like this
+    ///                 let f = |tops: &mut BinaryHeap<_>, num: &mut _| {
+    ///                     tops.push(Reverse(*num));
+    ///                     *num = tops.pop().unwrap().0;
+    ///                 };
+    ///                 f
+    ///             })
+    ///             .tee_funnel(other.into_collector().map_output(Some))
+    ///         })
+    ///         .map_output(move |(mut tops, other)| (
+    ///             std::iter::from_fn(|| tops.pop())
+    ///                 .map(|top| top.0)
+    ///                 .feed_into(Vec::with_capacity(k)),
+    ///             other,
+    ///         ))
+    /// }
+    ///
+    /// let mut top3_and_sum_other = top_k(3, vec![]);
+    /// assert!(top3_and_sum_other.collect_many([2, 7]).is_continue());
+    /// assert_eq!(top3_and_sum_other.finish(), (vec![2, 7], None));
+    ///
+    /// let mut top3_and_sum_other = top_k(3, 0.into_sum());
+    /// assert!(top3_and_sum_other.collect_many([2, 7, 3, 4, 8]).is_continue());
+    /// assert_eq!(top3_and_sum_other.finish(), (vec![4, 7, 8], Some(5)));
+    /// ```
+    #[cfg(feature = "unstable")]
+    #[inline]
+    fn then<F, C>(self, f: F) -> Then<Self, C::IntoCollector, F>
+    where
+        Self: Sized,
+        C: IntoCollectorBase<Output = Self::Output>,
+        F: FnOnce(Self::Output) -> C,
+    {
+        assert_collector_base(Then::new(self, f))
     }
 }
 
