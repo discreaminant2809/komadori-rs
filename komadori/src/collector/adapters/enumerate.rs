@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::collector::{Collector, CollectorBase};
 
-/// Creates a collector that feeds the underlying collector with the current count
+/// A collector that feeds the underlying collector with the current count
 /// alongside with the item.
 ///
 /// This `struct` is created by [`CollectorBase::enumerate()`]. See its documentation for more.

@@ -5,7 +5,7 @@ use crate::collector::CollectorBase;
 ///
 /// This trait should not be used in bound, since you would block
 /// custom sum without using this trait (e.g. using adapters).
-/// Accepting a bland parallel collector as a parameter instead.
+/// Accept a bland collector as a parameter instead.
 ///
 /// See its implementors for examples.
 ///

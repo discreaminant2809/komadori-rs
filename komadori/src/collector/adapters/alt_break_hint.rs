@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase};
 
-/// Creates a collector that alternates the behavior of
+/// A collector that alternates the behavior of
 /// [`break_hint()`](CollectorBase::break_hint).
 ///
 /// This `struct` is created by [`CollectorBase::alt_break_hint()`].

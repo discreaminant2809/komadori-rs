@@ -335,20 +335,27 @@ pub trait CollectorBase {
     /// # Examples
     ///
     /// ```
-    /// use komadori::{prelude::*, clb_mut};
+    /// use komadori::{prelude::*, cmp::Max, iter::Fold};
     ///
-    /// let mut collector = String::new()
-    ///     .into_concat()
-    ///     .map(clb_mut!(|s: &mut String| -> &str { &s[..] }))
-    ///     .tee_funnel(vec![]);
+    /// let mut max_subarray_sum = Fold::new(0, {
+    ///     // The compiler is stupid so we get to write like this
+    ///     let f = |curr_sum: &mut i32, num: &mut _| {
+    ///         *curr_sum += *num;
+    ///         *num = *curr_sum;
+    ///         *curr_sum = (*curr_sum).max(0);
+    ///     };
+    ///     f
+    /// })
+    /// .tee_funnel(Max::new())
+    /// .map_output(|(_, max)| max);
     ///
-    /// let strings = ["noble", "and", "singer"].map(String::from);
-    /// assert!(collector.collect_many(strings).is_continue());
+    /// assert!(
+    ///     max_subarray_sum
+    ///         .collect_many([2, -3, 4, -1, 2, 1, -5, 4])
+    ///         .is_continue()
+    /// );
     ///
-    /// let (concat, string_vec) = collector.finish();
-    ///
-    /// assert_eq!(concat, "nobleandsinger");
-    /// assert_eq!(string_vec, ["noble", "and", "singer"]);
+    /// assert_eq!(max_subarray_sum.finish(), Some(6));
     /// ```
     #[inline]
     fn tee_funnel<C>(self, other: C) -> TeeFunnel<Self, C::IntoCollector>
@@ -889,9 +896,9 @@ pub trait CollectorBase {
     /// The closure should compose the stop signal of the underlying collector,
     /// even if the underlying collector does not collect anything at all,
     /// to signal a stop as soon as possible.
-    /// (In fact, [`break_hint()`](CollectorBase::break_hint) implementation
+    /// In fact, [`break_hint()`](CollectorBase::break_hint) implementation
     /// of this collector returns whatever the underlying collector returns,
-    /// skipping the closure)
+    /// skipping the closure.
     ///
     /// # Examples
     ///
