@@ -102,16 +102,30 @@ pub trait Collector<T>: CollectorBase {
     /// As a result, `collector.collect_many(empty_iter)` is an alternative
     /// way to check whether this collector has stopped accumulating.
     ///
+    /// # Notes
+    ///
+    /// When [`Break(())`] is returned, it implies that the iterator
+    /// is safe to have [`next()`](Iterator::next) or similar methods called
+    /// "safely."
+    /// When [`Continue(())`] is returned, it implies that the iterator
+    /// is exhausted, and future calls to [`next()`](Iterator::next) or similar methods
+    /// may result in unspecified behaviors.
+    ///
+    /// Implementations must adhere to this semantics.
+    ///
     /// # Examples
     ///
     /// ```rust
     /// use komadori::prelude::*;
     ///
     /// let mut collector = vec![1, 2].into_collector();
-    /// collector.collect_many([3, 4, 5]);
+    /// assert!(collector.collect_many([3, 4, 5]).is_continue());
     ///
     /// assert_eq!(collector.finish(), [1, 2, 3, 4, 5]);
     /// ```
+    ///
+    /// [`Continue(())`]: ControlFlow::Continue
+    /// [`Break(())`]: ControlFlow::Break
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()>
     where
         Self: Sized,

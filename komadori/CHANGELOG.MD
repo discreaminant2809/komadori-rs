@@ -9,6 +9,10 @@
 - Unstable: `CollectorBase::then()`.
 - `crate::ops::IntoSum`.
 
+### Fixed
+
+- `CollectorBase::chain()` calling `next()` on an iterator after it has returned `None`.
+
 ### Removed
 
 - `crate::ops::Adding`.

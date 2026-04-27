@@ -173,13 +173,14 @@ where
     // or else we get the "mutable more than once" error.
     {
         let mut test_parts = tester.collector_test_parts();
+        let mut iter = test_parts.iter.fuse();
+        let mut overreach_detector = iter.by_ref().overreach_detector();
+
         // Simulate the fact that break_hint is used before looping,
         // which is the intended use case.
         let has_stopped = (|| {
             test_parts.collector.break_hint()?;
-            test_parts
-                .iter
-                .try_for_each(|item| test_parts.collector.collect(item))
+            overreach_detector.try_for_each(|item| test_parts.collector.collect(item))
         })()
         .is_break();
 
@@ -197,23 +198,32 @@ where
                 );
             }
         }
+
+        prop_assert!(
+            !overreach_detector.overreached(),
+            "`collect()` calls `next()` on an iterator that has returned `None`"
+        );
+
         // We may have not considered that the collector is implemeted incorrectly
         // and even if the above test passes, the output of the collector
         // may have been "tainted" by extra items fed.
         // We will catch it also in the below test
 
-        (test_parts.pred)(test_parts.collector.finish(), &mut test_parts.iter)
+        (test_parts.pred)(test_parts.collector.finish(), &mut iter)
             .map_err(|e| e.of_method("collect"))?;
     }
 
     // `collect_many()`
     {
         let mut test_parts = tester.collector_test_parts();
+        let mut iter = test_parts.iter.fuse();
+        let mut overreach_detector = iter.by_ref().overreach_detector();
+
         // We don't call `break_hint()` because it's NOT an intended use case.
         // The user should be able to call it directly without that method.
         let has_stopped = test_parts
             .collector
-            .collect_many(&mut test_parts.iter)
+            .collect_many(&mut overreach_detector)
             .is_break();
         prop_assert_eq!(
             has_stopped,
@@ -228,21 +238,84 @@ where
             );
         }
 
-        (test_parts.pred)(test_parts.collector.finish(), &mut test_parts.iter)
+        prop_assert!(
+            !overreach_detector.overreached(),
+            "`collect_many()` calls `next()` on an iterator that has returned `None`"
+        );
+
+        (test_parts.pred)(test_parts.collector.finish(), &mut iter)
             .map_err(|e| e.of_method("collect_many"))?;
     }
 
     // `collect_then_finish()`
     {
         let mut test_parts = tester.collector_test_parts();
-        (test_parts.pred)(
-            test_parts
-                .collector
-                .collect_then_finish(&mut test_parts.iter),
-            &mut test_parts.iter,
-        )
-        .map_err(|e| e.of_method("collect_then_finish"))?;
+        let mut iter = test_parts.iter.fuse();
+        let mut overreach_detector = iter.by_ref().overreach_detector();
+
+        let output = test_parts
+            .collector
+            .collect_then_finish(&mut overreach_detector);
+
+        prop_assert!(
+            !overreach_detector.overreached(),
+            "`collect_then_finish()` calls `next()` on an iterator that has returned `None`"
+        );
+
+        (test_parts.pred)(output, &mut iter).map_err(|e| e.of_method("collect_then_finish"))?;
     }
 
     Ok(())
+}
+
+trait IteratorExt: Iterator {
+    fn overreach_detector(self) -> OverreachDetector<Self>
+    where
+        Self: Sized,
+    {
+        OverreachDetector::StillGoing(self)
+    }
+}
+impl<I> IteratorExt for I where I: Iterator {}
+
+enum OverreachDetector<I> {
+    StillGoing(I),
+    Stopped(bool),
+}
+
+impl<I> OverreachDetector<I> {
+    fn overreached(&self) -> bool {
+        matches!(self, Self::Stopped(true))
+    }
+}
+
+impl<I> Iterator for OverreachDetector<I>
+where
+    I: Iterator,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::StillGoing(iter) => {
+                if let Some(item) = iter.next() {
+                    Some(item)
+                } else {
+                    *self = Self::Stopped(false);
+                    None
+                }
+            }
+            Self::Stopped(overreached) => {
+                *overreached = true;
+                None
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::StillGoing(iter) => iter.size_hint(),
+            Self::Stopped(_) => (0, Some(0)),
+        }
+    }
 }

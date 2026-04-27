@@ -5,3 +5,5 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 87e38583e755ad32c09194ca9bf2fbd7e18178f7d79e12f0bf15e289142518f7 # shrinks to nums = [0], first_count = 1, second_count = 0
+cc aa09c8ee3eecf9f717e42d6dd608875a19dbe8e7bed9e8eba9aacf90d629465f # shrinks to nums = [], first_count = 0, second_count = 1
+cc a1c044fd1cda0c98f9081c08d39884cc40b49d33ec66b328df5cd36d9453c224 # shrinks to nums = [], first_count = 1, second_count = 1

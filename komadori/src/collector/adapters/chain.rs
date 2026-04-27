@@ -72,7 +72,6 @@ where
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
         let mut items = items.into_iter();
 
-        // No need to consult the `break_hint`
         if self.collector1.collect_many(&mut items).is_break() {
             self.collector2.collect_many(items)
         } else {
@@ -80,14 +79,21 @@ where
         }
     }
 
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
+    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
         let mut items = items.into_iter();
 
-        // No need to consult the `break_hint`
-        (
-            self.collector1.collect_then_finish(&mut items),
-            self.collector2.collect_then_finish(items),
-        )
+        // Be careful! The first collector may have exhausted the iterator,
+        // and collect_then_finish can't tell that!
+        // Yes, `fuse()` helps, but this way removes the need
+        // of iterator adapters!
+        if self.collector1.collect_many(&mut items).is_break() {
+            (
+                self.collector1.finish(),
+                self.collector2.collect_then_finish(items),
+            )
+        } else {
+            (self.collector1.finish(), self.collector2.finish())
+        }
     }
 }
 
