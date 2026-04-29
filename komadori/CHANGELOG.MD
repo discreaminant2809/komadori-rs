@@ -6,8 +6,11 @@
 
 - `CollectorBase::trying_options()`.
 - `CollectorBase::trying_results()`.
-- Unstable: `CollectorBase::then()`.
 - `crate::ops::IntoSum`.
+- `crate::ops::IntoProduct`.
+- Unstable: `CollectorBase::then()`.
+- Unstable: `IntoSum` implementations for `Saturating<UInt>`, where `UInt` is every
+  unsigned integer type.
 
 ### Fixed
 
@@ -16,6 +19,7 @@
 ### Removed
 
 - `crate::ops::Adding`.
+- `crate::ops::Muling`.
 
 ## 0.6.0
 

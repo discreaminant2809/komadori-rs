@@ -61,3 +61,8 @@ harness = false
 name = "min_max"
 required-features = ["itertools"]
 harness = false
+
+[[bench]]
+name = "saturating_sum"
+required-features = ["unstable"]
+harness = false

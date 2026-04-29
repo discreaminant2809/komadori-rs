@@ -5,6 +5,8 @@
 //!
 //! This module corresponds to [`std::num`].
 
+#[cfg(feature = "unstable")]
+use std::num::Saturating;
 use std::{num::Wrapping, ops::ControlFlow};
 
 use crate::{
@@ -21,7 +23,11 @@ use crate::{
 ///
 /// This `struct` is created by [`[number].into_sum()`](ops::IntoSum),
 /// where `[number]`'s type is, currently, all integers and floating point numbers,
-/// as well as [`Wrapping`].
+/// as well as [`Wrapping`] (for integers) and [`Saturating`] (only for unsigned integers,
+/// and unstable for now).
+///
+/// For [`Saturating`], the collector stops when the sum is the maximum value
+/// of the unsigned integer type.
 ///
 /// # Examples
 ///
@@ -321,6 +327,101 @@ macro_rules! float_impls {
 }
 
 float_impls!(f32 f64);
+
+macro_rules! unsigned_saturating_add_impl {
+    ($IntTy:ty) => {
+        #[cfg(feature = "unstable")]
+        impl ops::IntoSum for Saturating<$IntTy> {
+            type IntoSum = IntoSum<Saturating<$IntTy>>;
+
+            #[inline]
+            fn into_sum(self) -> Self::IntoSum {
+                assert_collector::<_, Saturating<$IntTy>>(
+                    IntoSum(self),
+                )
+            }
+        }
+
+        #[cfg(feature = "unstable")]
+        impl Default for IntoSum<Saturating<$IntTy>> {
+            #[inline]
+            fn default() -> Self {
+                assert_collector::<_, Saturating<$IntTy>>(
+                    IntoSum(Saturating(
+                        0 as $IntTy,
+                    )),
+                )
+            }
+        }
+
+        #[cfg(feature = "unstable")]
+        impl CollectorBase for IntoSum<Saturating<$IntTy>> {
+            type Output = Saturating<$IntTy>;
+
+            #[inline]
+            fn finish(self) -> Self::Output {
+                self.0
+            }
+
+            #[inline]
+            fn break_hint(&self) -> ControlFlow<()> {
+                if self.0.0 < <$IntTy>::MAX {
+                    ControlFlow::Continue(())
+                } else {
+                    ControlFlow::Break(())
+                }
+            }
+        }
+
+        #[cfg(feature = "unstable")]
+        impl Collector<Saturating<$IntTy>> for IntoSum<Saturating<$IntTy>> {
+            #[inline]
+            fn collect(&mut self, Saturating(num): Saturating<$IntTy>) -> ControlFlow<()> {
+                if let Some(sum) = self.0.0.checked_add(num) {
+                    self.0.0 = sum;
+                    ControlFlow::Continue(())
+                } else {
+                    self.0.0 = <$IntTy>::MAX;
+                    ControlFlow::Break(())
+                }
+            }
+        }
+
+        // impl<'a> Collector<&'a Saturating<$IntTy>> for IntoSum<Saturating<$IntTy>> {
+        //     #[inline]
+        //     fn collect(&mut self, &Saturating(num): &'a Saturating<$IntTy>) -> ControlFlow<()> {
+        //         if let Some(sum) = self.0.0.checked_add(num) {
+        //             self.0.0 = sum;
+        //             ControlFlow::Continue(())
+        //         } else {
+        //             self.0.0 = <$IntTy>::MAX;
+        //             ControlFlow::Break(())
+        //         }
+        //     }
+        // }
+
+        // impl<'a> Collector<&'a mut Saturating<$IntTy>> for IntoSum<Saturating<$IntTy>> {
+        //     #[inline]
+        //     fn collect(
+        //         &mut self,
+        //         &mut Saturating(num): &'a mut Saturating<$IntTy>,
+        //     ) -> ControlFlow<()> {
+        //         if let Some(sum) = self.0.0.checked_add(num) {
+        //             self.0.0 = sum;
+        //             ControlFlow::Continue(())
+        //         } else {
+        //             self.0.0 = <$IntTy>::MAX;
+        //             ControlFlow::Break(())
+        //         }
+        //     }
+        // }
+    };
+
+    ($($IntTy:ty)*) => {
+        $(unsigned_saturating_add_impl!($IntTy);)*
+    };
+}
+unsigned_saturating_add_impl!(u8 u16 u32 u64 u128 usize);
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
