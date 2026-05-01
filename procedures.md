@@ -1,11 +1,13 @@
 # Procedures
 
-## Procedure of pubishing a new version of a crate
+## Checklist of pubishing a new version of a crate
 
-- Must pass all CIs.
+- Pass all CIs.
 - Clear any local dependencies (ones with `path = { ... }`).
+- Check `README.md` (both the crate and the workspace).
 - `cargo publish --dry-run` and check for abnormality.
 - `cargo publish`.
+- Push a tag for that crate's version.
 
 ## Procedure of implementing a feature
 
