@@ -149,8 +149,8 @@ pub use par_collector_by_mut::*;
 pub use par_collector_by_ref::*;
 pub use unindexed_par_collector_base::*;
 
-/// Re-export so that you do not need to import `komadori`.
-pub use komadori::collector::{Collector, CollectorBase, IntoCollectorBase};
+/// Re-exported so that you do not need to import `komadori`.
+pub use komadori::collector::{Collector, CollectorBase, IntoCollector, IntoCollectorBase};
 
 #[allow(unused)]
 #[inline(always)]

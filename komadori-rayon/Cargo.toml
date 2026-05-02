@@ -5,19 +5,19 @@ edition = "2024"
 authors = ["Ayabin"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/discreaminant2809/komadori-rs"
-# description = "Provides a composable, declarative way to consume an iterator"
+description = "Multi-reduction library. Provides a composable, declarative way to consume an iterator"
 readme = "README.md"
-# categories = ["rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
-# keywords = ["collector", "fold", "unzip", "composition", "iterator"]
+categories = ["concurrency", "rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
+keywords = ["rayon", "parallelism", "collector", "fold", "multi-reduction"]
 
 [dependencies]
-komadori = { version = "0.6.0" }
+komadori = { version = "0.7.0" }
 rayon = { version = "1.11.0", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = "0.8.2"
 proptest = "1.11.0"
-rand = "0.10.0"
+rand = "0.10.1"
 
 [features]
 default = ["rayon"]
