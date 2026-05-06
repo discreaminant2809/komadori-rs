@@ -152,7 +152,13 @@ where
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique::uniquify((len, consumer::Consumer::new(consumer, &self.take_pred), commit))
+        let take_pred = &self.take_pred;
+        unique::uniquify(
+            (len, consumer::Consumer::new(consumer, take_pred), move |output| {
+                commit(output)?;
+                take_pred.break_hint()
+            }),
+        )
     }
 
     fn take_parts<'a>(
@@ -188,7 +194,11 @@ where
         ) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique_unindexed::uniquify((consumer::Consumer::new(consumer, &self.take_pred), commit))
+        let take_pred = &self.take_pred;
+        unique_unindexed::uniquify((consumer::Consumer::new(consumer, take_pred), move |output| {
+            commit(output)?;
+            take_pred.break_hint()
+        }))
     }
 
     fn take_parts_unindexed<'a>(

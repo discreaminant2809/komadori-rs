@@ -4,8 +4,8 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Also, Fuse, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, MapOutput, Take, Tee,
-    TeeClone, TeeFunnel, TeeMut, assert_par_collector_base, assert_unindexed_par_collector_base, tee,
+    Also, Fuse, IntoParallelCollectorBase, IntoSerial, IntoUnindexedParallelCollectorBase, MapOutput, Take,
+    Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector_base, assert_unindexed_par_collector_base, tee,
     tee_clone, tee_funnel, tee_mut,
 };
 
@@ -375,6 +375,35 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         U: IntoUnindexedParallelCollectorBase,
     {
         assert_unindexed_par_collector_base(Also::new(self, unindexed.into_par_collector()))
+    }
+
+    /// Creates a (serial) collector from a parallel collector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori_rayon::{
+    ///     prelude::*,
+    ///     collector::{Collector, CollectorBase},
+    /// };
+    ///
+    /// let mut collector = vec![]
+    ///     .into_par_collector()
+    ///     .take(3)
+    ///     .into_serial();
+    ///
+    /// assert!(collector.collect(1).is_continue());
+    /// assert!(collector.collect(2).is_continue());
+    /// assert!(collector.collect(3).is_break());
+    ///
+    /// assert_eq!(collector.finish(), [1, 2, 3]);
+    /// ```
+    #[inline]
+    fn into_serial(self) -> IntoSerial<Self>
+    where
+        Self: Sized,
+    {
+        IntoSerial::new(self)
     }
 }
 

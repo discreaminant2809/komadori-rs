@@ -87,6 +87,11 @@ where
             *remaining -= len;
             len
         };
+        let break_hint = if *remaining == 0 {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        };
 
         // We "lie" to the underlying parallel collector that
         // we only have this amount left.
@@ -96,7 +101,14 @@ where
         // if appropriate.
         let max_len = inner_max_len.min(max_len);
 
-        unique::uniquify((max_len, indexed::Consumer::new(consumer, max_len), commit))
+        unique::uniquify((
+            max_len,
+            indexed::Consumer::new(consumer, max_len),
+            move |output| {
+                commit(output)?;
+                break_hint
+            },
+        ))
     }
 
     fn take_parts<'a>(

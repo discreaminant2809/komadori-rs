@@ -1,6 +1,7 @@
 mod also;
 mod filter;
 mod fuse;
+mod into_serial;
 mod map_output;
 mod take;
 mod take_any_while;
@@ -13,6 +14,7 @@ mod tee_mut;
 pub use also::*;
 pub use filter::*;
 pub use fuse::*;
+pub use into_serial::*;
 pub use map_output::*;
 pub use take::*;
 pub use take_any_while::*;
