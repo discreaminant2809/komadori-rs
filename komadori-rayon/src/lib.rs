@@ -22,3 +22,5 @@ mod helpers;
 #[allow(unused)]
 mod test_utils;
 pub mod vec;
+
+pub use komadori::{clb, clb_mut, clb_once};

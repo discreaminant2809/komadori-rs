@@ -149,9 +149,6 @@ pub use par_collector_by_mut::*;
 pub use par_collector_by_ref::*;
 pub use unindexed_par_collector_base::*;
 
-/// Re-exported so that you do not need to import `komadori`.
-pub use komadori::collector::{Collector, CollectorBase, IntoCollector, IntoCollectorBase};
-
 #[allow(unused)]
 #[inline(always)]
 pub(crate) const fn assert_par_collector_base<C>(x: C) -> C

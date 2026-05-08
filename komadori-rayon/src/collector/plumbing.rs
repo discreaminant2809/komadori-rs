@@ -98,7 +98,8 @@
 
 use std::ops::ControlFlow;
 
-use komadori::prelude::*;
+/// Re-exported so that you do not need to import `komadori`.
+pub use komadori::collector::{Collector, CollectorBase, IntoCollector, IntoCollectorBase};
 
 /// Defines the serial collector type used by an (indexed) parallel collector.
 ///
@@ -242,7 +243,7 @@ macro_rules! uniquify_serial {
     ($mod_name:ident, unindexed = false) => {
         #[allow(missing_debug_implementations)]
         mod $mod_name {
-            use $crate::collector::{Collector, CollectorBase, IntoCollectorBase, plumbing};
+            use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
 
             use ::core::{any::Any, marker::PhantomData, ops::ControlFlow};
 
@@ -421,7 +422,7 @@ macro_rules! uniquify_serial {
     ($mod_name:ident, unindexed = true) => {
         #[allow(missing_debug_implementations, )]
         mod $mod_name {
-            use $crate::collector::{Collector, CollectorBase, IntoCollectorBase, plumbing};
+            use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
 
             use ::core::{any::Any, marker::PhantomData, ops::ControlFlow};
 
