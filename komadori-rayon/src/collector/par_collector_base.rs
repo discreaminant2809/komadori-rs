@@ -4,9 +4,9 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Also, Fuse, IntoParallelCollectorBase, IntoSerial, IntoUnindexedParallelCollectorBase, MapOutput, Take,
-    Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector_base, assert_unindexed_par_collector_base, tee,
-    tee_clone, tee_funnel, tee_mut,
+    Also, Fuse, IntoCollector, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, MapOutput,
+    Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector_base, assert_unindexed_par_collector_base,
+    tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -379,31 +379,42 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
 
     /// Creates a (serial) collector from a parallel collector.
     ///
+    /// It is a method of this trait instead of implementing
+    /// [`IntoCollector`] because of the orphan rule,
+    /// and the danger of implicit conversion
+    /// (may accidentally downgrade to serial execution without knowing).
+    ///
+    /// A type should not be **both** a serial and parallel collectors,
+    /// since it would be a clash between this method and tbe same method
+    /// in [`IntoCollector`].
+    ///
     /// # Examples
     ///
     /// ```
-    /// use komadori_rayon::{
-    ///     prelude::*,
-    ///     collector::{Collector, CollectorBase},
-    /// };
+    /// use komadori_rayon::prelude::*;
+    /// use komadori::prelude::*;
     ///
     /// let mut collector = vec![]
     ///     .into_par_collector()
     ///     .take(3)
-    ///     .into_serial();
+    ///     .into_collector();
     ///
+    /// // Use as a normal (serial) collector!
+    /// assert!(collector.break_hint().is_continue());
     /// assert!(collector.collect(1).is_continue());
     /// assert!(collector.collect(2).is_continue());
     /// assert!(collector.collect(3).is_break());
     ///
     /// assert_eq!(collector.finish(), [1, 2, 3]);
     /// ```
+    ///
+    /// [`IntoCollector`]: komadori::collector::IntoCollector
     #[inline]
-    fn into_serial(self) -> IntoSerial<Self>
+    fn into_collector(self) -> IntoCollector<Self>
     where
         Self: Sized,
     {
-        IntoSerial::new(self)
+        IntoCollector::new(self)
     }
 }
 

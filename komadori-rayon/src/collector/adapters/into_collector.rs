@@ -6,20 +6,20 @@ use crate::collector::{ParallelCollector, ParallelCollectorBase};
 
 /// A (serial) collector created from a parallel collector.
 ///
-/// This `struct` is created by [`ParallelCollectorBase::into_serial()`].
+/// This `struct` is created by [`ParallelCollectorBase::into_collector()`].
 /// See its documentation for more.
 #[derive(Debug, Clone)]
-pub struct IntoSerial<C> {
+pub struct IntoCollector<C> {
     par_collector: C,
 }
 
-impl<C> IntoSerial<C> {
+impl<C> IntoCollector<C> {
     pub(in crate::collector) fn new(par_collector: C) -> Self {
         Self { par_collector }
     }
 }
 
-impl<C> CollectorBase for IntoSerial<C>
+impl<C> CollectorBase for IntoCollector<C>
 where
     C: ParallelCollectorBase,
 {
@@ -36,7 +36,7 @@ where
     }
 }
 
-impl<C, T> Collector<T> for IntoSerial<C>
+impl<C, T> Collector<T> for IntoCollector<C>
 where
     C: ParallelCollector<T>,
 {

@@ -16,6 +16,8 @@
 //!
 //! If you want to implement your own parallel collector, see [`plumbing`].
 //!
+//! This module corresponds to [`komadori::collector`].
+//!
 //! # Indexed and unindexed
 //!
 //! This crate follows the `rayon`'s model, which distinguishes between "indexed" and "unindexed."
