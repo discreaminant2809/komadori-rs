@@ -66,7 +66,7 @@ impl Strategy for IndexedSplitStrategy {
             if self.max_depth == 0 || runner.rng().random_bool(1.0 / (self.max_depth + 1) as f64) {
                 IndexedSplitTree::Stay { len: self.len }
             } else {
-                let at = runner.rng().random_range(..self.len);
+                let at = runner.rng().random_range(..=self.len);
                 let (left, right) = self.dive_at(at);
 
                 IndexedSplitTree::Split {
@@ -94,34 +94,37 @@ impl ValueTree for IndexedSplitTree {
     }
 
     fn simplify(&mut self) -> bool {
-        match self {
-            Self::Stay { .. } => false,
-            Self::Split { at, left, right } => {
-                match (&mut **left, &mut **right) {
-                    // Time to shrink the split index
-                    (Self::Stay { len: len_left }, Self::Stay { len: len_right }) => {
-                        let len = *len_left + *len_right;
-                        let mid = len.midpoint(0);
-                        if *at == mid {
-                            *self = Self::Stay { len };
-                        } else if *at < mid {
-                        }
-                    }
+        // We don't implement simplification and complication for now, until needed.
 
-                    (left, Self::Stay { .. }) => {
-                        left.simplify();
-                    }
-                    (_, right) => {
-                        right.simplify();
-                    }
-                }
+        false
+        // match self {
+        //     Self::Stay { .. } => false,
+        //     Self::Split { at, left, right } => {
+        //         match (&mut **left, &mut **right) {
+        //             // Time to shrink the split index
+        //             (Self::Stay { len: len_left }, Self::Stay { len: len_right }) => {
+        //                 let len = *len_left + *len_right;
+        //                 let mid = len.midpoint(0);
+        //                 if *at == mid {
+        //                     *self = Self::Stay { len };
+        //                 } else if *at < mid {
+        //                 }
+        //             }
 
-                true
-            }
-        }
+        //             (left, Self::Stay { .. }) => {
+        //                 left.simplify();
+        //             }
+        //             (_, right) => {
+        //                 right.simplify();
+        //             }
+        //         }
+
+        //         true
+        //     }
+        // }
     }
 
     fn complicate(&mut self) -> bool {
-        todo!()
+        false
     }
 }

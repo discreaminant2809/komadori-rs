@@ -2,6 +2,8 @@
 //!
 //! This module corresponds to [`mod@std::vec`].
 
+#[cfg(test)]
+use std::mem::MaybeUninit;
 use std::{ops::ControlFlow, ptr::NonNull};
 
 use komadori::prelude::*;
@@ -15,6 +17,11 @@ use crate::{
     helpers::{unique, unique_unindexed},
     prelude::UnindexedParallelCollectorBase,
     slice::in_place_write,
+};
+#[cfg(test)]
+use crate::{
+    slice::drainer::Drainer,
+    test_utils::{self, IndexedParallelIterator, IndexedProducer},
 };
 
 /// A parallel collector that pushes collected items into a [`Vec`].
@@ -278,6 +285,51 @@ where
 }
 
 #[cfg(test)]
+impl<T> test_utils::IntoParallelIterator for Vec<T> {
+    type Item = T;
+
+    type IntoParIter = test_types::IntoParIter<T>;
+
+    fn into_par_iter(self) -> Self::IntoParIter {
+        test_types::IntoParIter(self)
+    }
+}
+
+#[cfg(test)]
+mod test_types {
+    // Do this because
+    // `type IntoParIter = test_types::IntoParIter<T>;`
+    // comaplains "leaking crate-private type."
+    pub struct IntoParIter<T>(pub(super) Vec<T>);
+}
+
+#[cfg(test)]
+impl<T> test_utils::ParallelIterator for test_types::IntoParIter<T> {
+    type Item = T;
+
+    fn producer(&mut self) -> impl test_utils::Producer<Item = Self::Item> {
+        self.indexed_producer().into_unindexed()
+    }
+}
+
+#[cfg(test)]
+impl<T> test_utils::IndexedParallelIterator for test_types::IntoParIter<T> {
+    fn indexed_producer(&mut self) -> impl IndexedProducer<Item = Self::Item> {
+        unsafe {
+            let len = self.0.len();
+            self.0.set_len(0);
+            let slice = std::ptr::slice_from_raw_parts_mut(self.0.as_mut_ptr(), len);
+            let slice = slice as *mut [MaybeUninit<T>];
+            Drainer::new(slice.as_mut().unwrap())
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+#[cfg(test)]
 mod miri_tests {
     use komadori::prelude::{Collector, IntoCollectorBase};
 
@@ -294,5 +346,62 @@ mod miri_tests {
 
         collector.finish();
         assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use proptest::collection::vec as propvec;
+    use proptest::prelude::*;
+    use proptest::test_runner::TestCaseResult;
+
+    use crate::{
+        collector::IntoParallelCollectorBase,
+        test_utils::{
+            BasicParallelCollectorTester, CoroutinePool, DEFAULT_MAX_DEPTH, IndexedSplitDecision,
+            IndexedSplitStrategy, ParallelCollectorTester, ParallelIterator, ParallelIteratorByRef,
+            PredError,
+        },
+    };
+
+    proptest! {
+        #[test]
+        fn test_into_collector(
+            starting_nums in propvec(any::<i32>(), ..5),
+            (split_decision, nums) in propvec(any::<i32>(), ..5)
+                .prop_flat_map(|nums| {
+                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
+                }),
+            pool in CoroutinePool::prop(),
+        ) {
+            test_into_collector_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    #[allow(unused)]
+    fn test_into_collector_impl(
+        mut pool: CoroutinePool,
+        split_decision: IndexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_nums.clone().into_par_collector(),
+            should_break_pred: |_| false,
+            pred: |iter, output| {
+                if starting_nums
+                    .iter()
+                    .copied()
+                    .chain(nums.iter().copied())
+                    .eq(output)
+                {
+                    Ok(())
+                } else {
+                    Err(PredError::IncorrectOutput)
+                }
+            },
+        }
+        .test_par_collector(&mut pool, split_decision)
     }
 }

@@ -36,49 +36,52 @@ impl UnindexedSplitDecision {
     }
 
     fn simplify(&mut self) -> bool {
-        match self {
-            // Already the most simplified.
-            Self::Stay => false,
+        // We don't implement simplification and complication for now, until needed.
+        false
+        // match self {
+        //     // Already the most simplified.
+        //     Self::Stay => false,
 
-            Self::Split { left, right } => {
-                // We strive for a balance tree first.
-                // O(max_depth^2)
-                // But the max_depth isn't gonna be large (about <= 4) anyway.
-                // The approach of caching the max_depth would be very complicated.
-                let left_depth = left.deepest_depth();
-                let right_depth = right.deepest_depth();
+        //     Self::Split { left, right } => {
+        //         // We strive for a balance tree first.
+        //         // O(max_depth^2)
+        //         // But the max_depth isn't gonna be large (about <= 4) anyway.
+        //         // The approach of caching the max_depth would be very complicated.
+        //         let left_depth = left.deepest_depth();
+        //         let right_depth = right.deepest_depth();
 
-                if left_depth < right_depth {
-                    // Always simplifiable if the depth is positive.
-                    assert!(right.simplify());
-                } else if left_depth > right_depth {
-                    assert!(left.simplify());
-                } else if left_depth == 0 {
-                    *self = Self::Stay;
-                } else {
-                    assert!(right.simplify());
-                }
+        //         if left_depth < right_depth {
+        //             // Always simplifiable if the depth is positive.
+        //             assert!(right.simplify());
+        //         } else if left_depth > right_depth {
+        //             assert!(left.simplify());
+        //         } else if left_depth == 0 {
+        //             *self = Self::Stay;
+        //         } else {
+        //             assert!(right.simplify());
+        //         }
 
-                true
-            }
-        }
+        //         true
+        //     }
+        // }
     }
 
     fn complicate(&mut self) -> bool {
-        match self {
-            Self::Stay => {
-                *self = Self::Split {
-                    left: Self::Stay.into(),
-                    right: Self::Stay.into(),
-                }
-            }
-            Self::Split { left, right } => {
-                left.complicate();
-                right.complicate();
-            }
-        }
+        false
+        // match self {
+        //     Self::Stay => {
+        //         *self = Self::Split {
+        //             left: Self::Stay.into(),
+        //             right: Self::Stay.into(),
+        //         }
+        //     }
+        //     Self::Split { left, right } => {
+        //         left.complicate();
+        //         right.complicate();
+        //     }
+        // }
 
-        true
+        // true
     }
 }
 
