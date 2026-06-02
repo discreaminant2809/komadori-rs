@@ -351,22 +351,11 @@ mod miri_tests {
 
 #[cfg(test)]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::{
-        collector::IntoParallelCollectorBase,
-        test_utils::{
-            BasicParallelCollectorTester, CoroutinePool, DEFAULT_MAX_DEPTH, IndexedSplitDecision,
-            IndexedSplitStrategy, ParallelCollectorTester, ParallelIterator, ParallelIteratorByRef,
-            PredError,
-        },
-    };
+    use crate::test_utils::{UnindexedParallelCollectorTester, prelude::*};
 
     proptest! {
         #[test]
-        fn test_into_collector(
+        fn indexed(
             starting_nums in propvec(any::<i32>(), ..5),
             (split_decision, nums) in propvec(any::<i32>(), ..5)
                 .prop_flat_map(|nums| {
@@ -374,12 +363,23 @@ mod proptests {
                 }),
             pool in CoroutinePool::prop(),
         ) {
-            test_into_collector_impl(pool, split_decision, starting_nums, nums)?;
+            indexed_impl(pool, split_decision, starting_nums, nums)?;
         }
     }
 
-    #[allow(unused)]
-    fn test_into_collector_impl(
+    proptest! {
+        #[test]
+        fn unindexed(
+            starting_nums in propvec(any::<i32>(), ..5),
+            nums in propvec(any::<i32>(), ..5),
+            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
+            pool in CoroutinePool::prop(),
+        ) {
+            unindexed_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    fn indexed_impl(
         mut pool: CoroutinePool,
         split_decision: IndexedSplitDecision,
         starting_nums: Vec<i32>,
@@ -389,19 +389,41 @@ mod proptests {
             iter_factory: || nums.par_iter().cloned(),
             collector_factory: || starting_nums.clone().into_par_collector(),
             should_break_pred: |_| false,
-            pred: |iter, output| {
-                if starting_nums
-                    .iter()
-                    .copied()
-                    .chain(nums.iter().copied())
-                    .eq(output)
-                {
-                    Ok(())
-                } else {
-                    Err(PredError::IncorrectOutput)
-                }
+            pred: |_, output| {
+                PredError::assert_eq(
+                    output,
+                    starting_nums
+                        .iter()
+                        .copied()
+                        .chain(nums.iter().copied())
+                        .collect(),
+                )
             },
         }
         .test_par_collector(&mut pool, split_decision)
+    }
+
+    fn unindexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: UnindexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_nums.clone().into_par_collector(),
+            should_break_pred: |_| false,
+            pred: |_, output| {
+                PredError::assert_eq(
+                    output,
+                    starting_nums
+                        .iter()
+                        .copied()
+                        .chain(nums.iter().copied())
+                        .collect(),
+                )
+            },
+        }
+        .test_unindexed_par_collector(&mut pool, split_decision)
     }
 }

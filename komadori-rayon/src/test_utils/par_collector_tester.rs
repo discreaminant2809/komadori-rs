@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use proptest::{
     prelude::*,
     test_runner::{Reason, TestCaseResult},
@@ -97,7 +99,7 @@ pub enum PredError {
     /// Incorrect [`Output`] produced by the collector
     ///
     /// [`Output`]: crate::collector::ParallelCollectorBase::Output
-    IncorrectOutput,
+    IncorrectOutput(String),
     // FIXME: Visit back later
     // /// The [`ParallelIterator`] is not consumed as expected.
     // IncorrectIterConsumption,
@@ -213,12 +215,27 @@ where
     }
 }
 
+impl PredError {
+    pub fn assert_eq<T>(actual: T, expected: T) -> Result<(), Self>
+    where
+        T: PartialEq + Debug,
+    {
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(Self::IncorrectOutput(format!(
+                "expected {expected:?}, got {actual:?}"
+            )))
+        }
+    }
+}
+
 impl From<PredError> for TestCaseError {
     fn from(e: PredError) -> Self {
         match e {
-            PredError::IncorrectOutput => TestCaseError::Fail(Reason::from(
-                "(unindexed) parallel collector yielded an incorrect output",
-            )),
+            PredError::IncorrectOutput(msg) => TestCaseError::Fail(Reason::from(format!(
+                "(unindexed) parallel collector yielded an incorrect output: {msg}"
+            ))),
         }
     }
 }
