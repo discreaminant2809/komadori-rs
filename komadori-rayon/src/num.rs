@@ -401,7 +401,7 @@ mod product {
 mod proptests {
     use crate::{
         ops::{IntoParProduct, IntoParSum},
-        test_utils::{UnindexedParallelCollectorTester, prelude::*},
+        test_utils::prelude::*,
     };
 
     proptest! {

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use proptest::{
     prelude::*,
@@ -225,6 +225,24 @@ impl PredError {
         } else {
             Err(Self::IncorrectOutput(format!(
                 "expected {expected:?}, got {actual:?}"
+            )))
+        }
+    }
+
+    pub fn assert_fn<T>(
+        actual: T,
+        expected: T,
+        f: impl FnOnce(&T, &T) -> bool,
+        err_msg: impl Display,
+    ) -> Result<(), Self>
+    where
+        T: Debug,
+    {
+        if f(&actual, &expected) {
+            Ok(())
+        } else {
+            Err(Self::IncorrectOutput(format!(
+                "{actual:?} and {expected:?} didn't satisfy the predicate: {err_msg}"
             )))
         }
     }

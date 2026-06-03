@@ -351,7 +351,7 @@ mod miri_tests {
 
 #[cfg(test)]
 mod proptests {
-    use crate::test_utils::{UnindexedParallelCollectorTester, prelude::*};
+    use crate::test_utils::prelude::*;
 
     proptest! {
         #[test]

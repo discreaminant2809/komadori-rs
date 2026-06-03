@@ -24,7 +24,7 @@ pub mod prelude {
         test_utils::{
             BasicParallelCollectorTester, CoroutinePool, DEFAULT_MAX_DEPTH, IndexedSplitDecision,
             IndexedSplitStrategy, ParallelCollectorTester, ParallelIterator, ParallelIteratorByRef,
-            PredError, UnindexedSplitDecision, UnindexedSplitStrategy,
+            PredError, UnindexedParallelCollectorTester, UnindexedSplitDecision, UnindexedSplitStrategy,
         },
     };
 }
