@@ -81,7 +81,7 @@ impl<'this, T> DefineUnindexedSerial<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T, usize>>;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T>>;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -179,7 +179,7 @@ impl<'v, 'this, T> DefineUnindexedSerial<'this> for ParCollectorMut<'v, T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T, usize>>;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T>>;
 }
 
 impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
