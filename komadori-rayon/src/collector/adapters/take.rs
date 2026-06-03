@@ -473,6 +473,20 @@ mod proptests {
             collector_factory: || starting_nums.clone().into_par_collector().take(take_count),
             should_break_pred: |_| nums.len() >= take_count,
             pred: |_, mut output: Vec<i32>| {
+                if nums.len() <= take_count {
+                    // It means that ALL items must arrive in the correct order.
+                    return PredError::assert_eq(
+                        output,
+                        starting_nums
+                            .iter()
+                            .copied()
+                            .chain(nums.iter().copied().take(take_count))
+                            .collect(),
+                    );
+                }
+
+                PredError::assert_eq(output.len(), starting_nums.len() + take_count)?;
+
                 PredError::assert_eq(&output[..starting_nums.len()], &starting_nums[..])?;
 
                 output[starting_nums.len()..].sort_unstable();
