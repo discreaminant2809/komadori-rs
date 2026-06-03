@@ -1,4 +1,4 @@
-use super::{IntoParallelCollectorBase, ParallelCollectorBase};
+use super::IntoParallelCollectorBase;
 
 /// A type that can be converted into a parallel collector by shared reference.
 ///
@@ -12,36 +12,17 @@ use super::{IntoParallelCollectorBase, ParallelCollectorBase};
 ///
 /// This trait is not intended for use in bounds.
 /// Use [`IntoParallelCollectorBase`] and similar traits in trait bounds instead.
-#[allow(private_bounds)]
-pub trait ParallelCollectorByRef: Sealed {
-    /// Which parallel collector being produced?
-    type ParCollector<'a>: ParallelCollectorBase
-    where
-        Self: 'a;
-
-    /// Creates a parallel collector from a shared reference of a value.
-    fn par_collector(&self) -> Self::ParCollector<'_>;
-}
-
-trait Sealed {}
-
-impl<T> ParallelCollectorByRef for T
+pub trait ParallelCollectorByRef
 where
-    T: ?Sized,
-    for<'a> &'a T: IntoParallelCollectorBase,
+    for<'a> &'a Self: IntoParallelCollectorBase,
 {
-    type ParCollector<'a>
-        = <&'a T as IntoParallelCollectorBase>::IntoParCollector
-    where
-        Self: 'a;
-
+    /// Creates a parallel collector from a shared reference of a value.
     #[inline]
-    fn par_collector(&self) -> Self::ParCollector<'_> {
+    fn par_collector(&self) -> <&'_ Self as IntoParallelCollectorBase>::IntoParCollector {
         self.into_par_collector()
     }
 }
-
-impl<T> Sealed for T
+impl<T> ParallelCollectorByRef for T
 where
     T: ?Sized,
     for<'a> &'a T: IntoParallelCollectorBase,
