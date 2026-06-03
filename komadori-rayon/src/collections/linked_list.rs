@@ -204,13 +204,13 @@ where
 
 #[allow(missing_debug_implementations)]
 mod consumer {
-    use std::collections::LinkedList;
+    use std::{collections::LinkedList, marker::PhantomData};
 
     use komadori::prelude::*;
 
     use crate::collector::plumbing::{self, UnindexedConsumer};
 
-    pub struct Consumer<T>(LinkedList<T>);
+    pub struct Consumer<T>(PhantomData<T>);
 
     pub struct Combiner(());
 
@@ -219,7 +219,7 @@ mod consumer {
     impl<T> Consumer<T> {
         #[inline]
         pub(super) fn new() -> Self {
-            Self(LinkedList::new())
+            Self(PhantomData)
         }
     }
 
@@ -230,7 +230,7 @@ mod consumer {
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
-            self.0.into_collector()
+            LinkedList::new().into_collector()
         }
     }
 
