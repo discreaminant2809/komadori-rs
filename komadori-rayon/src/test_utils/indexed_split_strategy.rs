@@ -19,6 +19,8 @@ pub enum IndexedSplitDecision {
 
 pub enum IndexedSplitTree {
     Stay {
+        // FIXME: used later for shrinking
+        #[allow(unused)]
         len: usize,
     },
     Split {

@@ -229,14 +229,15 @@ impl PredError {
         }
     }
 
-    pub fn assert_fn<T>(
+    pub fn assert_fn<T, U>(
         actual: T,
-        expected: T,
-        f: impl FnOnce(&T, &T) -> bool,
+        expected: U,
+        f: impl FnOnce(&T, &U) -> bool,
         err_msg: impl Display,
     ) -> Result<(), Self>
     where
         T: Debug,
+        U: Debug,
     {
         if f(&actual, &expected) {
             Ok(())
@@ -294,7 +295,7 @@ where
     let mut parts = tester.test_parts_unindexed();
     let (consumer, commit) = parts.collector.take_parts_unindexed();
 
-    let output = pool.bridge_unindexed(parts.iter.producer(), consumer, split_decision);
+    let output = pool.bridge_unindexed(parts.iter.take_producer(), consumer, split_decision);
     commit(output);
 
     prop_assert_eq!(

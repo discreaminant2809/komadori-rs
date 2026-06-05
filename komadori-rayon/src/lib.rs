@@ -155,8 +155,6 @@ pub mod slice;
 // pub mod unit;
 mod helpers;
 #[cfg(test)]
-// Will be touched in the future
-#[allow(unused)]
 mod test_utils;
 pub mod vec;
 

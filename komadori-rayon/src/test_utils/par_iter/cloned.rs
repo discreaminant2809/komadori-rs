@@ -1,5 +1,6 @@
 use super::{IndexedParallelIterator, ParallelIterator};
 
+#[derive(Clone)]
 pub struct Cloned<I> {
     iter: I,
 }
@@ -17,10 +18,14 @@ where
 {
     type Item = T;
 
-    fn producer(&mut self) -> impl super::Producer<Item = Self::Item> {
+    fn take_producer(&mut self) -> impl super::Producer<Item = Self::Item> {
         Producer {
-            producer: self.iter.producer(),
+            producer: self.iter.take_producer(),
         }
+    }
+
+    fn count(self) -> usize {
+        self.iter.count()
     }
 }
 

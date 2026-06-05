@@ -4,6 +4,12 @@ use crate::test_utils::{
 
 pub struct ParIter<'a, T>(&'a [T]);
 
+impl<T> Clone for ParIter<'_, T> {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
+}
+
 impl<'a, T: 'a> IntoParallelIterator for &'a [T] {
     type Item = &'a T;
 
@@ -17,8 +23,12 @@ impl<'a, T: 'a> IntoParallelIterator for &'a [T] {
 impl<'a, T> ParallelIterator for ParIter<'a, T> {
     type Item = &'a T;
 
-    fn producer(&mut self) -> impl IProducer<Item = Self::Item> {
+    fn take_producer(&mut self) -> impl IProducer<Item = Self::Item> {
         Producer(self.0).into_unindexed()
+    }
+
+    fn count(self) -> usize {
+        self.len()
     }
 }
 

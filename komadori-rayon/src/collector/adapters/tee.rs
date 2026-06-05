@@ -65,3 +65,18 @@ where
         collector.collect_then_finish(items)
     }
 }
+
+// #[cfg(test)]
+// mod proptests {
+//     use crate::{collector::ParallelCollectorBase, test_utils::prelude::*};
+
+//     fn indexed_impl(
+//         mut pool: CoroutinePool,
+//         split_decision: IndexedSplitDecision,
+//         starting_nums: Vec<i32>,
+//         nums: Vec<i32>,
+//         take_count: usize,
+//     ) -> TestCaseResult {
+
+//     }
+// }

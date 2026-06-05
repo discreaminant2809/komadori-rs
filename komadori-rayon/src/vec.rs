@@ -307,8 +307,12 @@ mod test_types {
 impl<T> test_utils::ParallelIterator for test_types::IntoParIter<T> {
     type Item = T;
 
-    fn producer(&mut self) -> impl test_utils::Producer<Item = Self::Item> {
+    fn take_producer(&mut self) -> impl test_utils::Producer<Item = Self::Item> {
         self.indexed_producer().into_unindexed()
+    }
+
+    fn count(self) -> usize {
+        self.len()
     }
 }
 

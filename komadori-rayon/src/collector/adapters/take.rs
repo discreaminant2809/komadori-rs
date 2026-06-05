@@ -158,7 +158,14 @@ where
         ) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique_unindexed::uniquify((unindexed::Consumer::new(consumer, &self.remaining), commit))
+        unique_unindexed::uniquify((unindexed::Consumer::new(consumer, &self.remaining), |output| {
+            commit(output)?;
+            if self.remaining.load(Ordering::Relaxed) == 0 {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        }))
     }
 
     fn take_parts_unindexed<'a>(
@@ -368,50 +375,51 @@ mod unindexed {
     {
         #[inline]
         fn collect(&mut self, item: T) -> ControlFlow<()> {
-            if should_take(self.remaining) {
-                self.collector.collect(item)
-            } else {
-                ControlFlow::Break(())
+            match take_one(self.remaining) {
+                TakeResult::NoMore => ControlFlow::Break(()),
+                TakeResult::OneLeft => {
+                    self.collector.collect(item)?;
+                    ControlFlow::Break(())
+                }
+                TakeResult::MoreThanOne => {
+                    self.collector.collect(item)?;
+                    ControlFlow::Continue(())
+                }
             }
         }
 
-        fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-            self.break_hint()?;
+        // Cannot meaningfully override `collect_many` and `collect_then_finish`
+    }
 
-            self.collector
-                .collect_many(items.into_iter().take_while(|_| should_take(self.remaining)))
-        }
-
-        fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-            if self.break_hint().is_break() {
-                self.collector.finish()
-            } else {
-                self.collector
-                    .collect_then_finish(items.into_iter().take_while(|_| should_take(self.remaining)))
-            }
+    #[inline(always)]
+    fn take_one(remaining: &AtomicUsize) -> TakeResult {
+        match remaining.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+            remaining.checked_sub(1)
+        }) {
+            Err(_) => TakeResult::NoMore,
+            Ok(0) => unreachable!("the previous value can't be 0 if successful"),
+            Ok(1) => TakeResult::OneLeft,
+            Ok(_) => TakeResult::MoreThanOne,
         }
     }
 
-    #[inline]
-    fn should_take(remaining: &AtomicUsize) -> bool {
-        remaining
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
-                remaining.checked_sub(1)
-            })
-            .is_ok()
+    #[repr(usize)]
+    enum TakeResult {
+        NoMore = 0,
+        OneLeft,
+        MoreThanOne,
     }
 }
 
 #[cfg(test)]
 mod proptests {
-    use crate::{collector::ParallelCollectorBase, test_utils::prelude::*};
+    use crate::test_utils::prelude::*;
 
     proptest! {
         /// Pre-requisite:
         /// - [`crate::vec::IntoParCollector`]
         #[test]
         fn indexed(
-            starting_nums in propvec(any::<i32>(), ..=2),
             take_count in ..=5_usize,
             (split_decision, nums) in propvec(any::<i32>(), ..=5)
                 .prop_flat_map(|nums| {
@@ -419,44 +427,34 @@ mod proptests {
                 }),
             pool in CoroutinePool::prop(),
         ) {
-            indexed_impl(pool, split_decision, starting_nums, nums, take_count)?;
+            indexed_impl(pool, split_decision, nums, take_count)?;
         }
     }
 
     proptest! {
         #[test]
         fn unindexed(
-            starting_nums in propvec(any::<i32>(), ..=2),
             take_count in ..=5_usize,
-            nums in propvec(any::<i32>(), ..=5),
+            nums1 in propvec(any::<i32>(), ..=3),
+            nums2 in propvec(any::<i32>(), ..=3),
             split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
             pool in CoroutinePool::prop(),
         ) {
-            unindexed_impl(pool, split_decision, starting_nums, nums, take_count)?;
+            unindexed_impl(pool, split_decision, nums1, nums2, take_count)?;
         }
     }
 
     fn indexed_impl(
         mut pool: CoroutinePool,
         split_decision: IndexedSplitDecision,
-        starting_nums: Vec<i32>,
         nums: Vec<i32>,
         take_count: usize,
     ) -> TestCaseResult {
         BasicParallelCollectorTester {
             iter_factory: || nums.par_iter().cloned(),
-            collector_factory: || starting_nums.clone().into_par_collector().take(take_count),
+            collector_factory: || vec![].into_par_collector().take(take_count),
             should_break_pred: |_| nums.len() >= take_count,
-            pred: |_, output| {
-                PredError::assert_eq(
-                    output,
-                    starting_nums
-                        .iter()
-                        .copied()
-                        .chain(nums.iter().copied().take(take_count))
-                        .collect(),
-                )
-            },
+            pred: |_, output| PredError::assert_eq(output, nums.iter().copied().take(take_count).collect()),
         }
         .test_par_collector(&mut pool, split_decision)
     }
@@ -464,62 +462,164 @@ mod proptests {
     fn unindexed_impl(
         mut pool: CoroutinePool,
         split_decision: UnindexedSplitDecision,
-        starting_nums: Vec<i32>,
-        nums: Vec<i32>,
+        nums1: Vec<i32>,
+        nums2: Vec<i32>,
         take_count: usize,
     ) -> TestCaseResult {
         BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter().cloned(),
-            collector_factory: || starting_nums.clone().into_par_collector().take(take_count),
-            should_break_pred: |_| nums.len() >= take_count,
-            pred: |_, mut output: Vec<i32>| {
-                if nums.len() <= take_count {
-                    // It means that ALL items must arrive in the correct order.
-                    return PredError::assert_eq(
-                        output,
-                        starting_nums
-                            .iter()
-                            .copied()
-                            .chain(nums.iter().copied().take(take_count))
-                            .collect(),
-                    );
-                }
-
-                PredError::assert_eq(output.len(), starting_nums.len() + take_count)?;
-
-                PredError::assert_eq(&output[..starting_nums.len()], &starting_nums[..])?;
-
-                output[starting_nums.len()..].sort_unstable();
-                let actual_tail = &output[starting_nums.len()..];
-
-                let mut expected_tail = nums.clone();
-                expected_tail.sort_unstable();
+            iter_factory: || {
+                nums1
+                    .par_iter()
+                    .cloned()
+                    .chain(nums2.par_iter().cloned().filter(|&num| num >= 0))
+            },
+            collector_factory: || vec![].into_par_collector().take(take_count),
+            should_break_pred: |iter| iter.count() >= take_count,
+            pred: |mut iter, output| {
+                PredError::assert_fn(
+                    &output[..],
+                    take_count,
+                    |output, _| output.len() <= take_count,
+                    "excessive length",
+                )?;
 
                 PredError::assert_fn(
-                    actual_tail,
-                    &expected_tail[..],
-                    |actual, expected| is_sorted_subseq(actual, expected),
+                    output,
+                    iter.take_iter().collect::<Vec<_>>(),
+                    |output, expected| is_subsequence(output, expected),
                     "not a subsequence",
                 )
             },
         }
         .test_unindexed_par_collector(&mut pool, split_decision)
     }
+}
 
-    fn is_sorted_subseq(subseq: &[i32], target: &[i32]) -> bool {
-        let mut subseq = subseq.iter();
-        let mut target = target.iter();
+#[cfg(test)]
+mod tests {
+    use komadori::prelude::*;
 
-        while let &[subseq_head, ..] = subseq.as_slice()
-            && let Some(&target_head) = target.next()
-        {
-            if subseq_head < target_head {
-                return false;
-            } else if subseq_head == target_head {
-                subseq.next();
-            }
-        }
+    use crate::{
+        collector::plumbing::{Combiner, UnindexedConsumer},
+        test_utils::{Producer, prelude::*},
+    };
 
-        subseq.len() == 0
+    // Turn out our own `ParallelIterator::chain()` is flawed to begin with!
+    //
+    // Test failed: (unindexed) parallel collector yielded an incorrect output: [1, 0] and [0, 1] didn't satisfy the predicate: not a subsequence.
+    // minimal failing input: take_count = 2, nums1 = [
+    //     0,
+    // ], nums2 = [
+    //     1,
+    //     -1,
+    // ], split_decision = Stay, pool = CoroutinePool {
+    //     rng: Xoshiro128PlusPlus {
+    //         s: [
+    //             12323650,
+    //             792414441,
+    //             3380224488,
+    //             183050292,
+    //         ],
+    //     },
+    // }
+    //         successes: 0
+    //         local rejects: 0
+    //         global rejects: 0
+    #[test]
+    fn unindexed_fail1() {
+        let mut iter = vec![0, 0]
+            .into_par_iter()
+            .chain(vec![1, -1].into_par_iter().filter(|&num| num >= 0));
+
+        let mut collector = vec![].into_par_collector().take(3);
+
+        let (consumer, commit) = collector.take_parts_unindexed();
+        let mut iter = iter.take_iter();
+        let mut serial = consumer.into_collector();
+        assert!(serial.collect(iter.next().unwrap()).is_continue());
+        assert!(serial.collect(iter.next().unwrap()).is_continue());
+        assert!(serial.collect(iter.next().unwrap()).is_break());
+        commit(serial.finish());
+
+        assert_eq!(collector.finish(), [0, 0, 1]);
+    }
+
+    // Turn out our own `ParallelIterator::chain()` is flawed to begin with!
+    //
+    // Test failed: (unindexed) parallel collector yielded an incorrect output: [0, 1, 0] and [0, 0, 0, 1, 1, 1] didn't satisfy the predicate: not a subsequence.
+    // minimal failing input: take_count = 3, nums1 = [
+    //     0,
+    //     0,
+    //     0,
+    // ], nums2 = [
+    //     1,
+    //     1,
+    //     1,
+    // ], split_decision = Split {
+    //     left: Split {
+    //         left: Stay,
+    //         right: Stay,
+    //     },
+    //     right: Stay,
+    // }, pool = CoroutinePool {
+    //     rng: Xoshiro128PlusPlus {
+    //         s: [
+    //             770253919,
+    //             1008533523,
+    //             1582379573,
+    //             1843798072,
+    //         ],
+    //     },
+    // }
+    //         successes: 4
+    //         local rejects: 0
+    //         global rejects: 0
+    #[test]
+    fn unindexed_fail2() {
+        let mut iter = vec![0, 0, 0]
+            .into_par_iter()
+            .chain(vec![1, 1, 1].into_par_iter().filter(|&num| num >= 0));
+
+        let mut collector = vec![].into_par_collector().take(3);
+
+        let mut producer = iter.take_producer();
+        let (consumer, commit) = collector.take_parts_unindexed();
+        let output = {
+            let (left_producer, right_producer) = (producer.split_off_left(), producer);
+            let combiner = consumer.to_combiner();
+            let (left_consumer, right_consumer) = (consumer.split_off_left(), consumer);
+
+            // Contains (when flattened): [0, 1]
+            let mut left_output = {
+                let mut producer = left_producer;
+                let consumer = left_consumer;
+
+                let (left_producer, right_producer) = (producer.split_off_left(), producer);
+                let combiner = consumer.to_combiner();
+                let (left_consumer, right_consumer) = (consumer.split_off_left(), consumer);
+
+                // Contains (when flattened): []
+                let mut left_output = left_producer.into_iter().feed_into(left_consumer);
+                // Contains (when flattened): [0, 1]
+                let right_output = right_producer.into_iter().feed_into(right_consumer);
+
+                combiner.combine(&mut left_output, right_output);
+                left_output
+            };
+            // Contains (when flattened): [0]
+            let right_output = right_producer.into_iter().feed_into(right_consumer);
+
+            combiner.combine(&mut left_output, right_output);
+            left_output
+        };
+        commit(output);
+
+        PredError::assert_fn(
+            collector.finish(),
+            [0, 0, 0, 1, 1, 1],
+            |actual, expected| is_subsequence(actual, expected),
+            "not a subsequence",
+        )
+        .unwrap()
     }
 }
