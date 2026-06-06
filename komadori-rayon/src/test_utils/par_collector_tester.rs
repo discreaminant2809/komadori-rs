@@ -33,7 +33,7 @@ pub trait ParallelCollectorTester {
     fn test_par_collector(
         mut self,
         pool: &mut CoroutinePool,
-        split_decision: IndexedSplitDecision,
+        split_decision: &IndexedSplitDecision,
     ) -> TestCaseResult
     where
         Self: Sized,
@@ -62,7 +62,7 @@ pub trait UnindexedParallelCollectorTester {
     fn test_unindexed_par_collector(
         mut self,
         pool: &mut CoroutinePool,
-        split_decision: UnindexedSplitDecision,
+        split_decision: &UnindexedSplitDecision,
     ) -> TestCaseResult
     where
         Self: Sized,
@@ -247,13 +247,11 @@ impl PredError {
             )))
         }
     }
-}
 
-impl From<PredError> for TestCaseError {
-    fn from(e: PredError) -> Self {
-        match e {
+    fn into_test_case_err(self, method_name: impl Display) -> TestCaseError {
+        match self {
             PredError::IncorrectOutput(msg) => TestCaseError::Fail(Reason::from(format!(
-                "(unindexed) parallel collector yielded an incorrect output: {msg}"
+                "in method `{method_name}()`: incorrect output: {msg}"
             ))),
         }
     }
@@ -262,24 +260,36 @@ impl From<PredError> for TestCaseError {
 fn test_collector_impl<CT>(
     tester: &mut CT,
     pool: &mut CoroutinePool,
-    split_decision: IndexedSplitDecision,
+    split_decision: &IndexedSplitDecision,
 ) -> TestCaseResult
 where
     CT: ParallelCollectorTester + ?Sized,
 {
-    let mut parts = tester.test_parts();
-    let (_, consumer, commit) = parts.collector.take_parts(parts.iter.len());
+    // `parts()`
+    {
+        let mut parts = tester.test_parts();
+        let (_, consumer, commit) = parts.collector.parts(parts.iter.len());
 
-    let output = pool.bridge(parts.iter.indexed_producer(), consumer, split_decision);
-    commit(output);
+        let output = pool.bridge(parts.iter.indexed_producer(), consumer, split_decision);
+        prop_assert_eq!(
+            commit(output).is_break(),
+            parts.should_break,
+            "in `parts()`: (unindexed) parallel collector didn't break correctly",
+        );
 
-    prop_assert_eq!(
-        parts.collector.break_hint().is_break(),
-        parts.should_break,
-        "(unindexed) parallel collector didn't break correctly"
-    );
+        (parts.pred)(parts.collector.finish()).map_err(|e| e.into_test_case_err("parts"))?;
+    }
 
-    (parts.pred)(parts.collector.finish())?;
+    // `take_parts()`
+    {
+        let mut parts = tester.test_parts();
+        let (_, consumer, commit) = parts.collector.take_parts(parts.iter.len());
+
+        let output = pool.bridge(parts.iter.indexed_producer(), consumer, split_decision);
+        commit(output);
+
+        (parts.pred)(parts.collector.finish()).map_err(|e| e.into_test_case_err("take_parts"))?;
+    }
 
     Ok(())
 }
@@ -287,24 +297,36 @@ where
 fn test_unindexed_collector_impl<CT>(
     tester: &mut CT,
     pool: &mut CoroutinePool,
-    split_decision: UnindexedSplitDecision,
+    split_decision: &UnindexedSplitDecision,
 ) -> TestCaseResult
 where
     CT: UnindexedParallelCollectorTester + ?Sized,
 {
-    let mut parts = tester.test_parts_unindexed();
-    let (consumer, commit) = parts.collector.take_parts_unindexed();
+    // `parts_unindexed`
+    {
+        let mut parts = tester.test_parts_unindexed();
+        let (consumer, commit) = parts.collector.parts_unindexed();
 
-    let output = pool.bridge_unindexed(parts.iter.take_producer(), consumer, split_decision);
-    commit(output);
+        let output = pool.bridge_unindexed(parts.iter.take_producer(), consumer, split_decision);
+        prop_assert_eq!(
+            commit(output).is_break(),
+            parts.should_break,
+            "in `parts_unindexed()`: (unindexed) parallel collector didn't break correctly",
+        );
 
-    prop_assert_eq!(
-        parts.collector.break_hint().is_break(),
-        parts.should_break,
-        "(unindexed) parallel collector didn't break correctly"
-    );
+        (parts.pred)(parts.collector.finish()).map_err(|e| e.into_test_case_err("parts_unindexed"))?;
+    }
 
-    (parts.pred)(parts.collector.finish())?;
+    // `take_parts_unindexed`
+    {
+        let mut parts = tester.test_parts_unindexed();
+        let (consumer, commit) = parts.collector.take_parts_unindexed();
+
+        let output = pool.bridge_unindexed(parts.iter.take_producer(), consumer, split_decision);
+        commit(output);
+
+        (parts.pred)(parts.collector.finish()).map_err(|e| e.into_test_case_err("take_parts_unindexed"))?;
+    }
 
     Ok(())
 }

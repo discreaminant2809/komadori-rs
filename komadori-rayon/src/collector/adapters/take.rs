@@ -456,7 +456,7 @@ mod proptests {
             should_break_pred: |_| nums.len() >= take_count,
             pred: |_, output| PredError::assert_eq(output, nums.iter().copied().take(take_count).collect()),
         }
-        .test_par_collector(&mut pool, split_decision)
+        .test_par_collector(&mut pool, &split_decision)
     }
 
     fn unindexed_impl(
@@ -491,7 +491,7 @@ mod proptests {
                 )
             },
         }
-        .test_unindexed_par_collector(&mut pool, split_decision)
+        .test_unindexed_par_collector(&mut pool, &split_decision)
     }
 }
 

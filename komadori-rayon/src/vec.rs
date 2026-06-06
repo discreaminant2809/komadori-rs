@@ -404,7 +404,7 @@ mod proptests {
                 )
             },
         }
-        .test_par_collector(&mut pool, split_decision)
+        .test_par_collector(&mut pool, &split_decision)
     }
 
     fn unindexed_impl(
@@ -428,6 +428,6 @@ mod proptests {
                 )
             },
         }
-        .test_unindexed_par_collector(&mut pool, split_decision)
+        .test_unindexed_par_collector(&mut pool, &split_decision)
     }
 }

@@ -58,19 +58,19 @@ impl CoroutinePool {
         &mut self,
         producer: P,
         consumer: C,
-        split_decision: UnindexedSplitDecision,
+        split_decision: &UnindexedSplitDecision,
     ) -> C::Output
     where
         P: Producer,
         C: UnindexedConsumer<IntoCollector: Collector<P::Item>>,
     {
-        struct UnindexedJob<P, C> {
+        struct UnindexedJob<'a, P, C> {
             producer: P,
             consumer: C,
-            split_decision: UnindexedSplitDecision,
+            split_decision: &'a UnindexedSplitDecision,
         }
 
-        impl<P, C> Job for UnindexedJob<P, C>
+        impl<P, C> Job for UnindexedJob<'_, P, C>
         where
             P: Producer,
             C: UnindexedConsumer<IntoCollector: Collector<P::Item>>,
@@ -96,19 +96,19 @@ impl CoroutinePool {
         &mut self,
         producer: P,
         consumer: C,
-        split_decision: IndexedSplitDecision,
+        split_decision: &IndexedSplitDecision,
     ) -> C::Output
     where
         P: IndexedProducer,
         C: Consumer<IntoCollector: Collector<P::Item>>,
     {
-        struct IndexedJob<P, C> {
+        struct IndexedJob<'a, P, C> {
             producer: P,
             consumer: C,
-            split_decision: IndexedSplitDecision,
+            split_decision: &'a IndexedSplitDecision,
         }
 
-        impl<P, C> Job for IndexedJob<P, C>
+        impl<P, C> Job for IndexedJob<'_, P, C>
         where
             P: IndexedProducer,
             C: Consumer<IntoCollector: Collector<P::Item>>,
@@ -198,11 +198,11 @@ impl<'a> SharedState<'a> {
     }
 }
 
-async fn bridge_task<'a, P, C>(
+async fn bridge_task<'a, 'sd: 'a, P, C>(
     state: Rc<RefCell<SharedState<'a>>>,
     mut producer: P,
     consumer: C,
-    split_decision: UnindexedSplitDecision,
+    split_decision: &'sd UnindexedSplitDecision,
 ) -> C::Output
 where
     P: Producer + 'a,
@@ -265,9 +265,8 @@ where
 
             let (left_work, right_work) = {
                 let mut state = state.borrow_mut();
-                let left_work = state.spawn(bridge_task(state_left, producer_left, consumer_left, *left));
-                let right_work =
-                    state.spawn(bridge_task(state_right, producer_right, consumer_right, *right));
+                let left_work = state.spawn(bridge_task(state_left, producer_left, consumer_left, left));
+                let right_work = state.spawn(bridge_task(state_right, producer_right, consumer_right, right));
 
                 (left_work, right_work)
             };
@@ -288,11 +287,11 @@ where
     }
 }
 
-async fn bridge_task_indexed<'a, P, C>(
+async fn bridge_task_indexed<'a, 'sd: 'a, P, C>(
     state: Rc<RefCell<SharedState<'a>>>,
     mut producer: P,
     mut consumer: C,
-    split_decision: IndexedSplitDecision,
+    split_decision: &'sd IndexedSplitDecision,
 ) -> C::Output
 where
     P: IndexedProducer + 'a,
@@ -344,6 +343,7 @@ where
             }
         }
         IndexedSplitDecision::Split { left, right, at } => {
+            let at = *at;
             let (producer_left, producer_right) = (producer.split_off_left_at(at), producer);
             let ((consumer_left, combiner), consumer_right) = (consumer.split_off_left_at(at), consumer);
             let state_left = Rc::clone(&state);
@@ -356,13 +356,13 @@ where
                     state_left,
                     producer_left,
                     consumer_left,
-                    *left,
+                    left,
                 ));
                 let right_work = state.spawn(bridge_task_indexed(
                     state_right,
                     producer_right,
                     consumer_right,
-                    *right,
+                    right,
                 ));
 
                 (left_work, right_work)

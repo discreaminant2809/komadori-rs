@@ -468,7 +468,7 @@ mod proptests {
             should_break_pred: |_| false,
             pred: |_, output| PredError::assert_eq(output, starting_num + nums.iter().sum::<i32>()),
         }
-        .test_par_collector(&mut pool, split_decision)
+        .test_par_collector(&mut pool, &split_decision)
     }
 
     fn sum_unindexed_impl(
@@ -483,7 +483,7 @@ mod proptests {
             should_break_pred: |_| false,
             pred: |_, output| PredError::assert_eq(output, starting_num + nums.iter().sum::<i32>()),
         }
-        .test_unindexed_par_collector(&mut pool, split_decision)
+        .test_unindexed_par_collector(&mut pool, &split_decision)
     }
 
     fn product_indexed_impl(
@@ -498,7 +498,7 @@ mod proptests {
             should_break_pred: |_| false,
             pred: |_, output| PredError::assert_eq(output, starting_num * nums.iter().product::<i32>()),
         }
-        .test_par_collector(&mut pool, split_decision)
+        .test_par_collector(&mut pool, &split_decision)
     }
 
     fn product_unindexed_impl(
@@ -513,6 +513,6 @@ mod proptests {
             should_break_pred: |_| false,
             pred: |_, output| PredError::assert_eq(output, starting_num * nums.iter().product::<i32>()),
         }
-        .test_unindexed_par_collector(&mut pool, split_decision)
+        .test_unindexed_par_collector(&mut pool, &split_decision)
     }
 }
