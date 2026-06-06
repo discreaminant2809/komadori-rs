@@ -40,6 +40,9 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
         C: IntoUnindexedParallelCollector<Self::Item>,
     {
         let mut collector = collector.into_par_collector();
+        if collector.break_hint().is_break() {
+            return collector.finish();
+        }
 
         match self.opt_len() {
             None => {
@@ -78,6 +81,9 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
         C: IntoParallelCollector<Self::Item>,
     {
         let mut collector = collector.into_par_collector();
+        if collector.break_hint().is_break() {
+            return collector.finish();
+        }
 
         let (actual_len, consumer, commit) = collector.take_parts(self.len());
         commit(indexed_path(self, consumer, actual_len));
