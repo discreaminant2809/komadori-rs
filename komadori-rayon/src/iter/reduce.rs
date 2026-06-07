@@ -225,3 +225,85 @@ mod consumer {
         }
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use std::ops::RangeInclusive;
+
+    use super::ParReduce;
+
+    use crate::test_utils::prelude::*;
+
+    // Won't overflow since we only add up to ±300,000,000 * 6 = ±1,800,000,000.
+    const NUM_RANGE: RangeInclusive<i32> = -300_000_000..=300_000_000;
+
+    proptest! {
+        /// Pre-requisite: None
+        #[test]
+        fn indexed(
+            (split_decision, nums) in propvec(NUM_RANGE, ..=5)
+                .prop_flat_map(|nums| {
+                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
+                }),
+            starting_num in prop_opt(NUM_RANGE),
+            pool in CoroutinePool::prop(),
+        ) {
+            indexed_impl(pool, split_decision, starting_num, nums)?;
+        }
+    }
+
+    proptest! {
+        /// Pre-requisite: None
+        #[test]
+        fn unindexed(
+            nums in propvec(NUM_RANGE, ..=5),
+            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
+            starting_num in prop_opt(NUM_RANGE),
+            pool in CoroutinePool::prop(),
+        ) {
+            unindexed_impl(pool, split_decision, starting_num, nums)?;
+        }
+    }
+
+    fn indexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: IndexedSplitDecision,
+        starting_num: Option<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        par_collector_tester(starting_num, &nums).test_par_collector(&mut pool, &split_decision)
+    }
+
+    fn unindexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: UnindexedSplitDecision,
+        starting_num: Option<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        par_collector_tester(starting_num, &nums).test_unindexed_par_collector(&mut pool, &split_decision)
+    }
+
+    fn par_collector_tester(
+        starting_num: Option<i32>,
+        nums: &[i32],
+    ) -> impl ParallelCollectorTester + UnindexedParallelCollectorTester {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: move || {
+                let mut collector = ParReduce::new(|a, b| *a += b);
+                collector.accum = starting_num;
+                collector
+            },
+            should_break_pred: |_| false,
+            pred: move |mut iter, output| {
+                PredError::assert_eq(
+                    output,
+                    starting_num
+                        .into_iter()
+                        .chain(iter.take_iter())
+                        .reduce(|a, b| a + b),
+                )
+            },
+        }
+    }
+}

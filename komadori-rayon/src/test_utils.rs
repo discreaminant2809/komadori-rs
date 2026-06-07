@@ -17,6 +17,7 @@ pub const DEFAULT_MAX_DEPTH: usize = 4;
 pub mod prelude {
     pub use super::is_subsequence;
     pub use proptest::collection::vec as propvec;
+    pub use proptest::option::of as prop_opt;
     pub use proptest::prelude::*;
     pub use proptest::test_runner::TestCaseResult;
 
