@@ -147,15 +147,15 @@
 pub mod cmp;
 pub mod collections;
 pub mod collector;
+mod helpers;
 pub mod iter;
 pub mod num;
 pub mod ops;
 pub mod prelude;
 pub mod slice;
-// pub mod unit;
-mod helpers;
 #[cfg(test)]
 mod test_utils;
+pub mod unit;
 pub mod vec;
 
 pub use komadori::{clb, clb_mut, clb_once};
