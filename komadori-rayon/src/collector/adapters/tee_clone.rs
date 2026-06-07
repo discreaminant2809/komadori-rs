@@ -147,10 +147,24 @@ mod proptests {
             should_break_pred: |iter| iter.count() >= first_count.max(second_count),
             pred: |mut iter, (output1, output2)| {
                 PredError::assert_fn(
+                    &output1[..],
+                    first_count.min(nums.len()),
+                    |output, &len| output.len() == len,
+                    "incorrect length",
+                )?;
+
+                PredError::assert_fn(
                     output1,
                     iter.clone().take_iter().collect::<Vec<_>>(),
                     |actual, expected| is_subsequence(actual, expected),
                     "not a subsequence",
+                )?;
+
+                PredError::assert_fn(
+                    &output2[..],
+                    second_count.min(nums.len()),
+                    |output, &len| output.len() == len,
+                    "incorrect length",
                 )?;
 
                 PredError::assert_fn(
