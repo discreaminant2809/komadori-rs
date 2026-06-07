@@ -15,7 +15,7 @@ command = "cargo"
 args = ["watch", "-w", "src", "-x", "+nightly doc --all-features --no-deps"]
 
 [tasks.doc]
-env = { RUSTDOCFLAGS = "--cfg docsrs" }
+env = { RUSTDOCFLAGS = "-Z unstable-options --cfg docsrs --generate-link-to-definition" }
 command = "rustup"
 args = ["run", "nightly", "cargo", "doc", "--all-features", "--no-deps"]
 
