@@ -268,3 +268,80 @@ mod consumer {
         }
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use std::collections::LinkedList;
+
+    use komadori::prelude::*;
+
+    use crate::test_utils::prelude::*;
+
+    proptest! {
+        /// Pre-requisite: None
+        #[test]
+        fn indexed(
+            (split_decision, nums) in propvec(any::<i32>(), ..=5)
+                .prop_flat_map(|nums| {
+                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
+                }),
+            starting_nums in propvec(any::<i32>(), ..=2),
+            pool in CoroutinePool::prop(),
+        ) {
+            indexed_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    proptest! {
+        /// Pre-requisite: None
+        #[test]
+        fn unindexed(
+            pool in CoroutinePool::prop(),
+            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
+            starting_nums in propvec(any::<i32>(), ..=2),
+            nums in propvec(any::<i32>(), ..=5),
+        ) {
+            unindexed_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    fn indexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: IndexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        par_collector_tester(&starting_nums, &nums).test_par_collector(&mut pool, &split_decision)
+    }
+
+    fn unindexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: UnindexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        par_collector_tester(&starting_nums, &nums).test_unindexed_par_collector(&mut pool, &split_decision)
+    }
+
+    fn par_collector_tester(
+        starting_nums: &[i32],
+        nums: &[i32],
+    ) -> impl ParallelCollectorTester + UnindexedParallelCollectorTester {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: move || {
+                starting_nums
+                    .iter()
+                    .feed_into(LinkedList::new())
+                    .into_par_collector()
+            },
+            should_break_pred: |_| false,
+            pred: move |_, output| {
+                PredError::assert_eq(
+                    output,
+                    starting_nums.iter().chain(nums).feed_into(LinkedList::new()),
+                )
+            },
+        }
+    }
+}
