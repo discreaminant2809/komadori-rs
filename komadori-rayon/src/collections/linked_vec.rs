@@ -76,7 +76,14 @@ impl<T> CollectorBase for Serial<T> {
     #[inline]
     fn finish(self) -> Self::Output {
         let len = self.chunk.len();
-        ([self.chunk].into(), len)
+        (
+            if len == 0 {
+                LinkedList::new()
+            } else {
+                [self.chunk].into()
+            },
+            len,
+        )
     }
 }
 
