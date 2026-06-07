@@ -4,7 +4,7 @@
 //!
 //! The idea behind parallel collectors is:
 //!
-//! - First, shared states in a parallel collector are parked
+//! - First, shared states in a parallel collector stay
 //!   in the thread that orchestrates the operation.
 //!
 //! - Next, the parallel collector creates two "parts":
@@ -13,43 +13,34 @@
 //!     Its job is to "commit" the output of the consumer back
 //!     to the parallel collector.
 //!
-//! - The consumer is used (converted to a serial collector, or split further)
-//!   and eventually produces an output (produced directly, or combined from
-//!   two outputs).
+//! - The consumer is either converted to a serial collector,
+//!   or split further. An “intermediate” output is
+//!   either produced directly from a consumer,
+//!   or are combined from two outputs.
 //!
 //! - The committer commits the consumer's output back to the parallel collector.
 //!
 //! - A cycle completes! The parallel collector can be used again, or
 //!   [`finish()`](super::ParallelCollectorBase) to produce the "grand final" output.
 //!
-//! Understanding this is crucial to understand the design of parallel collectors.
+//! Understanding this pipeline is crucial to understand the design of parallel collectors.
 //!
-//! And, unlike `rayon` which supports two "modes" (*pull mode* for producers
-//! and *push mode* for consumers), this crate supports one and only one mode: consumers.
+//! Unlike `rayon` which supports two "modes" (*pull mode* for producers
+//! and *push mode* for consumers), this crate supports one and only one mode:
+//! *push mode* for consumers.
 //!
 //! # Consumer
 //!
 //! Although the signatures are different, a consumer here are pretty close to
 //! `rayon`'s consumers: it supports splitting (either at a given index or approximately),
-//! converting itself into something to collect items serially, producing and output,
+//! converting itself into something to collect items serially, producing an output,
 //! and reducing with other outputs.
 //!
-//! A difference, however, is unlike `rayon`, consumer types have to be `pub` to support
-//! that "delayed item commitment" trick. It is kind of a limitation for now.
-//! As of now, we require all consumer types to be `pub`, but behind private modules to
-//! not polute the API surface and become more semver-friendly.
-//! Caller must **not** refer to those types directly since they do not follow the semver,
-//! but indirectly via [`DefineSerial`] and [`DefineUnindexedSerial`].
-//!
-//! Earlier, it is said that a consumer is borrowed from the parallel collector,
-//! and consumer types vary between parallel collectors, and they share the fact
-//! that they hold a lifetime. Is it a perfect use case of generic assosciated
-//! types (GAT), right? In an ideal world when
-//! [this limitation](https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
-//! did not exist, we could use them and the API surface would look more elegant
-//! than ever! But, back to reality, it exists, so we choose not to use it, but a
-//! [hack by Sabrina Jewson](https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
-//! reflected by [`DefineSerial`] and [`DefineUnindexedSerial`].
+//! A consumer is returned as a return-position `impl` trait in trait (RPITIT)
+//! because knowing the type and putting bounds on it do not make sense whatsoever.
+//! Hence, it is completely hidden.
+//! Also, RPITIT does also work as a GAT that borrow from the paralle collector,
+//! so it can hold a mutable reference to the paralle collector too.
 //!
 //! # Why "committer"?
 //!
@@ -59,42 +50,77 @@
 //! have been written for the indexed path, and a linked list of [`Vec`] chunks
 //! for the unindexed path. Can [`Vec`] use them immediately? No!
 //!
-//! Moreover, arguably, consumer's output is not actually an "output" in a sense
-//! (it got its name due to [`ConsumerBase: IntoCollectorBase`](IntoCollectorBase)),
-//! because that "output" is also used as an input of something else, which is...
-//! a "committer."
-//!
 //! A committer is simply an [`FnOnce`] that takes the consumer's output and "commit"
 //! it back to the parallel collector, completing a "cycle." Back to the previous examples,
 //! for the indexed path, the job of the [`Vec`]'s committer is to verify
 //! the number of writes match the expectation, and for the unindexed path,
 //! the job is to concatenate those small [`Vec`] chunks into the bigger [`Vec`].
+//! And since a committer is an [`FnOnce`],
+//! implementors can simply define a committer with a closure.
 //!
-//! Its type is a return-position `impl` trait in trait (RPITIT)
-//! because knowing the type and putting bounds on it do not make sense whatsoever,
-//! and since it does not partitipate in the "delayed item commitment" trick above,
-//! it should be completely hidden.
-//! Implementors can define a committer with simply... a closure!
+//! A committer is returned as a return-position `impl` trait in trait (RPITIT)
+//! because knowing the type and putting bounds on it do not make sense whatsoever.
+//! Hence, it is completely hidden.
 //! Also, RPITIT does also work as a GAT that borrow from the paralle collector,
-//! so it can hold a mutable reference to the paralle collector too!
+//! so it can hold a mutable reference to the paralle collector too.
+//!
+//! # [`uniquify_serial!`](crate::uniquify_serial)
+//!
+//! If you do not care about future-proofing your serial collectors,
+//! you can skip this part!
+//!
+//! Otherwise, this macro is used to make a serial collector "unique"
+//! in terms of a lifetime and the implemented type.
+//!
+//! For the indexed version, it creates a private module that contains the following:
+//!
+//! - `Serial<'a, This, C>`: It wraps around a serial collector type.
+//!   It implements **no** auto traits at all, and is invariant over `'a`.
+//!
+//! - `Output<'a, This, O>`: It wraps around the serial collector's output type.
+//!   It only implements [`Send`] (if `O` is [`Send`]) and **no** other auto traits at all,
+//!   and is invariant over `'a`.
+//!
+//! - `fn uniquify((len, consumer, commit))` (receives a tuple):
+//!   Returns the same tuple with a consumer and a committer using
+//!   `Serial` and `Output` in the module.
+//!   This is used in the [`parts()`] method.
+//!
+//! - `fn take_uniquify((len, consumer, commit))`:
+//!   Returns the same tuple with a consumer and a committer using
+//!   `Serial` and `Output` in the module.
+//!   This is used in the [`take_parts()`] method.
+//!
+//! For the unindexed version, it is the same
+//! except for the two functions which do not take `len`
+//! and are used in the [`parts_unindexed()`] and [`take_parts_unindexed()`]
+//! methods, respectively.
+//!
+//! It should be inaccessible to the callers so that they cannot
+//! name the type and extract your serial collector type.
 //!
 //! # Where are `bridge()` and its friends?
 //!
 //! Damn, this crate is **not** a thread pool library! The philosophy is different:
 //! The crate only defines parallel reductions,
 //! and it is up to the callers to choose how to drive them.
-//! Originally it was not planned to be that way. It was later when I could see
-//! its thread-pool-agnostic potential.
-//! The main driver is `rayon` (which is the original plan), but you can use
+//! The main driver is `rayon`, but you can use
 //! other drivers too, such as `chili` like in `par_iter` crate.
 //! Note that [`feed_into()`](crate::iter::RayonParallelIteratorExt)
-//! disappears as long as you "reject" `rayon`, since it only works
+//! disappears as long as you "eject" the crate from `rayon`, since it only works
 //! with `rayon`'s parallel iterators, but it is also easy to build
 //! a wrapper around the crate's abstractions!
 //!
 //! # How to implement a parallel collector?
 //!
-//! Coming soon...
+//! Coming soon!
+//!
+//! (In the mean time, you can take a look at the crate’s implementations to see how)
+//!
+//! [`parts()`]: super::ParallelCollectorBase::parts
+//! [`take_parts()`]: super::ParallelCollectorBase::take_parts
+//! [`parts_unindexed()`]: super::UnindexedParallelCollectorBase::parts_unindexed
+//! [`take_parts_unindexed()`]: super::UnindexedParallelCollectorBase::take_parts_unindexed
 
 use std::ops::ControlFlow;
 
@@ -106,6 +132,12 @@ pub use komadori::collector::{Collector, CollectorBase, IntoCollector, IntoColle
 /// Implementors should implement this for every lifetime outlived by the implemented type.
 /// [`ParallelCollectorBase`](super::ParallelCollectorBase) extends this trait
 /// with *any* lifetimes, so it is pointless to not doing so.
+///
+/// We cannot use GAT because of [this limitation][limitation],
+/// so this is basically a [workaround of it by Sabrina Jewson][workaround].
+///
+/// [limitation]: (https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
+/// [workaround]: (https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
 pub trait DefineSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<'this, Self>> {
     /// Which (indexed) consumer being produced?
     type Serial: CollectorBase<Output: Send>;
@@ -116,6 +148,12 @@ pub trait DefineSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<
 /// Implementors should implement this for every lifetime outlived by the implemented type.
 /// [`UnindexedParallelCollectorBase`](super::UnindexedParallelCollectorBase)
 /// extends this trait with *any* lifetimes, so it is pointless to not doing so.
+///
+/// We cannot use GAT because of [this limitation][limitation],
+/// so this is basically a [workaround of it by Sabrina Jewson][workaround].
+///
+/// [limitation]: (https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
+/// [workaround]: (https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
 pub trait DefineUnindexedSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<'this, Self>> {
     /// Which unindexed consumer being produced?
     type UnindexedSerial: CollectorBase<Output: Send>;
@@ -230,7 +268,7 @@ pub trait UnindexedConsumer: Consumer {
     fn to_combiner(&self) -> Self::Combiner;
 }
 
-/// A combiner used to combine the outputs of the two split of the consumers.
+/// A combiner used to combine the outputs of the two splits of a consumer.
 pub trait Combiner<O> {
     /// Combines two outputs by merging the "right" output
     /// into the "left" one.
@@ -238,6 +276,18 @@ pub trait Combiner<O> {
 }
 
 /// Defines a wrapper that makes your serial collector type "unique."
+///
+/// See the [plumbing module][self#uniquify_serial] for more information.
+///
+/// # Syntax
+///
+/// ```
+/// use komadori_rayon::uniquify_serial;
+///
+/// uniquify_serial!(mod_name_for_indexed);
+/// uniquify_serial!(also_mod_name_for_indexed, unindexed = false);
+/// uniquify_serial!(mod_name_for_unindexed, unindexed = true);
+/// ```
 #[macro_export]
 macro_rules! uniquify_serial {
     ($mod_name:ident, unindexed = false) => {
