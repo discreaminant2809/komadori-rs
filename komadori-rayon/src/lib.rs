@@ -152,6 +152,7 @@ pub mod iter;
 pub mod num;
 pub mod ops;
 pub mod prelude;
+pub(crate) mod reference;
 pub mod slice;
 #[cfg(test)]
 mod test_utils;
