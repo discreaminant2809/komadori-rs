@@ -3,8 +3,7 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use super::{
-    Also, Filter, IntoParallelCollectorBase, ParallelCollectorBase, TakeAnyWhile,
-    assert_unindexed_par_collector, assert_unindexed_par_collector_base,
+    Filter, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -75,8 +74,9 @@ pub trait UnindexedParallelCollectorBase:
     /// If you want the collector to stop after the first `false`,
     /// consider using [`take_any_while()`](Self::take_any_while) instead.
     ///
-    /// `filter()` will **always** use the unindexed path, because
-    /// the number of items is now nondeterministic.
+    /// `filter()` will **always** use the unindexed path
+    /// of the underlying parallel collector,
+    /// because the number of items is nondeterministic now.
     ///
     /// # Examples
     ///
@@ -108,6 +108,10 @@ pub trait UnindexedParallelCollectorBase:
     /// Creates a parallel collector that accumulates items until it encounters
     /// an items that makess a given predicate `false` at *any* time.
     ///
+    /// `take_any_while()` will **always** use the unindexed path
+    /// of the underlying parallel collector,
+    /// because the number of items is nondeterministic now.
+    ///
     /// # Examples
     ///
     /// ```
@@ -132,17 +136,6 @@ pub trait UnindexedParallelCollectorBase:
         P: Fn(&T) -> bool + Sync,
     {
         assert_unindexed_par_collector::<_, T>(TakeAnyWhile::new(self, pred))
-    }
-
-    /// Used when the indexed path of your parallel collector
-    /// is not efficient enough.
-    #[inline]
-    fn also_indexed<U>(self, indexed: U) -> Also<U::IntoParCollector, Self>
-    where
-        Self: Sized,
-        U: IntoParallelCollectorBase,
-    {
-        assert_unindexed_par_collector_base(Also::new(indexed.into_par_collector(), self))
     }
 }
 

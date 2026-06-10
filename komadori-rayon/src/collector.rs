@@ -105,15 +105,13 @@
 //! split exceeding the reported "maximum length."
 //!
 //! For a serial collector obtained by a consumer of [`parts()`] and [`take_parts()`],
-//! at a time, you must feed it at **most** the remaining amount
-//! the serial collector would affort
-//! ([`take()`](ParallelCollectorBase::take) does not follow this rule, however;
-//! the adapter's indexed path allows to feed more items than the remaining amount
-//! for [`collect_many()`] and [`collect_then_finish()`]
-//! if this is the first time collecting **or** the remaining length is not `0`).
-//! Furthermore, before the serial collector is finished, the remaining amount
-//! must be `0`.
-//! Also, when the last item (before full-filling the amount) is collected,
+//! at a time, you must feed it at **most** the maximum amount
+//! the serial collector would affort.
+//! Furthermore, before the serial collector is finished, the collector
+//! must have returned [`Break(())`] once ([`collect_then_finish()`]
+//! is counted as [`collect_many()`] followed by
+//! [`finish()`](komadori::collector::CollectorBase::finish)).
+//! Also, when the last item before full-filling the amount is collected,
 //! you **must** treat the returned [`ControlFlow`] as [`Break(())`], even though
 //! the implementation may actually return [`Continue(())`].
 //! Behaviors of violating the above are unspecified.

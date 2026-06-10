@@ -16,7 +16,7 @@ use super::Fuse;
 /// or the unindexed path.
 ///
 /// This `struct` is created by [`ParallelCollectorBase::also_unindexed()`],
-/// and [`UnindexedParallelCollectorBase::also_indexed()`].
+/// and [`ParallelCollectorBase::also_indexed()`].
 /// See their documentations for more.
 #[derive(Debug, Clone)]
 pub struct Also<I, U> {
