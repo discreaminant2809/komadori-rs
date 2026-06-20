@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 use std::mem::MaybeUninit;
-use std::{ops::ControlFlow, ptr::NonNull};
+use std::{collections::LinkedList, ops::ControlFlow, ptr::NonNull};
 
 use komadori::prelude::*;
 
@@ -27,6 +27,9 @@ use crate::{
 /// A parallel collector that pushes collected items into a [`Vec`].
 /// Its [`Output`] is [`Vec`].
 ///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
+///
 /// This struct is created by `Vec::into_par_collector()`.
 ///
 /// [`Output`]: ParallelCollectorBase::Output
@@ -35,6 +38,9 @@ pub struct IntoParCollector<T>(Vec<T>);
 
 /// A parallel collector that pushes collected items into a [`&mut Vec`](Vec).
 /// Its [`Output`] is [`&mut Vec`](Vec).
+///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
 ///
 /// This struct is created by `Vec::par_collector_mut()`.
 ///
@@ -157,12 +163,7 @@ where
         ) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
-            self.0.reserve(len);
-
-            for mut chunk in chunks {
-                self.0.append(&mut chunk);
-            }
-
+            unindexed_append_to_original(&mut self.0, chunks, len);
             ControlFlow::Continue(())
         }))
     }
@@ -263,12 +264,7 @@ where
         ) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
-            self.0.reserve(len);
-
-            for mut chunk in chunks {
-                self.0.append(&mut chunk);
-            }
-
+            unindexed_append_to_original(self.0, chunks, len);
             ControlFlow::Continue(())
         }))
     }
@@ -281,6 +277,36 @@ where
     #[inline]
     fn default() -> Self {
         Vec::default().into_par_collector()
+    }
+}
+
+fn unindexed_append_to_original<T>(og: &mut Vec<T>, mut chunks: LinkedList<Vec<T>>, mut append_len: usize) {
+    let Some(mut first_chunk) = chunks.pop_front() else {
+        return;
+    };
+
+    // The idea is that we optimize
+    if og.is_empty() {
+        // If the first chunk has more capacity, it's always reasonable,
+        // and even more if the original has no allocation at all.
+        //
+        // If not, it's purely allocator RNG that we can't model cleanly.
+        // Who knows, having a big enough buffer to accomodate `append_len`
+        // additional items is better than reallocation in some cases?
+        std::mem::swap(og, &mut first_chunk);
+
+        // Can't panic. The reduction of linked vec is assumed to
+        // correctly report the amount to append.
+        append_len -= og.len();
+    }
+    // If the length isn't 0,
+    // we have no other choice but to obey the original
+    // which already contains some items.
+
+    og.reserve(append_len);
+    og.append(&mut first_chunk);
+    for mut chunk in chunks {
+        og.append(&mut chunk);
     }
 }
 
