@@ -18,6 +18,9 @@ use crate::{
 /// A parallel collector that pushes collected items into a [`LinkedList`].
 /// Its [`Output`] is [`LinkedList`].
 ///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
+///
 /// This struct is created by `LinkedList::into_par_collector()`.
 ///
 /// [`Output`]: ParallelCollectorBase::Output
@@ -27,6 +30,9 @@ pub struct IntoParCollector<T>(LinkedList<T>);
 /// A parallel collector that pushes collected items into a
 /// [`&mut LinkedList`](LinkedList).
 /// Its [`Output`] is [`&mut LinkedList`](LinkedList).
+///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
 ///
 /// This struct is created by `LinkedList::par_collector_mut()`.
 ///
