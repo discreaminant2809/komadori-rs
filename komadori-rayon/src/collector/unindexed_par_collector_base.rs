@@ -150,14 +150,19 @@ pub trait UnindexedParallelCollectorBase:
     /// assert_eq!(smalls, [1, 300]);
     /// ```
     #[inline]
-    fn filter_with<L1, FL2, L2, P, T>(self, local1: L1, local2: FL2, pred: P) -> FilterWith<Self, L1, FL2, P>
+    fn filter_with<L1, FL2, L2, P, T>(
+        self,
+        local1: L1,
+        local2_f: FL2,
+        pred: P,
+    ) -> FilterWith<Self, L1, FL2, P>
     where
         Self: UnindexedParallelCollector<T> + Sized,
         L1: Clone + Send,
         FL2: Fn() -> L2 + Sync,
         P: Fn(&mut L1, &mut L2, &T) -> bool + Sync,
     {
-        assert_unindexed_par_collector::<_, T>(FilterWith::new(self, local1, local2, pred))
+        assert_unindexed_par_collector::<_, T>(FilterWith::new(self, local1, local2_f, pred))
     }
 
     /// Creates a parallel collector that accumulates items until it encounters
