@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use komadori::prelude::*;
 
 use super::{
-    Filter, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
+    Filter, FilterWith, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -103,6 +103,61 @@ pub trait UnindexedParallelCollectorBase:
         P: Fn(&T) -> bool + Sync,
     {
         assert_unindexed_par_collector::<_, T>(Filter::new(self, pred))
+    }
+
+    /// Same as [`filter()`](Self::filter), but with a state that will either be cloned
+    /// or created from a factory (or both) to each serial execution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    /// use komadori::prelude::*;
+    /// use std::sync::mpsc::channel;
+    ///
+    /// let (sender, receiver) = channel();
+    ///
+    /// let bigs = [1_u32, 2_000_000_000, 300, 4_000_000]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .filter_with(
+    ///                 sender, String::new,
+    ///                 |sender, buf, &num| {
+    ///                     // I know, this is not an efficient way to
+    ///                     // count the number of digits.
+    ///                     // This is just an example.
+    ///                     buf.clear();
+    ///                     use std::fmt::Write;
+    ///                     write!(buf, "{num}");
+    ///
+    ///                     if buf.len() >= 7 {
+    ///                         true
+    ///                     } else {
+    ///                         sender.send(num).unwrap();
+    ///                         false
+    ///                     }
+    ///                 },
+    ///             ),
+    ///     );
+    ///
+    /// let mut smalls = receiver.iter().feed_into(vec![]);
+    /// smalls.sort_unstable();
+    ///
+    /// assert_eq!(bigs, [2_000_000_000, 4_000_000]);
+    /// assert_eq!(smalls, [1, 300]);
+    /// ```
+    #[inline]
+    fn filter_with<L1, FL2, L2, P, T>(self, local1: L1, local2: FL2, pred: P) -> FilterWith<Self, L1, FL2, P>
+    where
+        Self: UnindexedParallelCollector<T> + Sized,
+        L1: Clone + Send,
+        FL2: Fn() -> L2 + Sync,
+        P: Fn(&mut L1, &mut L2, &T) -> bool + Sync,
+    {
+        assert_unindexed_par_collector::<_, T>(FilterWith::new(self, local1, local2, pred))
     }
 
     /// Creates a parallel collector that accumulates items until it encounters

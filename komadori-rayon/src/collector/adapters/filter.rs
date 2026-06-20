@@ -1,65 +1,84 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{DefineSerial, DefineUnindexedSerial},
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
     },
     helpers::{unique, unique_unindexed},
+    ops::{BasicParClosure, DefineCallMut, ParallelFnMutBase, WithLocalParClosure},
 };
+
+// So that we can hide this struct while still be able to satisfy the compiler.
+mod inner {
+    #[derive(Clone, Debug)]
+    pub struct FilterBase<C, P> {
+        pub(super) collector: C,
+        pub(super) pred: P,
+    }
+}
+use inner::FilterBase;
 
 /// A parallel collector that uses a closure to determine whether
 /// an item should be accumulated.
 ///
 /// This `struct` is created by [`UnindexedParallelCollectorBase::filter()`].
 /// See its documentation for more.
-#[derive(Clone)]
-pub struct Filter<C, P> {
-    collector: C,
-    pred: P,
+pub type Filter<C, P> = FilterBase<C, BasicParClosure<P>>;
+
+/// A parallel collector that uses a closure and a cloable state
+/// to determine whether an item should be accumulated.
+///
+/// This `struct` is created by
+/// [`UnindexedParallelCollectorBase::filter_with()`].
+/// See its documentation for more.
+pub type FilterWith<C, L1, FL2, P> = FilterBase<C, WithLocalParClosure<L1, FL2, P>>;
+
+impl<C, L1, FL2, P> FilterWith<C, L1, FL2, P> {
+    pub(in crate::collector) fn new(collector: C, local1: L1, local2_f: FL2, pred: P) -> Self {
+        Self {
+            collector,
+            pred: WithLocalParClosure::new(local1, local2_f, pred),
+        }
+    }
 }
 
 impl<C, P> Filter<C, P> {
     pub(in crate::collector) fn new(collector: C, pred: P) -> Self {
-        Self { collector, pred }
+        Self {
+            collector,
+            pred: BasicParClosure::new(pred),
+        }
     }
 }
 
-impl<C, P> Debug for Filter<C, P>
+impl<'a, C, P> DefineSerial<'a> for FilterBase<C, P>
 where
-    C: Debug,
+    C: DefineUnindexedSerial<'a>,
+    P: ParallelFnMutBase,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Filter")
-            .field("collector", &self.collector)
-            .field("pred", &std::any::type_name::<P>())
-            .finish()
-    }
+    type Serial =
+        unique::Serial<'a, Self, consumer::Serial<C::UnindexedSerial, <P as DefineCallMut<'a>>::CallMut>>;
 }
 
-impl<'this, C, P> DefineSerial<'this> for Filter<C, P>
+impl<'a, C, P> DefineUnindexedSerial<'a> for FilterBase<C, P>
 where
-    C: DefineUnindexedSerial<'this>,
-    P: Sync,
+    C: DefineUnindexedSerial<'a>,
+    P: ParallelFnMutBase,
 {
-    type Serial = unique::Serial<'this, Self, consumer::Serial<C::UnindexedSerial, &'this P>>;
+    type UnindexedSerial = unique_unindexed::Serial<
+        'a,
+        Self,
+        consumer::Serial<C::UnindexedSerial, <P as DefineCallMut<'a>>::CallMut>,
+    >;
 }
 
-impl<'this, C, P> DefineUnindexedSerial<'this> for Filter<C, P>
-where
-    C: DefineUnindexedSerial<'this>,
-    P: Sync,
-{
-    type UnindexedSerial =
-        unique_unindexed::Serial<'this, Self, consumer::Serial<C::UnindexedSerial, &'this P>>;
-}
-
-impl<C, P> ParallelCollectorBase for Filter<C, P>
+impl<C, P> ParallelCollectorBase for FilterBase<C, P>
 where
     C: UnindexedParallelCollectorBase,
-    P: Sync,
+    P: ParallelFnMutBase,
 {
     type Output = C::Output;
 
@@ -79,14 +98,18 @@ where
         len: usize,
     ) -> (
         usize,
-        impl crate::collector::plumbing::Consumer<
+        impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique::uniquify((len, consumer::Consumer::new(consumer, &self.pred), commit))
+        unique::uniquify((
+            len,
+            consumer::Consumer::new(consumer, self.pred.callable_mut()),
+            commit,
+        ))
     }
 
     #[inline]
@@ -95,26 +118,30 @@ where
         len: usize,
     ) -> (
         usize,
-        impl crate::collector::plumbing::Consumer<
+        impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        unique::take_uniquify((len, consumer::Consumer::new(consumer, &self.pred), commit))
+        unique::take_uniquify((
+            len,
+            consumer::Consumer::new(consumer, self.pred.take_callable_mut()),
+            commit,
+        ))
     }
 }
 
-impl<C, P> UnindexedParallelCollectorBase for Filter<C, P>
+impl<C, P> UnindexedParallelCollectorBase for FilterBase<C, P>
 where
     C: UnindexedParallelCollectorBase,
-    P: Sync,
+    P: ParallelFnMutBase,
 {
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        impl crate::collector::plumbing::UnindexedConsumer<
+        impl UnindexedConsumer<
             IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
             Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         >,
@@ -123,20 +150,26 @@ where
         ) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique_unindexed::uniquify((consumer::Consumer::new(consumer, &self.pred), commit))
+        unique_unindexed::uniquify((
+            consumer::Consumer::new(consumer, self.pred.callable_mut()),
+            commit,
+        ))
     }
 
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        impl crate::collector::plumbing::UnindexedConsumer<
+        impl UnindexedConsumer<
             IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
             Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        unique_unindexed::take_uniquify((consumer::Consumer::new(consumer, &self.pred), commit))
+        unique_unindexed::take_uniquify((
+            consumer::Consumer::new(consumer, self.pred.take_callable_mut()),
+            commit,
+        ))
     }
 }
 
@@ -146,11 +179,14 @@ mod consumer {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumer};
+    use crate::{
+        collector::plumbing::{self, UnindexedConsumer},
+        ops::CallMut,
+    };
 
-    pub struct Consumer<C, P> {
+    pub struct Consumer<C, PF> {
         consumer: C,
-        pred: P,
+        into_pred: PF,
     }
 
     // Can't utilize from komadori's filter(), since it requires item type right away.
@@ -161,14 +197,15 @@ mod consumer {
 
     impl<C, P> Consumer<C, P> {
         #[inline]
-        pub(super) fn new(consumer: C, pred: P) -> Self {
-            Self { consumer, pred }
+        pub(super) fn new(consumer: C, into_pred: P) -> Self {
+            Self { consumer, into_pred }
         }
     }
 
-    impl<C, P> IntoCollectorBase for Consumer<C, P>
+    impl<C, PF, P> IntoCollectorBase for Consumer<C, PF>
     where
         C: IntoCollectorBase,
+        PF: FnOnce() -> P,
     {
         type Output = C::Output;
 
@@ -178,15 +215,15 @@ mod consumer {
         fn into_collector(self) -> Self::IntoCollector {
             Serial {
                 collector: self.consumer.into_collector(),
-                pred: self.pred,
+                pred: (self.into_pred)(),
             }
         }
     }
 
-    impl<C, P> plumbing::Consumer for Consumer<C, P>
+    impl<C, PF, P> plumbing::Consumer for Consumer<C, PF>
     where
         C: plumbing::UnindexedConsumer,
-        P: Clone + Send,
+        PF: FnOnce() -> P + Clone + Send,
     {
         type Combiner = C::Combiner;
 
@@ -198,6 +235,25 @@ mod consumer {
         #[inline]
         fn break_hint(&self) -> ControlFlow<()> {
             self.consumer.break_hint()
+        }
+    }
+
+    impl<C, PF, P> plumbing::UnindexedConsumer for Consumer<C, PF>
+    where
+        C: plumbing::UnindexedConsumer,
+        PF: FnOnce() -> P + Clone + Send,
+    {
+        #[inline]
+        fn split_off_left(&self) -> Self {
+            Self {
+                consumer: self.consumer.split_off_left(),
+                into_pred: self.into_pred.clone(),
+            }
+        }
+
+        #[inline]
+        fn to_combiner(&self) -> Self::Combiner {
+            self.consumer.to_combiner()
         }
     }
 
@@ -218,33 +274,14 @@ mod consumer {
         }
     }
 
-    impl<C, P> plumbing::UnindexedConsumer for Consumer<C, P>
-    where
-        C: plumbing::UnindexedConsumer,
-        P: Clone + Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self {
-                consumer: self.consumer.split_off_left(),
-                pred: self.pred.clone(),
-            }
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            self.consumer.to_combiner()
-        }
-    }
-
     impl<C, P, T> Collector<T> for Serial<C, P>
     where
         C: Collector<T>,
-        P: FnMut(&T) -> bool,
+        P: for<'a> CallMut<(&'a T,), Output = bool>,
     {
         #[inline]
         fn collect(&mut self, item: T) -> ControlFlow<()> {
-            if (self.pred)(&item) {
+            if self.pred.call_mut((&item,)) {
                 self.collector.collect(item)
             } else {
                 self.collector.break_hint()
