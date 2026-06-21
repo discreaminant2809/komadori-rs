@@ -4,9 +4,9 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Also, Fuse, IntoCollector, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, MapOutput,
-    Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector_base, assert_unindexed_par_collector_base,
-    tee, tee_clone, tee_funnel, tee_mut,
+    Also, Fuse, IntoCollector, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, Map, MapOutput,
+    MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base,
+    assert_unindexed_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -419,6 +419,87 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         C: IntoParallelCollectorBase,
     {
         assert_par_collector_base(tee_funnel(self, other.into_par_collector()))
+    }
+
+    /// Creates a parallel collector that calls a closure on each item before collecting.
+    ///
+    /// This is used when you need a parallel collector that collects `U`,
+    /// but you have a parallel collector that collects `T`. In that case,
+    /// you can use `map()` to transform `U` into `T` before passing it along.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let squares = (1..=5)
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .map(|num| num * num)
+    ///     );
+    ///
+    /// assert_eq!(squares, [1, 4, 9, 16, 25]);
+    /// ```
+    #[inline]
+    fn map<F, T, U>(self, f: F) -> Map<Self, F>
+    where
+        Self: ParallelCollector<T> + Sized,
+        F: Fn(U) -> T + Sync,
+    {
+        assert_par_collector::<_, U>(Map::new(self, f))
+    }
+
+    /// Same as [`map()`](Self::map), but with a state that will either be cloned
+    /// or created from a factory (or both) to each serial execution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    /// use komadori::prelude::*;
+    /// use std::sync::mpsc::channel;
+    ///
+    /// let (sender, receiver) = channel();
+    ///
+    /// let digit_counts = [1_u32, 2_000_000_000, 3_000, 4_000_000]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .map_with(
+    ///                 sender, String::new,
+    ///                 |sender, buf, num| {
+    ///                     // I know, this is not an efficient way to
+    ///                     // count the number of digits.
+    ///                     // This is just an example.
+    ///                     buf.clear();
+    ///                     use std::fmt::Write;
+    ///                     write!(buf, "{num}");
+    ///
+    ///                     sender.send(num).unwrap();
+    ///                     buf.len()
+    ///                 },
+    ///             ),
+    ///     );
+    ///
+    /// let mut sum = receiver.iter().feed_into(0_u32.into_sum());
+    ///
+    /// assert_eq!(digit_counts, [1, 10, 4, 7]);
+    /// assert_eq!(sum, 2_004_003_001);
+    /// ```
+    #[inline]
+    fn map_with<L1, FL2, L2, F, T, U>(self, local1: L1, local2_f: FL2, f: F) -> MapWith<Self, L1, FL2, F>
+    where
+        Self: ParallelCollector<T> + Sized,
+        L1: Clone + Send,
+        FL2: Fn() -> L2 + Sync,
+        F: Fn(&mut L1, &mut L2, U) -> T + Sync,
+    {
+        assert_par_collector::<_, U>(MapWith::new(self, local1, local2_f, f))
     }
 
     /// Creates a parallel collector that transforms the final accumulated result.
