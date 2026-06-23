@@ -143,6 +143,7 @@
 //! [`filter()`]: UnindexedParallelCollectorBase::filter
 
 mod adapters;
+mod custom;
 mod into_par_collector;
 mod par_collector_base;
 mod par_collector_by_mut;
@@ -151,6 +152,7 @@ pub mod plumbing;
 mod unindexed_par_collector_base;
 
 pub use adapters::*;
+pub use custom::*;
 pub use into_par_collector::*;
 pub use par_collector_base::*;
 pub use par_collector_by_mut::*;

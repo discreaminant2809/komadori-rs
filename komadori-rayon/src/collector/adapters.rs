@@ -1,4 +1,3 @@
-mod also;
 mod filter;
 mod fuse;
 mod into_collector;
@@ -13,7 +12,6 @@ mod tee_clone;
 mod tee_funnel;
 mod tee_mut;
 
-pub use also::*;
 pub use filter::*;
 pub use fuse::*;
 pub use into_collector::*;

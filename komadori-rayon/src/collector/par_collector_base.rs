@@ -4,9 +4,8 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Also, Fuse, IntoCollector, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, Map, MapOutput,
-    MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base,
-    assert_unindexed_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
+    Fuse, IntoCollector, IntoParallelCollectorBase, Map, MapOutput, MapWith, Take, Tee, TeeClone, TeeFunnel,
+    TeeMut, assert_par_collector, assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -533,76 +532,6 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         F: FnOnce(Self::Output) -> R,
     {
         assert_par_collector_base(MapOutput::new(self, f))
-    }
-
-    /// Overrides the unindexed path of this parallel collector with
-    /// another unindexed path of another unindexed parallel collector.
-    ///
-    /// Used when your parallel collector only supports the indexed path,
-    /// or you are dissatified with the implementation of the unindexed path.
-    ///
-    /// As a [`ParallelCollector<T>`], this adapter only requires
-    /// the first one to implement [`ParallelCollector<T>`],
-    /// but as an [`UnindexedParallelCollector<T>`],
-    /// the first one must implement [`ParallelCollector<T>`],
-    /// and the second one must implement [`UnindexedParallelCollector<T>`].
-    ///
-    /// The [`Output`] is a tuple containing the [`Output`]s of
-    /// this parallel collector followed by the other parallel collector.
-    /// It is usually not desired so it is recommended to use
-    /// [`map_output()`](Self::map_output) after this adapter.
-    ///
-    /// # Examples
-    ///
-    /// Coming soon!
-    // FIXME: Blocker: `fold()` or `nest_serial()`?
-    ///
-    /// [`Output`]: Self::Output
-    /// [`UnindexedParallelCollector<T>`]: super::UnindexedParallelCollector
-    #[inline]
-    fn also_unindexed<U>(self, unindexed: U) -> Also<Self, U::IntoParCollector>
-    where
-        Self: Sized,
-        U: IntoUnindexedParallelCollectorBase,
-    {
-        assert_unindexed_par_collector_base(Also::new(self, unindexed.into_par_collector()))
-    }
-
-    /// Overrides the indexed path of this parallel collector with
-    /// another indexed path of another parallel collector.
-    ///
-    /// Used when you are dissatified with the implementation of the indexed path.
-    ///
-    /// As a [`ParallelCollector<T>`], this adapter only requires
-    /// the second one to implement [`ParallelCollector<T>`],
-    /// but as an [`UnindexedParallelCollector<T>`],
-    /// the second one must implement [`ParallelCollector<T>`],
-    /// and the first one must implement [`UnindexedParallelCollector<T>`].
-    ///
-    /// The [`Output`] is a tuple containing the [`Output`]s of
-    /// the other parallel collector followed by this parallel collector
-    /// (a reverse compared to [`also_unindexed()`](Self::also_unindexed)).
-    /// It is usually not desired so it is recommended to use
-    /// [`map_output()`](Self::map_output) after this adapter.
-    ///
-    /// Although this method is in [`ParallelCollectorBase`],
-    /// it makes more sense to use this adapter on an
-    /// unindexed parallel collector.
-    ///
-    /// # Examples
-    ///
-    /// Coming soon!
-    // FIXME: Blocker: `fold()` or `nest_serial()`?
-    ///
-    /// [`Output`]: Self::Output
-    /// [`UnindexedParallelCollector<T>`]: super::UnindexedParallelCollector
-    #[inline]
-    fn also_indexed<U>(self, indexed: U) -> Also<U::IntoParCollector, Self>
-    where
-        Self: Sized,
-        U: IntoParallelCollectorBase,
-    {
-        assert_par_collector_base(Also::new(indexed.into_par_collector(), self))
     }
 
     /// Creates a (serial) collector from a parallel collector.
