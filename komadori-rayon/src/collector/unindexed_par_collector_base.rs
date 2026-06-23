@@ -2,8 +2,10 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
+use crate::collector::assert_unindexed_par_collector_base;
+
 use super::{
-    Filter, FilterWith, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
+    Filter, FilterWith, NestLocal, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -196,6 +198,37 @@ pub trait UnindexedParallelCollectorBase:
         P: Fn(&T) -> bool + Sync,
     {
         assert_unindexed_par_collector::<_, T>(TakeAnyWhile::new(self, pred))
+    }
+
+    /// Creates a parallel collector that collects all the outputs
+    /// from local collectors cloned to each serial reduction.
+    ///
+    /// `nest_local()` is usually used after [`ParReduce`](crate::iter::ParReduce).
+    ///
+    /// This adapter collects `T` if `C: IntoCollector<T>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, iter::ParReduce};
+    ///
+    /// let nums = (1..=5)
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         ParReduce::new(|v1, mut v2: Vec<_>| v1.append(&mut v2))
+    ///             .nest_local(vec![])
+    ///     );
+    ///
+    /// assert_eq!(nums, Some(vec![1, 2, 3, 4, 5]));
+    /// ```
+    #[inline]
+    fn nest_local<C>(self, local: C) -> NestLocal<Self, C::IntoCollector>
+    where
+        Self: UnindexedParallelCollector<C::Output> + Sized,
+        C: IntoCollectorBase<IntoCollector: Clone + Send>,
+    {
+        assert_unindexed_par_collector_base(NestLocal::new(self, local.into_collector()))
     }
 }
 
