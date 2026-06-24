@@ -12,6 +12,36 @@ use super::IntoParallelCollectorBase;
 ///
 /// This trait is not intended for use in bounds.
 /// Use [`IntoParallelCollectorBase`] and similar traits in trait bounds instead.
+///
+/// # Examples
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::prelude::*;
+///
+/// let mut nums = vec![1, 2];
+///
+/// (3..=6)
+///     .into_par_iter()
+///     .feed_into(nums.par_collector_mut());
+///
+/// assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+/// ```
+///
+/// If possible, you can use `&mut` instead of `.par_collector_mut()`:
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::prelude::*;
+///
+/// let mut nums = vec![1, 2];
+///
+/// (3..=6)
+///     .into_par_iter()
+///     .feed_into(&mut nums);
+///
+/// assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+/// ```
 pub trait ParallelCollectorByMut
 where
     for<'a> &'a mut Self: IntoParallelCollectorBase,

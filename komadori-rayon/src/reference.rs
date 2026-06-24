@@ -31,7 +31,7 @@ where
 /// methods, the underlying parallel collectors will **not** be "taken,"
 /// and can still be used afterwards.
 ///
-/// However, it is diddicult to know whether the parallel collector
+/// However, it is difficult to know whether the parallel collector
 /// has stopped collecting or not in this usage.
 /// Use [`fuse()`](ParallelCollectorBase::fuse) whenever possible.
 ///

@@ -139,7 +139,7 @@ pub use komadori::collector::{Collector, CollectorBase, IntoCollector, IntoColle
 /// [limitation]: (https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
 /// [workaround]: (https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
 pub trait DefineSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<'this, Self>> {
-    /// Which (indexed) consumer being produced?
+    /// Which serial collector being produced in the indexed path?
     type Serial: CollectorBase<Output: Send>;
 }
 
@@ -155,7 +155,7 @@ pub trait DefineSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<
 /// [limitation]: (https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
 /// [workaround]: (https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
 pub trait DefineUnindexedSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<'this, Self>> {
-    /// Which unindexed consumer being produced?
+    /// Which serial collector being produced in the unindexed path?
     type UnindexedSerial: CollectorBase<Output: Send>;
 }
 
@@ -288,6 +288,15 @@ pub trait Combiner<O> {
 /// uniquify_serial!(also_mod_name_for_indexed, unindexed = false);
 /// uniquify_serial!(mod_name_for_unindexed, unindexed = true);
 /// ```
+///
+/// If you want to make the generated module more public, you can do this:
+///
+/// ```
+/// pub(crate) mod crate_public {
+///     komadori_rayon::uniquify_serial!(private);
+///     pub use private::*;
+/// }
+/// ```
 #[macro_export]
 macro_rules! uniquify_serial {
     ($mod_name:ident, unindexed = false) => {
@@ -295,7 +304,7 @@ macro_rules! uniquify_serial {
         mod $mod_name {
             use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
 
-            use ::core::{any::Any, marker::PhantomData, ops::ControlFlow};
+            use ::core::{any::Any, marker::PhantomData, ops::ControlFlow, primitive::usize};
 
             type InvariantLtAndNoAutoTraits<'a, This> =
                 PhantomData<(fn(&'a mut This) -> &'a mut This, dyn Any)>;
@@ -384,7 +393,7 @@ macro_rules! uniquify_serial {
                 #[inline]
                 fn into_collector(self) -> Self::IntoCollector {
                     Serial {
-                        collector: self.consumer.into_collector(),
+                        collector: IntoCollectorBase::into_collector(self.consumer),
                         _marker: PhantomData,
                     }
                 }
@@ -398,7 +407,10 @@ macro_rules! uniquify_serial {
 
                 #[inline]
                 fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-                    let (consumer, combiner) = self.consumer.split_off_left_at(index);
+                    let (consumer, combiner) = plumbing::Consumer::split_off_left_at(
+                        &mut self.consumer, index
+                    );
+
                     (
                         Self {
                             consumer,
@@ -410,7 +422,7 @@ macro_rules! uniquify_serial {
 
                 #[inline]
                 fn break_hint(&self) -> ControlFlow<()> {
-                    self.consumer.break_hint()
+                    plumbing::Consumer::break_hint(&self.consumer)
                 }
             }
 
@@ -420,7 +432,7 @@ macro_rules! uniquify_serial {
             {
                 #[inline]
                 fn combine(self, left: &mut Output<'a, This, O>, right: Output<'a, This, O>) {
-                    self.0.combine(&mut left.output, right.output);
+                    plumbing::Combiner::combine(self.0, &mut left.output, right.output);
                 }
             }
 
@@ -433,14 +445,14 @@ macro_rules! uniquify_serial {
                 #[inline]
                 fn finish(self) -> Self::Output {
                     Output {
-                        output: self.collector.finish(),
+                        output: CollectorBase::finish(self.collector),
                         _marker: PhantomData,
                     }
                 }
 
                 #[inline]
                 fn break_hint(&self) -> ControlFlow<()> {
-                    self.collector.break_hint()
+                    CollectorBase::break_hint(&self.collector)
                 }
             }
 
@@ -450,18 +462,18 @@ macro_rules! uniquify_serial {
             {
                 #[inline]
                 fn collect(&mut self, item: T) -> ControlFlow<()> {
-                    self.collector.collect(item)
+                    Collector::collect(&mut self.collector, item)
                 }
 
                 #[inline]
                 fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-                    self.collector.collect_many(items)
+                    Collector::collect_many(&mut self.collector, items)
                 }
 
                 #[inline]
                 fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
                     Output {
-                        output: self.collector.collect_then_finish(items),
+                        output: Collector::collect_then_finish(self.collector, items),
                         _marker: PhantomData,
                     }
                 }
@@ -474,7 +486,7 @@ macro_rules! uniquify_serial {
         mod $mod_name {
             use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
 
-            use ::core::{any::Any, marker::PhantomData, ops::ControlFlow};
+            use ::core::{any::Any, marker::PhantomData, ops::ControlFlow, primitive::usize};
 
             type InvariantLtAndNoAutoTraits<'a, This> =
                 PhantomData<(fn(&'a mut This) -> &'a mut This, dyn Any)>;
@@ -557,7 +569,7 @@ macro_rules! uniquify_serial {
                 #[inline]
                 fn into_collector(self) -> Self::IntoCollector {
                     Serial {
-                        collector: self.consumer.into_collector(),
+                        collector: IntoCollectorBase::into_collector(self.consumer),
                         _marker: PhantomData,
                     }
                 }
@@ -571,7 +583,7 @@ macro_rules! uniquify_serial {
 
                 #[inline]
                 fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-                    let (consumer, combiner) = self.consumer.split_off_left_at(index);
+                    let (consumer, combiner) = plumbing::Consumer::split_off_left_at(&mut self.consumer, index);
                     (
                         Self {
                             consumer,
@@ -583,7 +595,7 @@ macro_rules! uniquify_serial {
 
                 #[inline]
                 fn break_hint(&self) -> ControlFlow<()> {
-                    self.consumer.break_hint()
+                    plumbing::Consumer::break_hint(&self.consumer)
                 }
             }
 
@@ -594,14 +606,14 @@ macro_rules! uniquify_serial {
                 #[inline]
                 fn split_off_left(&self) -> Self {
                     Self {
-                        consumer: self.consumer.split_off_left(),
+                        consumer: plumbing::UnindexedConsumer::split_off_left(&self.consumer),
                         _marker: PhantomData,
                     }
                 }
 
                 #[inline]
                 fn to_combiner(&self) -> Self::Combiner {
-                    Combiner(self.consumer.to_combiner())
+                    Combiner(plumbing::UnindexedConsumer::to_combiner(&self.consumer))
                 }
             }
 
@@ -611,7 +623,7 @@ macro_rules! uniquify_serial {
             {
                 #[inline]
                 fn combine(self, left: &mut Output<'a, This, O>, right: Output<'a, This, O>) {
-                    self.0.combine(&mut left.output, right.output);
+                    plumbing::Combiner::combine(self.0, &mut left.output, right.output);
                 }
             }
 
@@ -624,14 +636,14 @@ macro_rules! uniquify_serial {
                 #[inline]
                 fn finish(self) -> Self::Output {
                     Output {
-                        output: self.collector.finish(),
+                        output: CollectorBase::finish(self.collector),
                         _marker: PhantomData,
                     }
                 }
 
                 #[inline]
                 fn break_hint(&self) -> ControlFlow<()> {
-                    self.collector.break_hint()
+                    CollectorBase::break_hint(&self.collector)
                 }
             }
 
@@ -641,18 +653,18 @@ macro_rules! uniquify_serial {
             {
                 #[inline]
                 fn collect(&mut self, item: T) -> ControlFlow<()> {
-                    self.collector.collect(item)
+                    Collector::collect(&mut self.collector, item)
                 }
 
                 #[inline]
                 fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-                    self.collector.collect_many(items)
+                    Collector::collect_many(&mut self.collector, items)
                 }
 
                 #[inline]
                 fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
                     Output {
-                        output: self.collector.collect_then_finish(items),
+                        output: Collector::collect_then_finish(self.collector, items),
                         _marker: PhantomData,
                     }
                 }

@@ -1,6 +1,6 @@
 //! Parallel collectors for slice manipulation.
 //!
-//! This module is empty for now. More will be added alter.
+//! This module is empty for now. More will be added later.
 //!
 //! This module corresponds to [`std::slice`].
 

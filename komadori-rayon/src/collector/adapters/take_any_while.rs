@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// A parallel collector that accumulates items until it encounters
-/// an items that makess a given predicate `false` at *any* time.
+/// an item that makes a given predicate `false` at *any* time.
 ///
 /// This `struct` is created by [`UnindexedParallelCollectorBase::take_any_while()`].
 /// See its documentation for more.

@@ -169,7 +169,7 @@ pub trait UnindexedParallelCollectorBase:
     }
 
     /// Creates a parallel collector that accumulates items until it encounters
-    /// an items that makess a given predicate `false` at *any* time.
+    /// an item that makes a given predicate `false` at *any* time.
     ///
     /// `take_any_while()` will **always** use the unindexed path
     /// of the underlying parallel collector,
@@ -297,6 +297,6 @@ pub trait UnindexedParallelCollector<T>:
 }
 
 impl<C, T> UnindexedParallelCollector<T> for C where
-    C: UnindexedParallelCollectorBase<Serial: Collector<T>, UnindexedSerial: Collector<T>>
+    C: UnindexedParallelCollectorBase<Serial: Collector<T>, UnindexedSerial: Collector<T>> + ?Sized
 {
 }

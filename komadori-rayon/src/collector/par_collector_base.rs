@@ -580,7 +580,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
 /// You cannot implement this trait directly. You should instead define the item type
 /// of serial collectors produced by consumers of this parallel collector.
 pub trait ParallelCollector<T>: ParallelCollectorBase<Serial: Collector<T>> {}
-impl<C, T> ParallelCollector<T> for C where C: ParallelCollectorBase<Serial: Collector<T>> {}
+impl<C, T> ParallelCollector<T> for C where C: ParallelCollectorBase<Serial: Collector<T>> + ?Sized {}
 
 // For anyone wanna do this:
 // ```
