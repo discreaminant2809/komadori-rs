@@ -5,7 +5,7 @@ use komadori::prelude::*;
 use crate::collector::assert_unindexed_par_collector_base;
 
 use super::{
-    Filter, FilterWith, NestLocal, NestLocalWith, ParallelCollectorBase, TakeAnyWhile,
+    Filter, FilterWith, FoldLocal, NestLocal, NestLocalWith, ParallelCollectorBase, TakeAnyWhile,
     assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
@@ -284,6 +284,52 @@ pub trait UnindexedParallelCollectorBase:
         C: IntoCollectorBase,
     {
         assert_unindexed_par_collector_base(NestLocalWith::new(self, local, inner_f))
+    }
+
+    /// Creates a parallel collector that uses a closure and local states
+    /// to collect items in each local reduction.
+    ///
+    /// The underlying parallel collector will receive a tuple of both local states
+    /// after each local reduction ends.
+    ///
+    /// `fold_local()` is usually used after [`ParReduce`](crate::iter::ParReduce).
+    /// You can also use [`map()`](ParallelCollectorBase::map) between the two
+    /// to get rid of the tuple.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, iter::ParReduce};
+    ///
+    /// let sentence = ["there", "are", "a", "noble", "and", "a", "singer"]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         ParReduce::new(|piece1, piece2: String| {
+    ///             piece1.push(' ');
+    ///             *piece1 += &piece2;
+    ///         })
+    ///         .map(|(_, piece)| piece)
+    ///         .fold_local(true, String::new, |is_first, piece, word| {
+    ///             if !std::mem::replace(is_first, false) {
+    ///                 piece.push(' ');
+    ///             }
+    ///             *piece += word;
+    ///         })
+    ///         .map_output(Option::unwrap_or_default)
+    ///     );
+    ///
+    /// assert_eq!(sentence, "there are a noble and a singer");
+    /// ```
+    #[inline]
+    fn fold_local<L1, FL2, L2, F, T>(self, local1: L1, local2_f: FL2, f: F) -> FoldLocal<Self, L1, FL2, F>
+    where
+        Self: UnindexedParallelCollector<(L1, L2)> + Sized,
+        L1: Clone + Send,
+        FL2: Fn() -> L2 + Sync,
+        F: Fn(&mut L1, &mut L2, T) + Sync,
+    {
+        assert_unindexed_par_collector::<_, T>(FoldLocal::new(self, local1, local2_f, f))
     }
 }
 
