@@ -5,7 +5,8 @@ use komadori::prelude::*;
 use crate::collector::assert_unindexed_par_collector_base;
 
 use super::{
-    Filter, FilterWith, NestLocal, ParallelCollectorBase, TakeAnyWhile, assert_unindexed_par_collector,
+    Filter, FilterWith, NestLocal, NestLocalWith, ParallelCollectorBase, TakeAnyWhile,
+    assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -229,6 +230,60 @@ pub trait UnindexedParallelCollectorBase:
         C: IntoCollectorBase<IntoCollector: Clone + Send>,
     {
         assert_unindexed_par_collector_base(NestLocal::new(self, local.into_collector()))
+    }
+
+    /// Creates a parallel collector that collects all the outputs
+    /// from local collectors created from a function to each serial reduction.
+    ///
+    /// `nest_local_with()` is usually used after [`ParReduce`](crate::iter::ParReduce).
+    ///
+    /// This adapter collects `T` if `C: IntoCollector<T>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori::prelude::*;
+    /// use komadori_rayon::{prelude::*, iter::ParReduce};
+    /// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+    ///
+    /// let nums = (1..=5)
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         // A rough recreation of `take_any_while()`!
+    ///         ParReduce::new(|v1, mut v2: Vec<_>| v1.append(&mut v2))
+    ///             .nest_local_with(Arc::new(AtomicBool::new(false)), |stopped| {
+    ///                 vec![]
+    ///                     .into_collector()
+    ///                     .take_while(move |&num| {
+    ///                         if stopped.load(Ordering::Relaxed) {
+    ///                             false
+    ///                         } else if num <= 3 {
+    ///                             true
+    ///                         } else {
+    ///                             stopped.store(true, Ordering::Relaxed);
+    ///                             false
+    ///                         }
+    ///                     })
+    ///             })
+    ///             .map_output(Option::unwrap_or_default)
+    ///     );
+    ///
+    /// // Honestly we can't guarantee anything other than
+    /// // every number must be less than or equal to 3
+    /// for num in nums {
+    ///     assert!(num <= 3, "{num} is greater than 3");
+    /// }
+    /// ```
+    #[inline]
+    fn nest_local_with<L, F, C>(self, local: L, inner_f: F) -> NestLocalWith<Self, L, F>
+    where
+        Self: UnindexedParallelCollector<C::Output> + Sized,
+        L: Clone + Send,
+        F: Fn(L) -> C + Sync,
+        C: IntoCollectorBase,
+    {
+        assert_unindexed_par_collector_base(NestLocalWith::new(self, local, inner_f))
     }
 }
 
