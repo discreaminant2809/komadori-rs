@@ -128,6 +128,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// You still have to consider such collectors as being "taken" and only
     /// call [`finish()`](Self::finish) on them.
     ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
+    ///
     /// # Examples
     ///
     /// Coming soon!
@@ -181,6 +183,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
     /// helps migrate this problem also.
     ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
+    ///
     /// # Examples
     ///
     /// Indexed path:
@@ -231,18 +235,18 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(Take::new(self, n))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects the item
-    /// copied with the [`Copy`] trait before the second collector collects it.
+    /// For each item collected, the first parallel collector collects the item
+    /// copied with the [`Copy`] trait before the second parallel collector collects it.
     ///
-    /// `tee()` only stops when **both** collectors have stopped.
+    /// `tee()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `T`, both collectors must be able to
-    /// collect `T`, and `T` must implement [`Copy`].
+    /// This adapter collects `T` if both parallel collectors
+    /// collect `T` and `T` is [`Copy`].
     ///
     /// The [`Output`](Self::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
@@ -272,20 +276,20 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(tee(self, other.into_par_collector()))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects the item
-    /// cloned with the [`Clone`] trait before the second collector collects it.
+    /// For each item collected, the first parallel collector collects the item
+    /// cloned with the [`Clone`] trait before the second parallel collector collects it.
     /// If one of them has stopped, the implementation will **not** clone
     /// the item, and will instead feed it into the other for optimization.
     ///
-    /// `tee_clone()` only stops when **both** collectors have stopped.
+    /// `tee_clone()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `T`, both collectors must implement
-    /// [`ParallelCollector<T>`](super::ParallelCollector), and `T` must implement [`Clone`].
+    /// This adapter collects `T` if both parallel collectors collect `T`
+    /// and `T` implements [`Clone`].
     ///
     /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
@@ -320,23 +324,21 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(tee_clone(self, other.into_par_collector()))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects
-    /// the mutable reference of the item before the second collector also
+    /// For each item collected, the first parallel collector collects
+    /// the mutable reference of the item before the second parallel collector also
     /// collects the mutable reference of it.
     ///
-    /// `tee_mut()` only stops when **both** collectors have stopped.
+    /// `tee_mut()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `&'i mut T`,
-    /// the first collector must implement
+    /// This adapter collects `&'i mut T` if the first parallel collector implements
     /// [`for<'a> ParallelCollector<&'a mut T>`](super::ParallelCollector)
-    /// (a collector that can collect a mutable reference with any lifetime),
-    /// and the second collector must implement
-    /// [`ParallelCollector<&'i mut T>`](super::ParallelCollector).
+    /// (a parallel collector that can collect a mutable reference with any lifetime),
+    /// and the second parallel collector collects `&'i mut T`.
     ///
     /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
@@ -371,21 +373,20 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(tee_mut(self, other.into_par_collector()))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects
-    /// the mutable reference of the item before the second collector collects it.
+    /// For each item collected, the first parallel collector collects
+    /// the mutable reference of the item before the second parallel collector collects it.
     ///
-    /// `tee_funnel()` only stops when **both** collectors have stopped.
+    /// `tee_funnel()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `T`,
-    /// the first collector must implement
+    /// This adapter collects `T` if the first parallel collector implements
     /// [`for<'a> ParallelCollector<&'a mut T>`](super::ParallelCollector)
-    /// (a collector that can collect a mutable reference with any lifetime),
-    /// and the second collector must implement [`ParallelCollector<T>`](super::ParallelCollector).
+    /// (a parallel collector that can collect a mutable reference with any lifetime),
+    /// and the second parallel collector collects `T`.
     ///
     /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
@@ -426,6 +427,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// but you have a parallel collector that collects `T`. In that case,
     /// you can use `map()` to transform `U` into `T` before passing it along.
     ///
+    /// This adapter collects `U`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -453,6 +456,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
 
     /// Same as [`map()`](Self::map), but with a state that will either be cloned
     /// or created from a factory (or both) to each serial execution.
+    ///
+    /// This adapter collects `U`.
     ///
     /// # Examples
     ///
@@ -506,6 +511,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// This is used when your output gets "ugly" after a chain of adaptors,
     /// or when you do not want to break your API by (accidentally) rearranging adaptors,
     /// or when you just want a different output type for your collector.
+    ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
     ///
     /// # Examples
     ///

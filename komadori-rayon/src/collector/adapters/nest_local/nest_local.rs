@@ -4,7 +4,7 @@ use komadori::prelude::*;
 
 use super::{DefineLocal, NestLocalBase, SplittableLocal};
 
-/// Creates a parallel collector that collects all the outputs
+/// A parallel collector that collects all the outputs
 /// from local collectors cloned to each serial reduction.
 ///
 /// This `struct` is created by

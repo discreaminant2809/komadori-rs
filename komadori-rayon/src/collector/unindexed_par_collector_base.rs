@@ -81,6 +81,8 @@ pub trait UnindexedParallelCollectorBase:
     /// of the underlying parallel collector,
     /// because the number of items is nondeterministic now.
     ///
+    /// This adapter collects `T`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -110,6 +112,8 @@ pub trait UnindexedParallelCollectorBase:
 
     /// Same as [`filter()`](Self::filter), but with a state that will either be cloned
     /// or created from a factory (or both) to each serial execution.
+    ///
+    /// This adapter collects `T`.
     ///
     /// # Examples
     ///
@@ -175,6 +179,8 @@ pub trait UnindexedParallelCollectorBase:
     /// of the underlying parallel collector,
     /// because the number of items is nondeterministic now.
     ///
+    /// This adapter collects `T`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -203,6 +209,9 @@ pub trait UnindexedParallelCollectorBase:
 
     /// Creates a parallel collector that collects all the outputs
     /// from local collectors cloned to each serial reduction.
+    ///
+    /// The underlying parallel collector will receive an output of the cloned local collector
+    /// after each local reduction ends.
     ///
     /// `nest_local()` is usually used after [`ParReduce`](crate::iter::ParReduce).
     ///
@@ -234,6 +243,9 @@ pub trait UnindexedParallelCollectorBase:
 
     /// Creates a parallel collector that collects all the outputs
     /// from local collectors created from a function to each serial reduction.
+    ///
+    /// The underlying parallel collector will receive an output of the created local collector
+    /// after each local reduction ends.
     ///
     /// `nest_local_with()` is usually used after [`ParReduce`](crate::iter::ParReduce).
     ///
@@ -295,6 +307,8 @@ pub trait UnindexedParallelCollectorBase:
     /// `fold_local()` is usually used after [`ParReduce`](crate::iter::ParReduce).
     /// You can also use [`map()`](ParallelCollectorBase::map) between the two
     /// to get rid of the tuple.
+    ///
+    /// This adapter collects `T`.
     ///
     /// # Examples
     ///
