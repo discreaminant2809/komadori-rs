@@ -65,6 +65,12 @@ where
         self.collector.finish()
     }
 
+    #[inline]
+    fn break_hint(&self) -> ControlFlow<()> {
+        self.splittable_local.break_hint()?;
+        self.collector.break_hint()
+    }
+
     fn parts<'a>(
         &'a mut self,
         len: usize,

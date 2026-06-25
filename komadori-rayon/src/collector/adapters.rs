@@ -1,6 +1,7 @@
 mod enumerate;
 mod filter;
 mod fuse;
+mod indexed_only;
 mod into_collector;
 mod map;
 mod map_output;
@@ -16,6 +17,7 @@ mod tee_mut;
 pub use enumerate::*;
 pub use filter::*;
 pub use fuse::*;
+pub use indexed_only::*;
 pub use into_collector::*;
 pub use map::*;
 pub use map_output::*;

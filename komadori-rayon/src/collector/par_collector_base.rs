@@ -4,8 +4,9 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Enumerate, Fuse, IntoCollector, IntoParallelCollectorBase, Map, MapOutput, MapWith, Take, Tee, TeeClone,
-    TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
+    Enumerate, Fuse, IndexedOnly, IntoCollector, IntoParallelCollectorBase, Map, MapOutput, MapWith, Take,
+    Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base, tee, tee_clone,
+    tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -551,13 +552,13 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// [`feed_into()`](crate::iter::RayonParallelIteratorExt::feed_into)
     /// (use
     /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
-    /// instead)
+    /// instead).
     ///
     /// # Examples
     ///
     /// ```
     /// use rayon::prelude::*;
-    /// use komadori_rayon::{prelude::*, iter::ParCount};
+    /// use komadori_rayon::prelude::*;
     ///
     /// let indexed_nums = [1, 6, 4, 2]
     ///     .into_par_iter()
@@ -575,6 +576,47 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         Self: Sized,
     {
         assert_par_collector_base(Enumerate::new(self))
+    }
+
+    /// Creates a parallel collector that restricts to the indexed path only.
+    ///
+    /// `indexed_only()` can be used as a "lint" to prevent accidental fallback
+    /// to the unindexed path. For example, [`take()`](Self::take)'s unindexed path
+    /// behaves very differently from its indexed path and is less efficient,
+    /// so this adapter can be used to prevent the used of such path.
+    ///
+    /// `indexed_only()` is **only** an indexed parallel collector and can
+    /// only provide the indexed path. It cannot be used whenever
+    /// an unindexed parallel collector is expected, such as
+    /// [`filter()`](super::UnindexedParallelCollectorBase::filter) and
+    /// [`feed_into()`](crate::iter::RayonParallelIteratorExt::feed_into)
+    /// (use
+    /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
+    /// instead).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let guaranteed_first_three = [1, 5, 4, 2, 3]
+    ///     .into_par_iter()
+    ///     .feed_into_indexed(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .take(3)
+    ///             .indexed_only()
+    ///     );
+    ///
+    /// assert_eq!(guaranteed_first_three, [1, 5, 4]);
+    /// ```
+    #[inline]
+    fn indexed_only(self) -> IndexedOnly<Self>
+    where
+        Self: Sized,
+    {
+        assert_par_collector_base(IndexedOnly::new(self))
     }
 
     /// Creates a (serial) collector from a parallel collector.

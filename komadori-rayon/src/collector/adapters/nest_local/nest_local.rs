@@ -49,6 +49,11 @@ where
     C: CollectorBase + Clone + Send,
 {
     #[inline]
+    fn break_hint(&self) -> ControlFlow<()> {
+        self.collector.as_ref().unwrap().break_hint()
+    }
+
+    #[inline]
     fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
         Anchor {
             collector: self.collector.as_ref().expect(TAKEN_ERR_MSG).clone(),

@@ -45,6 +45,11 @@ where
         self.collector.finish()
     }
 
+    #[inline]
+    fn break_hint(&self) -> ControlFlow<()> {
+        self.collector.break_hint()
+    }
+
     fn parts<'a>(
         &'a mut self,
         len: usize,
