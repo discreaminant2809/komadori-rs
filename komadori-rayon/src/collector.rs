@@ -103,6 +103,8 @@
 //! otherwise the behavior is unspecified.
 //! However, this is just a hint, and the callers can still freely
 //! split exceeding the reported "maximum length."
+//! That length also does **not** imply that the parallel collector stops after
+//! that amount of items, even if it is less than the feeding length.
 //!
 //! For a serial collector obtained by a consumer of [`parts()`] and [`take_parts()`],
 //! at a time, you must feed it at **most** the maximum amount

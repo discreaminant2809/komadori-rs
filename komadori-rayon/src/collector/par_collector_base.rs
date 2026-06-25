@@ -4,8 +4,8 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Fuse, IntoCollector, IntoParallelCollectorBase, Map, MapOutput, MapWith, Take, Tee, TeeClone, TeeFunnel,
-    TeeMut, assert_par_collector, assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
+    Enumerate, Fuse, IntoCollector, IntoParallelCollectorBase, Map, MapOutput, MapWith, Take, Tee, TeeClone,
+    TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -539,6 +539,42 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         F: FnOnce(Self::Output) -> R,
     {
         assert_par_collector_base(MapOutput::new(self, f))
+    }
+
+    /// Creates a parallel collector that feeds the underlying collector
+    /// with the position of an item alongside with the item.
+    ///
+    /// `enumerate()` is **only** an indexed parallel collector and can
+    /// only provide the indexed path. It cannot be used whenever
+    /// an unindexed parallel collector is expected, such as
+    /// [`filter()`](super::UnindexedParallelCollectorBase::filter) and
+    /// [`feed_into()`](crate::iter::RayonParallelIteratorExt::feed_into)
+    /// (use
+    /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
+    /// instead)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, iter::ParCount};
+    ///
+    /// let indexed_nums = [1, 6, 4, 2]
+    ///     .into_par_iter()
+    ///     .feed_into_indexed(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .enumerate()
+    ///     );
+    ///
+    /// assert_eq!(indexed_nums, [(0, 1), (1, 6), (2, 4), (3, 2)]);
+    /// ```
+    #[inline]
+    fn enumerate(self) -> Enumerate<Self>
+    where
+        Self: Sized,
+    {
+        assert_par_collector_base(Enumerate::new(self))
     }
 
     /// Creates a (serial) collector from a parallel collector.

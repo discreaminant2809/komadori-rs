@@ -1,3 +1,4 @@
+mod enumerate;
 mod filter;
 mod fuse;
 mod into_collector;
@@ -12,6 +13,7 @@ mod tee_clone;
 mod tee_funnel;
 mod tee_mut;
 
+pub use enumerate::*;
 pub use filter::*;
 pub use fuse::*;
 pub use into_collector::*;
