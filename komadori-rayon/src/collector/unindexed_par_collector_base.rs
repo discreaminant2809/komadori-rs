@@ -6,7 +6,7 @@ use crate::collector::assert_unindexed_par_collector_base;
 
 use super::{
     Filter, FilterWith, FoldLocal, NestLocal, NestLocalWith, ParallelCollectorBase, TakeAnyWhile,
-    assert_unindexed_par_collector,
+    UnindexedOnly, assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -344,6 +344,48 @@ pub trait UnindexedParallelCollectorBase:
         F: Fn(&mut L1, &mut L2, T) + Sync,
     {
         assert_unindexed_par_collector::<_, T>(FoldLocal::new(self, local1, local2_f, f))
+    }
+
+    /// Creates a parallel collector that restricts to the unindexed path only.
+    ///
+    /// No matter whichever you want the indexed or unindexed path,
+    /// `unindexed_only()` always uses the unindexed path of the underlying parallel collector.
+    ///
+    /// This adapter might be useful if you want to benchmark the unindexed path explicitly
+    /// without the code implicitly switching to the indexed path.
+    /// This is also useful if you want consistent semantics, such as you want
+    /// [`take(n)`](ParallelCollectorBase::take) to always take random `n` items
+    /// instead of the first `n` for the indexed path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    /// use std::assert_matches;
+    ///
+    /// let three_nums = [1, 5, 4, 2, 3]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .take(3)
+    ///             .unindexed_only()
+    ///     );
+    ///
+    /// // Now we can only assume that there are three numbers
+    /// // that come from random positions.
+    /// assert_eq!(three_nums.len(), 3);
+    /// for num in three_nums {
+    ///     assert_matches!(num, 1..=5, "{num} is not in between 1 and 5");
+    /// }
+    /// ```
+    #[inline]
+    fn unindexed_only(self) -> UnindexedOnly<Self>
+    where
+        Self: Sized,
+    {
+        assert_unindexed_par_collector_base(UnindexedOnly::new(self))
     }
 }
 

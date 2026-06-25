@@ -13,6 +13,7 @@ mod tee_base;
 mod tee_clone;
 mod tee_funnel;
 mod tee_mut;
+mod unindexed_only;
 
 pub use enumerate::*;
 pub use filter::*;
@@ -28,6 +29,7 @@ pub use tee::Tee;
 pub use tee_clone::TeeClone;
 pub use tee_funnel::TeeFunnel;
 pub use tee_mut::TeeMut;
+pub use unindexed_only::*;
 
 pub(super) use tee::tee;
 pub(super) use tee_base::*;
