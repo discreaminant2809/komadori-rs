@@ -1,5 +1,6 @@
 mod enumerate;
 mod filter;
+mod filter_map;
 mod fuse;
 mod indexed_only;
 mod into_collector;
@@ -17,6 +18,7 @@ mod unindexed_only;
 
 pub use enumerate::*;
 pub use filter::*;
+pub use filter_map::*;
 pub use fuse::*;
 pub use indexed_only::*;
 pub use into_collector::*;

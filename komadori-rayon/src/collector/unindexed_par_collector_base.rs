@@ -5,8 +5,8 @@ use komadori::prelude::*;
 use crate::collector::assert_unindexed_par_collector_base;
 
 use super::{
-    Filter, FilterWith, FoldLocal, NestLocal, NestLocalWith, ParallelCollectorBase, TakeAnyWhile,
-    UnindexedOnly, assert_unindexed_par_collector,
+    Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith, ParallelCollectorBase,
+    TakeAnyWhile, UnindexedOnly, assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -170,6 +170,100 @@ pub trait UnindexedParallelCollectorBase:
         P: Fn(&mut L1, &mut L2, &T) -> bool + Sync,
     {
         assert_unindexed_par_collector::<_, T>(FilterWith::new(self, local1, local2_f, pred))
+    }
+
+    /// A parallel collector that both filters and maps each item before collecting.
+    ///
+    /// The underlying parallel collector only collects `item`s for which
+    /// the given predicate returns [`Some(item)`](Some).
+    ///
+    /// Note that even if an item is not accumulated, this adapter will still return
+    /// [`Continue(())`] as long as the underlying parallel collector does.
+    ///
+    /// `filter_map()` will **always** use the unindexed path
+    /// of the underlying parallel collector,
+    /// because the number of items is nondeterministic now.
+    ///
+    /// This adapter collects `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let nums = ["1", "-2", "three", "4"]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .filter_map(|s: &str| s.parse::<i32>().ok())
+    ///     );
+    ///
+    /// assert_eq!(nums, [1, -2, 4]);
+    /// ```
+    ///
+    /// [`Continue(())`]: ControlFlow::Continue
+    #[inline]
+    fn filter_map<P, T, R>(self, pred: P) -> FilterMap<Self, P>
+    where
+        Self: UnindexedParallelCollector<R> + Sized,
+        P: Fn(T) -> Option<R> + Sync,
+    {
+        assert_unindexed_par_collector::<_, T>(FilterMap::new(self, pred))
+    }
+
+    /// Same as [`filter_map()`](Self::filter_map), but with a state that will either be cloned
+    /// or created from a factory (or both) to each serial execution.
+    ///
+    /// This adapter collects `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    /// use komadori::prelude::*;
+    /// use std::sync::mpsc::channel;
+    ///
+    /// let (sender, receiver) = channel();
+    ///
+    /// let nums = ["1", "-2", "three", "4"]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .filter_map_with(
+    ///                 sender, || {},
+    ///                 |sender, _, s: &str| match s.parse::<i32>() {
+    ///                     Ok(num) => Some(num),
+    ///                     Err(_) => {
+    ///                         sender.send(s);
+    ///                         None
+    ///                     }
+    ///                 },
+    ///             )
+    ///     );
+    ///
+    /// let mut nans = receiver.iter().feed_into(vec![]);
+    ///
+    /// assert_eq!(nums, [1, -2, 4]);
+    /// assert_eq!(nans, ["three"]);
+    /// ```
+    #[inline]
+    fn filter_map_with<L1, FL2, L2, P, T, R>(
+        self,
+        local1: L1,
+        local2_f: FL2,
+        pred: P,
+    ) -> FilterMapWith<Self, L1, FL2, P>
+    where
+        Self: UnindexedParallelCollector<R> + Sized,
+        L1: Clone + Send,
+        FL2: Fn() -> L2 + Sync,
+        P: Fn(&mut L1, &mut L2, T) -> Option<R> + Sync,
+    {
+        assert_unindexed_par_collector::<_, T>(FilterMapWith::new(self, local1, local2_f, pred))
     }
 
     /// Creates a parallel collector that accumulates items until it encounters
