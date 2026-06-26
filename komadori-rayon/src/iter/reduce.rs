@@ -23,6 +23,8 @@ use crate::{
 /// two items are fed into the closure, the first one is left compared to
 /// the second one (the "right" value).
 ///
+/// This parallel collector collects `T`.
+///
 /// # Examples
 ///
 /// ```
