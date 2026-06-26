@@ -4,9 +4,9 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Cloning, Enumerate, Fuse, IndexedOnly, IntoCollector, IntoParallelCollectorBase, Map, MapOutput, MapWith,
-    Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base, tee, tee_clone,
-    tee_funnel, tee_mut,
+    Cloning, Copying, Enumerate, Fuse, IndexedOnly, IntoCollector, IntoParallelCollectorBase, Map, MapOutput,
+    MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base, tee,
+    tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -640,6 +640,25 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         Self: Sized,
     {
         assert_par_collector_base(Cloning::new(self))
+    }
+
+    /// Creates a parallel collector that copies every collected item.
+    ///
+    /// Many collectors may already have implementations for references, such as collections.
+    /// In this case, you do not need this adapter.
+    ///
+    /// This adapter collects `&T` and `&mut T` if the underlying parallel collector
+    /// collects `T` and `T` implements [`Copy`].
+    ///
+    /// # Examples
+    ///
+    /// Coming soon!
+    #[inline]
+    fn copying(self) -> Copying<Self>
+    where
+        Self: Sized,
+    {
+        assert_par_collector_base(Copying::new(self))
     }
 
     /// Creates a (serial) collector from a parallel collector.
