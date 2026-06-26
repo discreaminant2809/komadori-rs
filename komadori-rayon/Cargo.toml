@@ -17,6 +17,7 @@ rayon = { version = "1.11.0", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = "0.8.2"
+par-iter = "2.0.0"
 proptest = "1.11.0"
 rand = "0.10.1"
 
@@ -48,3 +49,6 @@ harness = false
 name = "max_vec"
 required-features = ["rayon"]
 harness = false
+
+[[example]]
+name = "par_iter_crate"
