@@ -1,3 +1,4 @@
+mod cloning;
 mod enumerate;
 mod filter;
 mod filter_map;
@@ -16,6 +17,7 @@ mod tee_funnel;
 mod tee_mut;
 mod unindexed_only;
 
+pub use cloning::*;
 pub use enumerate::*;
 pub use filter::*;
 pub use filter_map::*;
