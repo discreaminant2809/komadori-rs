@@ -586,6 +586,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// to the unindexed path. For example, [`take()`](Self::take)'s unindexed path
     /// behaves very differently from its indexed path and is less efficient,
     /// so this adapter can be used to prevent the used of such path.
+    /// However, it does **not** alter the path the upstream (which provides items
+    /// for the parallel collector) chooses.
     ///
     /// `indexed_only()` is **only** an indexed parallel collector and can
     /// only provide the indexed path. It cannot be used whenever

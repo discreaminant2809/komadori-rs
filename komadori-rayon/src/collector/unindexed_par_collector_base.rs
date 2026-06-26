@@ -442,14 +442,16 @@ pub trait UnindexedParallelCollectorBase:
 
     /// Creates a parallel collector that restricts to the unindexed path only.
     ///
-    /// No matter whichever you want the indexed or unindexed path,
+    /// No matter whichever path (indexed or unindexed) you ask it for,
     /// `unindexed_only()` always uses the unindexed path of the underlying parallel collector.
+    /// However, it does **not** alter the path the upstream (which provides items
+    /// for the parallel collector) chooses.
     ///
     /// This adapter might be useful if you want to benchmark the unindexed path explicitly
     /// without the code implicitly switching to the indexed path.
     /// This is also useful if you want consistent semantics, such as you want
-    /// [`take(n)`](ParallelCollectorBase::take) to always take random `n` items
-    /// instead of the first `n` for the indexed path.
+    /// [`take(n)`](ParallelCollectorBase::take) to always take `n` random items
+    /// instead of the first `n` items for the indexed path.
     ///
     /// This adapter collects `T` if the underlying parallel collector collects `T`.
     ///

@@ -17,6 +17,9 @@ use super::{
 /// This can also be used as an unindexed parallel collector,
 /// but you can override the unindexed path with [`also_unindexed()`](Self::also_unindexed).
 ///
+/// Be aware that the order the closures are called is unspecified,
+/// so you should not rely on it.
+///
 /// # Examples
 ///
 /// ```
@@ -55,6 +58,8 @@ pub struct Custom<S, BH, I, IF, IC> {
 /// A custom parallel collector built from existing ones,
 /// with distinct indexed and unindexed paths from
 /// two different parallel collectors.
+///
+/// This `struct` is created by [`Custom::also_unindexed()`].
 ///
 /// # Examples
 ///
@@ -97,7 +102,11 @@ pub struct Custom<S, BH, I, IF, IC> {
 ///
 /// let set = [1, 4, 5, 4, 3, 1, 2]
 ///     .into_par_iter()
-///     .feed_into(hash_set_par_collector().unindexed_only());
+///     .feed_into(
+///         hash_set_par_collector()
+///             // To test the unindexed path!
+///             .unindexed_only()
+///     );
 ///
 /// assert_eq!(set, HashSet::from([1, 2, 3, 4, 5]));
 /// ```
@@ -120,7 +129,10 @@ where
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
 {
-    /// Creates a new instance of this parallel collector.
+    /// Creates a new instance of this parallel collector with a state,
+    /// a closure that determines whether to stop,
+    /// a closure that provides an existing parallel collector,
+    /// and a closure that commits its output back to the state.
     pub fn new(state: S, break_hint: BH, indexed_f: IF, indexed_commit: IC) -> Self {
         Self {
             state,
@@ -131,7 +143,9 @@ where
         }
     }
 
-    /// Creates a new instance of [`CustomAlsoUnindexed`] from this parallel collector.
+    /// Creates a new instance of [`CustomAlsoUnindexed`] from this parallel collector
+    /// with a closure that provides an existing unindexed parallel collector,
+    /// and a closure that commits its output back to the state.
     pub fn also_unindexed<U, UF, UC>(
         self,
         unindexed_f: UF,
