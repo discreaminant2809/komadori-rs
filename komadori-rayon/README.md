@@ -130,6 +130,8 @@ if you want to delve into how parallel collectors work.
   so you have to drive parallel collectors by yourself, or wait until this crate
   add more integrations with other thread pools.
 
+  See [this example][par-iter-example].
+
 - **`unstable`** — Enables experimental and unstable features.
   Items gated behind this feature do **not** follow normal semver guarantees
   and may change or be removed at any time.
@@ -139,3 +141,4 @@ if you want to delve into how parallel collectors work.
 [`ParallelCollector`]: https://docs.rs/komadori-rayon/latest/komadori-rayon/collector/trait.ParallelCollector.html
 [`feed_into()`]: https://docs.rs/komadori-rayon/latest/komadori-rayon/iter/trait.RayonParallelIteratorExt.html#method.feed_into
 [max_vec_bench_mark]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/benches/max_vec.rs
+[par-iter-example]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/examples/par_iter_crate
