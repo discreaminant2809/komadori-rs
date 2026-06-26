@@ -9,7 +9,7 @@ description = "Multi-reduction library. Provides a composable, declarative way t
 readme = "README.md"
 categories = ["concurrency", "rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
 keywords = ["rayon", "parallelism", "collector", "fold", "multi-reduction"]
-exclude = ["*.md"] # We have some notes that should be excluded.
+exclude = ["DESIGN_NOTES.md"] # Not worth including anyway.
 
 [dependencies]
 komadori = { version = "0.7.0" }
