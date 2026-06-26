@@ -258,7 +258,7 @@ mod sum {
 
     pub struct Combiner(());
 
-    pub type Serial<Num> = komadori::num::Adding<Num>;
+    pub type Serial<Num> = komadori::num::IntoSum<Num>;
 
     impl<Num> Consumer<Num> {
         #[inline]
@@ -267,23 +267,24 @@ mod sum {
         }
     }
 
-    impl<PrimTy> IntoCollectorBase for Consumer<PrimTy>
+    impl<Num> IntoCollectorBase for Consumer<Num>
     where
-        PrimTy: Adding<Output = PrimTy>,
+        Serial<Num>: Default + CollectorBase<Output = Num>,
     {
-        type Output = PrimTy;
+        type Output = Num;
 
-        type IntoCollector = PrimTy::Adding;
+        type IntoCollector = Serial<Num>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
-            <PrimTy>::adding()
+            Serial::default()
         }
     }
 
-    impl<PrimTy> plumbing::Consumer for Consumer<PrimTy>
+    impl<Num> plumbing::Consumer for Consumer<Num>
     where
-        PrimTy: Adding<Output = PrimTy> + AddAssign + Send,
+        Serial<Num>: Default + CollectorBase<Output = Num>,
+        Num: AddAssign + Send,
     {
         type Combiner = Combiner;
 
@@ -293,9 +294,10 @@ mod sum {
         }
     }
 
-    impl<PrimTy> UnindexedConsumer for Consumer<PrimTy>
+    impl<Num> UnindexedConsumer for Consumer<Num>
     where
-        PrimTy: Adding<Output = PrimTy> + AddAssign + Send,
+        Serial<Num>: Default + CollectorBase<Output = Num>,
+        Num: AddAssign + Send,
     {
         #[inline]
         fn split_off_left(&self) -> Self {
@@ -308,12 +310,12 @@ mod sum {
         }
     }
 
-    impl<PrimTy> plumbing::Combiner<PrimTy> for Combiner
+    impl<Num> plumbing::Combiner<Num> for Combiner
     where
-        PrimTy: AddAssign,
+        Num: AddAssign,
     {
         #[inline]
-        fn combine(self, left: &mut PrimTy, right: PrimTy) {
+        fn combine(self, left: &mut Num, right: Num) {
             *left += right;
         }
     }
@@ -321,6 +323,7 @@ mod sum {
 
 #[allow(missing_debug_implementations)]
 mod product {
+
     use std::{marker::PhantomData, ops::MulAssign};
 
     use komadori::prelude::*;
@@ -331,7 +334,7 @@ mod product {
 
     pub struct Combiner(());
 
-    pub type Serial<Num> = komadori::num::Muling<Num>;
+    pub type Serial<Num> = komadori::num::IntoProduct<Num>;
 
     impl<Num> Consumer<Num> {
         #[inline]
@@ -340,23 +343,24 @@ mod product {
         }
     }
 
-    impl<PrimTy> IntoCollectorBase for Consumer<PrimTy>
+    impl<Num> IntoCollectorBase for Consumer<Num>
     where
-        PrimTy: Muling<Output = PrimTy>,
+        Serial<Num>: Default + CollectorBase<Output = Num>,
     {
-        type Output = PrimTy;
+        type Output = Num;
 
-        type IntoCollector = PrimTy::Muling;
+        type IntoCollector = Serial<Num>;
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
-            <PrimTy>::muling()
+            Serial::default()
         }
     }
 
-    impl<PrimTy> plumbing::Consumer for Consumer<PrimTy>
+    impl<Num> plumbing::Consumer for Consumer<Num>
     where
-        PrimTy: Muling<Output = PrimTy> + MulAssign + Send,
+        Serial<Num>: Default + CollectorBase<Output = Num>,
+        Num: MulAssign + Send,
     {
         type Combiner = Combiner;
 
@@ -366,9 +370,10 @@ mod product {
         }
     }
 
-    impl<PrimTy> UnindexedConsumer for Consumer<PrimTy>
+    impl<Num> UnindexedConsumer for Consumer<Num>
     where
-        PrimTy: Muling<Output = PrimTy> + MulAssign + Send,
+        Serial<Num>: Default + CollectorBase<Output = Num>,
+        Num: MulAssign + Send,
     {
         #[inline]
         fn split_off_left(&self) -> Self {
@@ -381,13 +386,133 @@ mod product {
         }
     }
 
-    impl<PrimTy> plumbing::Combiner<PrimTy> for Combiner
+    impl<Num> plumbing::Combiner<Num> for Combiner
     where
-        PrimTy: MulAssign,
+        Num: MulAssign,
     {
         #[inline]
-        fn combine(self, left: &mut PrimTy, right: PrimTy) {
+        fn combine(self, left: &mut Num, right: Num) {
             *left *= right;
         }
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use crate::{
+        ops::{IntoParProduct, IntoParSum},
+        test_utils::prelude::*,
+    };
+
+    proptest! {
+        #[test]
+        fn sum_indexed(
+            starting_num in -10_000..=10_000,
+            (split_decision, nums) in propvec(-10_000..=10_000, ..5)
+                .prop_flat_map(|nums| {
+                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
+                }),
+            pool in CoroutinePool::prop(),
+        ) {
+            sum_indexed_impl(pool, split_decision, starting_num, nums)?;
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn sum_unindexed(
+            starting_num in -10_000..=10_000,
+            nums in propvec(-10_000..=10_000, ..5),
+            pool in CoroutinePool::prop(),
+            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
+        ) {
+            sum_unindexed_impl(pool, split_decision, starting_num, nums)?;
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn product_indexed(
+            starting_num in -10..=10,
+            (split_decision, nums) in propvec(-10..=10, ..5)
+                .prop_flat_map(|nums| {
+                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
+                }),
+            pool in CoroutinePool::prop(),
+        ) {
+            product_indexed_impl(pool, split_decision, starting_num, nums)?;
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn product_unindexed(
+            starting_num in -10..=10,
+            nums in propvec(-10..=10, ..5),
+            pool in CoroutinePool::prop(),
+            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
+        ) {
+            product_unindexed_impl(pool, split_decision, starting_num, nums)?;
+        }
+    }
+
+    fn sum_indexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: IndexedSplitDecision,
+        starting_num: i32,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_num.into_par_sum(),
+            should_break_pred: |_| false,
+            pred: |_, output| PredError::assert_eq(output, starting_num + nums.iter().sum::<i32>()),
+        }
+        .test_par_collector(&mut pool, &split_decision)
+    }
+
+    fn sum_unindexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: UnindexedSplitDecision,
+        starting_num: i32,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_num.into_par_sum(),
+            should_break_pred: |_| false,
+            pred: |_, output| PredError::assert_eq(output, starting_num + nums.iter().sum::<i32>()),
+        }
+        .test_unindexed_par_collector(&mut pool, &split_decision)
+    }
+
+    fn product_indexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: IndexedSplitDecision,
+        starting_num: i32,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_num.into_par_product(),
+            should_break_pred: |_| false,
+            pred: |_, output| PredError::assert_eq(output, starting_num * nums.iter().product::<i32>()),
+        }
+        .test_par_collector(&mut pool, &split_decision)
+    }
+
+    fn product_unindexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: UnindexedSplitDecision,
+        starting_num: i32,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_num.into_par_product(),
+            should_break_pred: |_| false,
+            pred: |_, output| PredError::assert_eq(output, starting_num * nums.iter().product::<i32>()),
+        }
+        .test_unindexed_par_collector(&mut pool, &split_decision)
     }
 }

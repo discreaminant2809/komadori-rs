@@ -2,7 +2,9 @@
 //!
 //! This module corresponds to [`mod@std::vec`].
 
-use std::{ops::ControlFlow, ptr::NonNull};
+#[cfg(test)]
+use std::mem::MaybeUninit;
+use std::{collections::LinkedList, ops::ControlFlow, ptr::NonNull};
 
 use komadori::prelude::*;
 
@@ -16,9 +18,17 @@ use crate::{
     prelude::UnindexedParallelCollectorBase,
     slice::in_place_write,
 };
+#[cfg(test)]
+use crate::{
+    slice::drainer::Drainer,
+    test_utils::{self, IndexedParallelIterator, IndexedProducer},
+};
 
 /// A parallel collector that pushes collected items into a [`Vec`].
 /// Its [`Output`] is [`Vec`].
+///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
 ///
 /// This struct is created by `Vec::into_par_collector()`.
 ///
@@ -28,6 +38,9 @@ pub struct IntoParCollector<T>(Vec<T>);
 
 /// A parallel collector that pushes collected items into a [`&mut Vec`](Vec).
 /// Its [`Output`] is [`&mut Vec`](Vec).
+///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
 ///
 /// This struct is created by `Vec::par_collector_mut()`.
 ///
@@ -74,7 +87,7 @@ impl<'this, T> DefineUnindexedSerial<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T, usize>>;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T>>;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -150,12 +163,7 @@ where
         ) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
-            self.0.reserve(len);
-
-            for mut chunk in chunks {
-                self.0.append(&mut chunk);
-            }
-
+            unindexed_append_to_original(&mut self.0, chunks, len);
             ControlFlow::Continue(())
         }))
     }
@@ -172,7 +180,7 @@ impl<'v, 'this, T> DefineUnindexedSerial<'this> for ParCollectorMut<'v, T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T, usize>>;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T>>;
 }
 
 impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
@@ -256,12 +264,7 @@ where
         ) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
-            self.0.reserve(len);
-
-            for mut chunk in chunks {
-                self.0.append(&mut chunk);
-            }
-
+            unindexed_append_to_original(self.0, chunks, len);
             ControlFlow::Continue(())
         }))
     }
@@ -274,6 +277,85 @@ where
     #[inline]
     fn default() -> Self {
         Vec::default().into_par_collector()
+    }
+}
+
+fn unindexed_append_to_original<T>(og: &mut Vec<T>, mut chunks: LinkedList<Vec<T>>, mut append_len: usize) {
+    let Some(mut first_chunk) = chunks.pop_front() else {
+        return;
+    };
+
+    // The idea is that we optimize
+    if og.is_empty() {
+        // If the first chunk has more capacity, it's always reasonable,
+        // and even more if the original has no allocation at all.
+        //
+        // If not, it's purely allocator RNG that we can't model cleanly.
+        // Who knows, having a big enough buffer to accomodate `append_len`
+        // additional items is better than reallocation in some cases?
+        std::mem::swap(og, &mut first_chunk);
+
+        // Can't panic. The reduction of linked vec is assumed to
+        // correctly report the amount to append.
+        append_len -= og.len();
+    }
+    // If the length isn't 0,
+    // we have no other choice but to obey the original
+    // which already contains some items.
+
+    og.reserve(append_len);
+    og.append(&mut first_chunk);
+    for mut chunk in chunks {
+        og.append(&mut chunk);
+    }
+}
+
+#[cfg(test)]
+impl<T> test_utils::IntoParallelIterator for Vec<T> {
+    type Item = T;
+
+    type IntoParIter = test_types::IntoParIter<T>;
+
+    fn into_par_iter(self) -> Self::IntoParIter {
+        test_types::IntoParIter(self)
+    }
+}
+
+#[cfg(test)]
+mod test_types {
+    // Do this because
+    // `type IntoParIter = test_types::IntoParIter<T>;`
+    // comaplains "leaking crate-private type."
+    pub struct IntoParIter<T>(pub(super) Vec<T>);
+}
+
+#[cfg(test)]
+impl<T> test_utils::ParallelIterator for test_types::IntoParIter<T> {
+    type Item = T;
+
+    fn take_producer(&mut self) -> impl test_utils::Producer<Item = Self::Item> {
+        self.indexed_producer().into_unindexed()
+    }
+
+    fn count(self) -> usize {
+        self.len()
+    }
+}
+
+#[cfg(test)]
+impl<T> test_utils::IndexedParallelIterator for test_types::IntoParIter<T> {
+    fn indexed_producer(&mut self) -> impl IndexedProducer<Item = Self::Item> {
+        unsafe {
+            let len = self.0.len();
+            self.0.set_len(0);
+            let slice = std::ptr::slice_from_raw_parts_mut(self.0.as_mut_ptr(), len);
+            let slice = slice as *mut [MaybeUninit<T>];
+            Drainer::new(slice.as_mut().unwrap())
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -294,5 +376,84 @@ mod miri_tests {
 
         collector.finish();
         assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use crate::test_utils::prelude::*;
+
+    proptest! {
+        #[test]
+        fn indexed(
+            starting_nums in propvec(any::<i32>(), ..5),
+            (split_decision, nums) in propvec(any::<i32>(), ..5)
+                .prop_flat_map(|nums| {
+                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
+                }),
+            pool in CoroutinePool::prop(),
+        ) {
+            indexed_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn unindexed(
+            starting_nums in propvec(any::<i32>(), ..5),
+            nums in propvec(any::<i32>(), ..5),
+            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
+            pool in CoroutinePool::prop(),
+        ) {
+            unindexed_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    fn indexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: IndexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_nums.clone().into_par_collector(),
+            should_break_pred: |_| false,
+            pred: |_, output| {
+                PredError::assert_eq(
+                    output,
+                    starting_nums
+                        .iter()
+                        .copied()
+                        .chain(nums.iter().copied())
+                        .collect(),
+                )
+            },
+        }
+        .test_par_collector(&mut pool, &split_decision)
+    }
+
+    fn unindexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: UnindexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: || starting_nums.clone().into_par_collector(),
+            should_break_pred: |_| false,
+            pred: |_, output| {
+                PredError::assert_eq(
+                    output,
+                    starting_nums
+                        .iter()
+                        .copied()
+                        .chain(nums.iter().copied())
+                        .collect(),
+                )
+            },
+        }
+        .test_unindexed_par_collector(&mut pool, &split_decision)
     }
 }

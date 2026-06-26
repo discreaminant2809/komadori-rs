@@ -1,4 +1,4 @@
-use super::{IntoParallelCollectorBase, ParallelCollectorBase};
+use super::IntoParallelCollectorBase;
 
 /// A type that can be converted into a parallel collector by mutable reference.
 ///
@@ -12,36 +12,47 @@ use super::{IntoParallelCollectorBase, ParallelCollectorBase};
 ///
 /// This trait is not intended for use in bounds.
 /// Use [`IntoParallelCollectorBase`] and similar traits in trait bounds instead.
-#[allow(private_bounds)]
-pub trait ParallelCollectorByMut: Sealed {
-    /// Which parallel collector being produced?
-    type ParCollectorMut<'a>: ParallelCollectorBase
-    where
-        Self: 'a;
-
-    /// Creates a parallel collector from a mutable reference of a value.
-    fn par_collector_mut(&mut self) -> Self::ParCollectorMut<'_>;
-}
-
-trait Sealed {}
-
-impl<T> ParallelCollectorByMut for T
+///
+/// # Examples
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::prelude::*;
+///
+/// let mut nums = vec![1, 2];
+///
+/// (3..=6)
+///     .into_par_iter()
+///     .feed_into(nums.par_collector_mut());
+///
+/// assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+/// ```
+///
+/// If possible, you can use `&mut` instead of `.par_collector_mut()`:
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::prelude::*;
+///
+/// let mut nums = vec![1, 2];
+///
+/// (3..=6)
+///     .into_par_iter()
+///     .feed_into(&mut nums);
+///
+/// assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+/// ```
+pub trait ParallelCollectorByMut
 where
-    T: ?Sized,
-    for<'a> &'a mut T: IntoParallelCollectorBase,
+    for<'a> &'a mut Self: IntoParallelCollectorBase,
 {
-    type ParCollectorMut<'a>
-        = <&'a mut T as IntoParallelCollectorBase>::IntoParCollector
-    where
-        Self: 'a;
-
+    /// Creates a parallel collector from a shared reference of a value.
     #[inline]
-    fn par_collector_mut(&mut self) -> Self::ParCollectorMut<'_> {
+    fn par_collector_mut(&mut self) -> <&'_ mut Self as IntoParallelCollectorBase>::IntoParCollector {
         self.into_par_collector()
     }
 }
-
-impl<T> Sealed for T
+impl<T> ParallelCollectorByMut for T
 where
     T: ?Sized,
     for<'a> &'a mut T: IntoParallelCollectorBase,

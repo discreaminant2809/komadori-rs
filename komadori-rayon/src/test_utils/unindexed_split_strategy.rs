@@ -65,20 +65,21 @@ impl UnindexedSplitDecision {
     }
 
     fn complicate(&mut self) -> bool {
-        match self {
-            Self::Stay => {
-                *self = Self::Split {
-                    left: Self::Stay.into(),
-                    right: Self::Stay.into(),
-                }
-            }
-            Self::Split { left, right } => {
-                left.complicate();
-                right.complicate();
-            }
-        }
+        false
+        // match self {
+        //     Self::Stay => {
+        //         *self = Self::Split {
+        //             left: Self::Stay.into(),
+        //             right: Self::Stay.into(),
+        //         }
+        //     }
+        //     Self::Split { left, right } => {
+        //         left.complicate();
+        //         right.complicate();
+        //     }
+        // }
 
-        true
+        // true
     }
 }
 

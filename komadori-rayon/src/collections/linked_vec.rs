@@ -6,70 +6,37 @@ use komadori::prelude::*;
 
 use crate::collector::plumbing;
 
-trait LenCarrier {
-    fn new(len: usize) -> Self;
-    fn combine(&mut self, other: Self);
+pub struct Consumer<T> {
+    _marker: PhantomData<T>,
 }
 
-impl LenCarrier for usize {
-    #[inline]
-    fn new(len: usize) -> Self {
-        len
-    }
-
-    #[inline]
-    fn combine(&mut self, other: Self) {
-        *self += other;
-    }
-}
-
-impl LenCarrier for () {
-    #[inline]
-    fn new(_: usize) -> Self {}
-
-    #[inline]
-    fn combine(&mut self, _: Self) {}
-}
-
-pub struct Consumer<T, L> {
-    _marker: PhantomData<(T, L)>,
-}
-
-pub struct Serial<T, L> {
+pub struct Serial<T> {
     chunk: Vec<T>,
-    _marker: PhantomData<L>,
 }
 
 pub struct Combiner(());
 
-impl<T, L> Consumer<T, L> {
+impl<T> Consumer<T> {
     #[inline]
     pub(crate) fn new() -> Self {
         Self { _marker: PhantomData }
     }
 }
 
-impl<T, L> IntoCollectorBase for Consumer<T, L>
-where
-    L: LenCarrier,
-{
-    type Output = (LinkedList<Vec<T>>, L);
+impl<T> IntoCollectorBase for Consumer<T> {
+    type Output = (LinkedList<Vec<T>>, usize);
 
-    type IntoCollector = Serial<T, L>;
+    type IntoCollector = Serial<T>;
 
     #[inline]
     fn into_collector(self) -> Self::IntoCollector {
-        Serial {
-            chunk: vec![],
-            _marker: PhantomData,
-        }
+        Serial { chunk: vec![] }
     }
 }
 
-impl<T, L> plumbing::Consumer for Consumer<T, L>
+impl<T> plumbing::Consumer for Consumer<T>
 where
     T: Send,
-    L: LenCarrier + Send,
 {
     type Combiner = Combiner;
 
@@ -80,10 +47,9 @@ where
     }
 }
 
-impl<T, L> plumbing::UnindexedConsumer for Consumer<T, L>
+impl<T> plumbing::UnindexedConsumer for Consumer<T>
 where
     T: Send,
-    L: LenCarrier + Send,
 {
     #[inline]
     fn split_off_left(&self) -> Self {
@@ -96,34 +62,32 @@ where
     }
 }
 
-impl<T, L> plumbing::Combiner<(LinkedList<Vec<T>>, L)> for Combiner
-where
-    L: LenCarrier,
-{
+impl<T> plumbing::Combiner<(LinkedList<Vec<T>>, usize)> for Combiner {
     #[inline]
-    fn combine(self, left: &mut (LinkedList<Vec<T>>, L), mut right: (LinkedList<Vec<T>>, L)) {
+    fn combine(self, left: &mut (LinkedList<Vec<T>>, usize), mut right: (LinkedList<Vec<T>>, usize)) {
         left.0.append(&mut right.0);
-        left.1.combine(right.1);
+        left.1 += right.1;
     }
 }
 
-impl<T, L> CollectorBase for Serial<T, L>
-where
-    L: LenCarrier,
-{
-    type Output = (LinkedList<Vec<T>>, L);
+impl<T> CollectorBase for Serial<T> {
+    type Output = (LinkedList<Vec<T>>, usize);
 
     #[inline]
     fn finish(self) -> Self::Output {
-        let len_carrier = L::new(self.chunk.len());
-        ([self.chunk].into(), len_carrier)
+        let len = self.chunk.len();
+        (
+            if len == 0 {
+                LinkedList::new()
+            } else {
+                [self.chunk].into()
+            },
+            len,
+        )
     }
 }
 
-impl<T, L> Collector<T> for Serial<T, L>
-where
-    L: LenCarrier,
-{
+impl<T> Collector<T> for Serial<T> {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
         self.chunk.push(item);
@@ -137,9 +101,8 @@ where
     }
 }
 
-impl<'i, T, L> Collector<&'i T> for Serial<T, L>
+impl<'i, T> Collector<&'i T> for Serial<T>
 where
-    L: LenCarrier,
     T: Copy,
 {
     #[inline]
@@ -155,9 +118,8 @@ where
     }
 }
 
-impl<'i, T, L> Collector<&'i mut T> for Serial<T, L>
+impl<'i, T> Collector<&'i mut T> for Serial<T>
 where
-    L: LenCarrier,
     T: Copy,
 {
     #[inline]

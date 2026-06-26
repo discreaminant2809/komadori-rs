@@ -147,6 +147,16 @@ impl<'a, T> WriteProof<'a, T> {
             self.start, self.len, self.init_len,
         );
     }
+
+    #[inline]
+    unsafe fn collect_unchecked(&mut self, item: T) {
+        unsafe {
+            // SAFETY: We write at the index before the len.
+            self.start.add(self.init_len).write(item);
+        }
+
+        self.init_len += 1;
+    }
 }
 
 impl<'a, T> Drop for WriteProof<'a, T> {
@@ -171,13 +181,17 @@ impl<'a, T> CollectorBase for WriteProof<'a, T> {
 impl<'a, T> Collector<T> for WriteProof<'a, T> {
     fn collect(&mut self, item: T) -> ControlFlow<()> {
         assert!(self.init_len < self.len, "no space left to write");
+        // SAFETY: We write at the index before the len.
+        unsafe { self.collect_unchecked(item) };
+        ControlFlow::Continue(())
+    }
 
-        unsafe {
+    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+        items.into_iter().for_each(|item| {
+            assert!(self.init_len < self.len, "no space left to write");
             // SAFETY: We write at the index before the len.
-            self.start.add(self.init_len).write(item);
-        }
-
-        self.init_len += 1;
+            unsafe { self.collect_unchecked(item) };
+        });
         ControlFlow::Continue(())
     }
 }

@@ -18,6 +18,9 @@ use crate::{
 /// A parallel collector that pushes collected items into a [`LinkedList`].
 /// Its [`Output`] is [`LinkedList`].
 ///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
+///
 /// This struct is created by `LinkedList::into_par_collector()`.
 ///
 /// [`Output`]: ParallelCollectorBase::Output
@@ -27,6 +30,9 @@ pub struct IntoParCollector<T>(LinkedList<T>);
 /// A parallel collector that pushes collected items into a
 /// [`&mut LinkedList`](LinkedList).
 /// Its [`Output`] is [`&mut LinkedList`](LinkedList).
+///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
 ///
 /// This struct is created by `LinkedList::par_collector_mut()`.
 ///
@@ -204,13 +210,13 @@ where
 
 #[allow(missing_debug_implementations)]
 mod consumer {
-    use std::collections::LinkedList;
+    use std::{collections::LinkedList, marker::PhantomData};
 
     use komadori::prelude::*;
 
     use crate::collector::plumbing::{self, UnindexedConsumer};
 
-    pub struct Consumer<T>(LinkedList<T>);
+    pub struct Consumer<T>(PhantomData<T>);
 
     pub struct Combiner(());
 
@@ -219,7 +225,7 @@ mod consumer {
     impl<T> Consumer<T> {
         #[inline]
         pub(super) fn new() -> Self {
-            Self(LinkedList::new())
+            Self(PhantomData)
         }
     }
 
@@ -230,7 +236,7 @@ mod consumer {
 
         #[inline]
         fn into_collector(self) -> Self::IntoCollector {
-            self.0.into_collector()
+            LinkedList::new().into_collector()
         }
     }
 
@@ -265,6 +271,83 @@ mod consumer {
         #[inline]
         fn combine(self, left: &mut LinkedList<T>, mut right: LinkedList<T>) {
             left.append(&mut right);
+        }
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use std::collections::LinkedList;
+
+    use komadori::prelude::*;
+
+    use crate::test_utils::prelude::*;
+
+    proptest! {
+        /// Pre-requisite: None
+        #[test]
+        fn indexed(
+            (split_decision, nums) in propvec(any::<i32>(), ..=5)
+                .prop_flat_map(|nums| {
+                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
+                }),
+            starting_nums in propvec(any::<i32>(), ..=2),
+            pool in CoroutinePool::prop(),
+        ) {
+            indexed_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    proptest! {
+        /// Pre-requisite: None
+        #[test]
+        fn unindexed(
+            pool in CoroutinePool::prop(),
+            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
+            starting_nums in propvec(any::<i32>(), ..=2),
+            nums in propvec(any::<i32>(), ..=5),
+        ) {
+            unindexed_impl(pool, split_decision, starting_nums, nums)?;
+        }
+    }
+
+    fn indexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: IndexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        par_collector_tester(&starting_nums, &nums).test_par_collector(&mut pool, &split_decision)
+    }
+
+    fn unindexed_impl(
+        mut pool: CoroutinePool,
+        split_decision: UnindexedSplitDecision,
+        starting_nums: Vec<i32>,
+        nums: Vec<i32>,
+    ) -> TestCaseResult {
+        par_collector_tester(&starting_nums, &nums).test_unindexed_par_collector(&mut pool, &split_decision)
+    }
+
+    fn par_collector_tester(
+        starting_nums: &[i32],
+        nums: &[i32],
+    ) -> impl ParallelCollectorTester + UnindexedParallelCollectorTester {
+        BasicParallelCollectorTester {
+            iter_factory: || nums.par_iter().cloned(),
+            collector_factory: move || {
+                starting_nums
+                    .iter()
+                    .feed_into(LinkedList::new())
+                    .into_par_collector()
+            },
+            should_break_pred: |_| false,
+            pred: move |_, output| {
+                PredError::assert_eq(
+                    output,
+                    starting_nums.iter().chain(nums).feed_into(LinkedList::new()),
+                )
+            },
         }
     }
 }

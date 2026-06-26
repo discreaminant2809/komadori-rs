@@ -5,19 +5,21 @@ edition = "2024"
 authors = ["Ayabin"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/discreaminant2809/komadori-rs"
-# description = "Provides a composable, declarative way to consume an iterator"
+description = "Multi-reduction library. Provides a composable, declarative way to consume an iterator"
 readme = "README.md"
-# categories = ["rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
-# keywords = ["collector", "fold", "unzip", "composition", "iterator"]
+categories = ["concurrency", "rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
+keywords = ["rayon", "parallelism", "collector", "fold", "multi-reduction"]
+exclude = ["DESIGN_NOTES.md"] # Not worth including anyway.
 
 [dependencies]
-komadori = { version = "0.6.0" }
+komadori = { version = "0.7.0" }
 rayon = { version = "1.11.0", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = "0.8.2"
+par-iter = "2.0.0"
 proptest = "1.11.0"
-rand = "0.10.0"
+rand = "0.10.1"
 
 [features]
 default = ["rayon"]
@@ -26,7 +28,7 @@ unstable = []
 
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [[bench]]
 name = "btree_set"
@@ -47,3 +49,10 @@ harness = false
 name = "max_vec"
 required-features = ["rayon"]
 harness = false
+
+[[example]]
+name = "par_iter_crate"
+
+[[example]]
+name = "reddit_question1"
+required-features = ["rayon"]
