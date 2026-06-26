@@ -14,7 +14,9 @@
 //! define an unindexed collector.
 //! See their documentation for more.
 //!
-//! If you want to implement your own parallel collector, see [`plumbing`].
+//! If you want to implement your own parallel collector, see [`plumbing`],
+//! or use [`Custom`] and/or some combinations of adapters and
+//! exising parallel collectors to quickly create one fairly easily.
 //!
 //! This module corresponds to [`komadori::collector`].
 //!

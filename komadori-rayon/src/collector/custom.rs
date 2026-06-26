@@ -16,6 +16,33 @@ use super::{
 ///
 /// This can also be used as an unindexed parallel collector,
 /// but you can override the unindexed path with [`also_unindexed()`](Self::also_unindexed).
+///
+/// # Examples
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::{prelude::*, collector::Custom};
+/// use std::{collections::HashSet, ops::ControlFlow, hash::Hash};
+///
+/// fn hash_set_par_collector<T: Hash + Eq + Send>(
+/// ) -> impl UnindexedParallelCollector<T, Output = HashSet<T>> {
+///     Custom::new(
+///         HashSet::new(),
+///         |_| ControlFlow::Continue(()),
+///         |_| vec![],
+///         |set, items| set.extend(items),
+///     )
+///     // It's is quite wasteful in the unindexed path, because
+///     // we prematurely concatenate to Vec then push the Vec's items
+///     // to the HashSet, instead of concatenating to the HashSet directly.
+/// }
+///
+/// let set = [1, 4, 5, 4, 3, 1, 2]
+///     .into_par_iter()
+///     .feed_into(hash_set_par_collector());
+///
+/// assert_eq!(set, HashSet::from([1, 2, 3, 4, 5]));
+/// ```
 #[derive(Clone)]
 pub struct Custom<S, BH, I, IF, IC> {
     state: S,
@@ -31,49 +58,49 @@ pub struct Custom<S, BH, I, IF, IC> {
 ///
 /// # Examples
 ///
-// FIXME: use `nest_serial_with` instead.
-// /// ```
-// /// use rayon::prelude::*;
-// /// use komadori::prelude::*;
-// /// use komadori_rayon::{prelude::*, collector::Custom, iter::ParReduce};
-// /// use std::{collections::{HashSet, LinkedList}, ops::ControlFlow, hash::Hash};
-// ///
-// /// fn hash_set_par_collector<T: Hash + Eq + Send>(
-// /// ) -> impl UnindexedParallelCollector<T, Output = HashSet<T>> {
-// ///     Custom::new(
-// ///         HashSet::new(),
-// ///         |_| ControlFlow::Continue(()),
-// ///         |_| vec![],
-// ///         |set, items| set.extend(items),
-// ///     )
-// ///     .also_unindexed(
-// ///         |_| {
-// ///             ParReduce::new(|(len1, chunk1), (len2, mut chunk2): (usize, Vec<_>)| {
-// ///                 chunk1.append(&mut chunk2);
-// ///                 *len1 += len2;
-// ///             })
-// ///             .nest_local(
-// ///                 vec![]
-// ///                     .into_collector()
-// ///                     .map_output(|v| (
-// ///                         v.len(),
-// ///                         LinkedList::from_iter((!v.is_empty()).then_some(v)),
-// ///                     )),
-// ///             )
-// ///         },
-// ///         |set, (len, chunks)| {
-// ///             set.reserve(len);
-// ///             set.extend(chunks.into_iter().flatten());
-// ///         },
-// ///     )
-// /// }
-// ///
-// /// let set = [1, 4, 5, 4, 3, 1, 2]
-// ///     .into_par_iter()
-// ///     .feed_into(hash_set_par_collector());
-// ///
-// /// assert_eq!(set, HashSet::from([1, 2, 3, 4, 5]));
-// /// ```
+/// ```
+/// use rayon::prelude::*;
+/// use komadori::prelude::*;
+/// use komadori_rayon::{prelude::*, collector::Custom, iter::ParReduce};
+/// use std::{collections::{HashSet, LinkedList}, ops::ControlFlow, hash::Hash};
+///
+/// fn hash_set_par_collector<T: Hash + Eq + Send>(
+/// ) -> impl UnindexedParallelCollector<T, Output = HashSet<T>> {
+///     Custom::new(
+///         HashSet::new(),
+///         |_| ControlFlow::Continue(()),
+///         |_| vec![],
+///         |set, items| set.extend(items),
+///     )
+///     .also_unindexed(
+///         |_| {
+///             ParReduce::new(|(len1, chunk1), (len2, mut chunk2): (usize, LinkedList<_>)| {
+///                 chunk1.append(&mut chunk2);
+///                 *len1 += len2;
+///             })
+///             .nest_local_with((), |_| {
+///                 vec![]
+///                     .into_collector()
+///                     .map_output(|v| (
+///                         v.len(),
+///                         LinkedList::from_iter((!v.is_empty()).then_some(v)),
+///                     ))
+///             })
+///         },
+///         |set, len_chunks| {
+///             let (len, chunks) = len_chunks.unwrap_or_default();
+///             set.reserve(len);
+///             set.extend(chunks.into_iter().flatten());
+///         },
+///     )
+/// }
+///
+/// let set = [1, 4, 5, 4, 3, 1, 2]
+///     .into_par_iter()
+///     .feed_into(hash_set_par_collector().unindexed_only());
+///
+/// assert_eq!(set, HashSet::from([1, 2, 3, 4, 5]));
+/// ```
 #[derive(Clone)]
 pub struct CustomAlsoUnindexed<S, BH, I, IF, IC, U, UF, UC> {
     state: S,
