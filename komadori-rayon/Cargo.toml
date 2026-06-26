@@ -52,3 +52,7 @@ harness = false
 
 [[example]]
 name = "par_iter_crate"
+
+[[example]]
+name = "reddit_question1"
+required-features = ["rayon"]
