@@ -4,8 +4,8 @@ use komadori::prelude::*;
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Also, Fuse, IntoParallelCollectorBase, IntoUnindexedParallelCollectorBase, MapOutput, Take, Tee,
-    TeeClone, TeeFunnel, TeeMut, assert_par_collector_base, assert_unindexed_par_collector_base, tee,
+    Cloning, Copying, Enumerate, Fuse, IndexedOnly, IntoCollector, IntoParallelCollectorBase, Map, MapOutput,
+    MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base, tee,
     tee_clone, tee_funnel, tee_mut,
 };
 
@@ -129,6 +129,12 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// You still have to consider such collectors as being "taken" and only
     /// call [`finish()`](Self::finish) on them.
     ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
+    ///
+    /// # Examples
+    ///
+    /// Coming soon!
+    ///
     /// [`Continue(())`]: ControlFlow::Continue
     /// [`Break(())`]: ControlFlow::Break
     #[inline]
@@ -177,6 +183,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// For `rayon` specifically,
     /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
     /// helps migrate this problem also.
+    ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
     ///
     /// # Examples
     ///
@@ -228,21 +236,38 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(Take::new(self, n))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects the item
-    /// copied with the [`Copy`] trait before the second collector collects it.
+    /// For each item collected, the first parallel collector collects the item
+    /// copied with the [`Copy`] trait before the second parallel collector collects it.
     ///
-    /// `tee()` only stops when **both** collectors have stopped.
+    /// `tee()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `T`, both collectors must be able to
-    /// collect `T`, and `T` must implement [`Copy`].
+    /// This adapter collects `T` if both parallel collectors
+    /// collect `T` and `T` is [`Copy`].
     ///
     /// The [`Output`](Self::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, cmp::ParMax};
+    ///
+    /// let (sum, max) = [1, 2, 4, 5, 3]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         0i32.into_par_sum()
+    ///             .tee(ParMax::new())
+    ///     );
+    ///
+    /// assert_eq!(sum, 15);
+    /// assert_eq!(max, Some(5));
+    /// ```
     #[inline]
     fn tee<C>(self, other: C) -> Tee<Self, C::IntoParCollector>
     where
@@ -252,23 +277,45 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(tee(self, other.into_par_collector()))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects the item
-    /// cloned with the [`Clone`] trait before the second collector collects it.
+    /// For each item collected, the first parallel collector collects the item
+    /// cloned with the [`Clone`] trait before the second parallel collector collects it.
     /// If one of them has stopped, the implementation will **not** clone
     /// the item, and will instead feed it into the other for optimization.
     ///
-    /// `tee_clone()` only stops when **both** collectors have stopped.
+    /// `tee_clone()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `T`, both collectors must implement
-    /// [`ParallelCollector<T>`](super::ParallelCollector), and `T` must implement [`Clone`].
+    /// This adapter collects `T` if both parallel collectors collect `T`
+    /// and `T` implements [`Clone`].
     ///
     /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    /// use std::sync::Arc;
+    ///
+    /// let (nums1, nums2) = [1, 2, 3]
+    ///     .into_par_iter()
+    ///     .map(Arc::new)
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .take(2)
+    ///             .tee_clone(vec![])
+    ///     );
+    ///
+    /// assert!(nums1.iter().map(|num| **num).eq([1, 2]));
+    /// assert!(nums2.iter().map(|num| **num).eq([1, 2, 3]));
+    /// assert!(nums2.iter().map(Arc::strong_count).eq([2, 2, 1]));
+    /// ```
     #[inline]
     fn tee_clone<C>(self, other: C) -> TeeClone<Self, C::IntoParCollector>
     where
@@ -278,26 +325,46 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(tee_clone(self, other.into_par_collector()))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects
-    /// the mutable reference of the item before the second collector also
+    /// For each item collected, the first parallel collector collects
+    /// the mutable reference of the item before the second parallel collector also
     /// collects the mutable reference of it.
     ///
-    /// `tee_mut()` only stops when **both** collectors have stopped.
+    /// `tee_mut()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `&'i mut T`,
-    /// the first collector must implement
+    /// This adapter collects `&'i mut T` if the first parallel collector implements
     /// [`for<'a> ParallelCollector<&'a mut T>`](super::ParallelCollector)
-    /// (a collector that can collect a mutable reference with any lifetime),
-    /// and the second collector must implement
-    /// [`ParallelCollector<&'i mut T>`](super::ParallelCollector).
+    /// (a parallel collector that can collect a mutable reference with any lifetime),
+    /// and the second parallel collector collects `&'i mut T`.
     ///
     /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
+    ///
+    /// # Examples
+    ///
+    /// Coming soon!
+    // FIXED: Blocker: Parallel concatenation.
+    // /// ```
+    // /// use rayon::*;
+    // /// use komadori_rayon::{prelude::*, cmp::Max, clb_mut};
+    // ///
+    // /// let ((concat, max_len), string_vec) = ["noble", "and", "singer"]
+    // ///     .map(String::from)
+    // ///     .into_par_iter()
+    // ///     .feed_into(
+    // ///         String::new()
+    // ///             .into_concat()
+    // ///             .map(clb_mut!(|s: &mut String| -> &str { &s[..] }))
+    // ///             .tee_funnel(vec![])
+    // ///     );
+    // ///
+    // /// assert_eq!(concat, "nobleandsinger");
+    // /// assert_eq!(string_vec, ["noble", "and", "singer"]);
+    // /// ```
     #[inline]
     fn tee_mut<C>(self, other: C) -> TeeMut<Self, C::IntoParCollector>
     where
@@ -307,24 +374,45 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(tee_mut(self, other.into_par_collector()))
     }
 
-    /// Creates a parallel collector that lets both collectors collect the same item.
+    /// Creates a parallel collector that lets both parallel collectors collect the same item.
     ///
-    /// For each item collected, the first collector collects
-    /// the mutable reference of the item before the second collector collects it.
+    /// For each item collected, the first parallel collector collects
+    /// the mutable reference of the item before the second parallel collector collects it.
     ///
-    /// `tee_funnel()` only stops when **both** collectors have stopped.
+    /// `tee_funnel()` only stops when **both** parallel collectors have stopped.
     ///
-    /// If the item type of this adapter is `T`,
-    /// the first collector must implement
+    /// This adapter collects `T` if the first parallel collector implements
     /// [`for<'a> ParallelCollector<&'a mut T>`](super::ParallelCollector)
-    /// (a collector that can collect a mutable reference with any lifetime),
-    /// and the second collector must implement [`ParallelCollector<T>`](super::ParallelCollector).
+    /// (a parallel collector that can collect a mutable reference with any lifetime),
+    /// and the second parallel collector collects `T`.
     ///
     /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
+    /// both underlying parallel collectors, in order.
     ///
     /// See the [module-level documentation](crate::collector) for
     /// when this adapter is used and other variants of `tee` adapters.
+    ///
+    /// # Examples
+    ///
+    /// Coming soon!
+    // FIXED: Blocker: Parallel concatenation.
+    // /// ```
+    // /// use rayon::*;
+    // /// use komadori_rayon::{prelude::*, cmp::Max, clb_mut};
+    // ///
+    // /// let ((concat, max_len), string_vec) = ["noble", "and", "singer"]
+    // ///     .map(String::from)
+    // ///     .into_par_iter()
+    // ///     .feed_into(
+    // ///         String::new()
+    // ///             .into_concat()
+    // ///             .map(clb_mut!(|s: &mut String| -> &str { &s[..] }))
+    // ///             .tee_funnel(vec![])
+    // ///     );
+    // ///
+    // /// assert_eq!(concat, "nobleandsinger");
+    // /// assert_eq!(string_vec, ["noble", "and", "singer"]);
+    // /// ```
     #[inline]
     fn tee_funnel<C>(self, other: C) -> TeeFunnel<Self, C::IntoParCollector>
     where
@@ -334,11 +422,98 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(tee_funnel(self, other.into_par_collector()))
     }
 
+    /// Creates a parallel collector that calls a closure on each item before collecting.
+    ///
+    /// This is used when you need a parallel collector that collects `U`,
+    /// but you have a parallel collector that collects `T`. In that case,
+    /// you can use `map()` to transform `U` into `T` before passing it along.
+    ///
+    /// This adapter collects `U`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let squares = (1..=5)
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .map(|num| num * num)
+    ///     );
+    ///
+    /// assert_eq!(squares, [1, 4, 9, 16, 25]);
+    /// ```
+    #[inline]
+    fn map<F, T, U>(self, f: F) -> Map<Self, F>
+    where
+        Self: ParallelCollector<T> + Sized,
+        F: Fn(U) -> T + Sync,
+    {
+        assert_par_collector::<_, U>(Map::new(self, f))
+    }
+
+    /// Same as [`map()`](Self::map), but with a state that will either be cloned
+    /// or created from a factory (or both) to each serial execution.
+    ///
+    /// This adapter collects `U`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    /// use komadori::prelude::*;
+    /// use std::sync::mpsc::channel;
+    ///
+    /// let (sender, receiver) = channel();
+    ///
+    /// let digit_counts = [1_u32, 2_000_000_000, 3_000, 4_000_000]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .map_with(
+    ///                 sender, String::new,
+    ///                 |sender, buf, num| {
+    ///                     // I know, this is not an efficient way to
+    ///                     // count the number of digits.
+    ///                     // This is just an example.
+    ///                     buf.clear();
+    ///                     use std::fmt::Write;
+    ///                     write!(buf, "{num}");
+    ///
+    ///                     sender.send(num).unwrap();
+    ///                     buf.len()
+    ///                 },
+    ///             ),
+    ///     );
+    ///
+    /// let mut sum = receiver.iter().feed_into(0_u32.into_sum());
+    ///
+    /// assert_eq!(digit_counts, [1, 10, 4, 7]);
+    /// assert_eq!(sum, 2_004_003_001);
+    /// ```
+    #[inline]
+    fn map_with<L1, FL2, L2, F, T, U>(self, local1: L1, local2_f: FL2, f: F) -> MapWith<Self, L1, FL2, F>
+    where
+        Self: ParallelCollector<T> + Sized,
+        L1: Clone + Send,
+        FL2: Fn() -> L2 + Sync,
+        F: Fn(&mut L1, &mut L2, U) -> T + Sync,
+    {
+        assert_par_collector::<_, U>(MapWith::new(self, local1, local2_f, f))
+    }
+
     /// Creates a parallel collector that transforms the final accumulated result.
     ///
     /// This is used when your output gets "ugly" after a chain of adaptors,
     /// or when you do not want to break your API by (accidentally) rearranging adaptors,
     /// or when you just want a different output type for your collector.
+    ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
     ///
     /// # Examples
     ///
@@ -367,14 +542,165 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector_base(MapOutput::new(self, f))
     }
 
-    /// Used when your parallel collector only supports the indexed path.
+    /// Creates a parallel collector that feeds the underlying collector
+    /// with the position of an item alongside with the item.
+    ///
+    /// `enumerate()` is **only** an indexed parallel collector and can
+    /// only provide the indexed path. It cannot be used whenever
+    /// an unindexed parallel collector is expected, such as
+    /// [`filter()`](super::UnindexedParallelCollectorBase::filter) and
+    /// [`feed_into()`](crate::iter::RayonParallelIteratorExt::feed_into)
+    /// (use
+    /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
+    /// instead).
+    ///
+    /// This adapter collects `T` if the underlying parallel collector collects `(usize, T)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let indexed_nums = [1, 6, 4, 2]
+    ///     .into_par_iter()
+    ///     .feed_into_indexed(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .enumerate()
+    ///     );
+    ///
+    /// assert_eq!(indexed_nums, [(0, 1), (1, 6), (2, 4), (3, 2)]);
+    /// ```
     #[inline]
-    fn also_unindexed<U>(self, unindexed: U) -> Also<Self, U::IntoParCollector>
+    fn enumerate(self) -> Enumerate<Self>
     where
         Self: Sized,
-        U: IntoUnindexedParallelCollectorBase,
     {
-        assert_unindexed_par_collector_base(Also::new(self, unindexed.into_par_collector()))
+        assert_par_collector_base(Enumerate::new(self))
+    }
+
+    /// Creates a parallel collector that restricts to the indexed path only.
+    ///
+    /// `indexed_only()` can be used as a "lint" to prevent accidental fallback
+    /// to the unindexed path. For example, [`take()`](Self::take)'s unindexed path
+    /// behaves very differently from its indexed path and is less efficient,
+    /// so this adapter can be used to prevent the used of such path.
+    /// However, it does **not** alter the path the upstream (which provides items
+    /// for the parallel collector) chooses.
+    ///
+    /// `indexed_only()` is **only** an indexed parallel collector and can
+    /// only provide the indexed path. It cannot be used whenever
+    /// an unindexed parallel collector is expected, such as
+    /// [`filter()`](super::UnindexedParallelCollectorBase::filter) and
+    /// [`feed_into()`](crate::iter::RayonParallelIteratorExt::feed_into)
+    /// (use
+    /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
+    /// instead).
+    ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let guaranteed_first_three = [1, 5, 4, 2, 3]
+    ///     .into_par_iter()
+    ///     .feed_into_indexed(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .take(3)
+    ///             .indexed_only()
+    ///     );
+    ///
+    /// assert_eq!(guaranteed_first_three, [1, 5, 4]);
+    /// ```
+    #[inline]
+    fn indexed_only(self) -> IndexedOnly<Self>
+    where
+        Self: Sized,
+    {
+        assert_par_collector_base(IndexedOnly::new(self))
+    }
+
+    /// Creates a parallel collector that [`clone`](Clone::clone)s every collected item.
+    ///
+    /// Many collectors may already have implementations for references, such as collections.
+    /// In this case, you do not need this adapter.
+    ///
+    /// This adapter collects `&T` and `&mut T` if the underlying parallel collector
+    /// collects `T` and `T` implements [`Clone`].
+    ///
+    /// # Examples
+    ///
+    /// Coming soon!
+    #[inline]
+    fn cloning(self) -> Cloning<Self>
+    where
+        Self: Sized,
+    {
+        assert_par_collector_base(Cloning::new(self))
+    }
+
+    /// Creates a parallel collector that copies every collected item.
+    ///
+    /// Many collectors may already have implementations for references, such as collections.
+    /// In this case, you do not need this adapter.
+    ///
+    /// This adapter collects `&T` and `&mut T` if the underlying parallel collector
+    /// collects `T` and `T` implements [`Copy`].
+    ///
+    /// # Examples
+    ///
+    /// Coming soon!
+    #[inline]
+    fn copying(self) -> Copying<Self>
+    where
+        Self: Sized,
+    {
+        assert_par_collector_base(Copying::new(self))
+    }
+
+    /// Creates a (serial) collector from a parallel collector.
+    ///
+    /// It is a method of this trait instead of implementing
+    /// [`IntoCollector`] because of the orphan rule,
+    /// and the danger of implicit conversion
+    /// (may accidentally downgrade to serial execution without knowing).
+    ///
+    /// A type should not be **both** a serial and parallel collectors,
+    /// since it would be a clash between this method and tbe same method
+    /// in [`IntoCollector`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori_rayon::prelude::*;
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_par_collector()
+    ///     .take(3)
+    ///     .into_collector();
+    ///
+    /// // Use as a normal (serial) collector!
+    /// assert!(collector.break_hint().is_continue());
+    /// assert!(collector.collect(1).is_continue());
+    /// assert!(collector.collect(2).is_continue());
+    /// assert!(collector.collect(3).is_break());
+    ///
+    /// assert_eq!(collector.finish(), [1, 2, 3]);
+    /// ```
+    ///
+    /// [`IntoCollector`]: komadori::collector::IntoCollector
+    #[inline]
+    fn into_collector(self) -> IntoCollector<Self>
+    where
+        Self: Sized,
+    {
+        IntoCollector::new(self)
     }
 }
 
@@ -383,7 +709,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
 /// You cannot implement this trait directly. You should instead define the item type
 /// of serial collectors produced by consumers of this parallel collector.
 pub trait ParallelCollector<T>: ParallelCollectorBase<Serial: Collector<T>> {}
-impl<C, T> ParallelCollector<T> for C where C: ParallelCollectorBase<Serial: Collector<T>> {}
+impl<C, T> ParallelCollector<T> for C where C: ParallelCollectorBase<Serial: Collector<T>> + ?Sized {}
 
 // For anyone wanna do this:
 // ```

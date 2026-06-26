@@ -11,15 +11,17 @@
 //! [`max()`]: Iterator::max
 //! [`sum()`]: Iterator::sum
 
-mod par_count;
-mod par_reduce;
+mod count;
+mod for_each;
 #[cfg(feature = "rayon")]
 mod rayon_par_iter_ext;
+mod reduce;
 
-pub use par_count::*;
-pub use par_reduce::*;
+pub use count::*;
+pub use for_each::*;
 #[cfg(feature = "rayon")]
 pub use rayon_par_iter_ext::*;
+pub use reduce::*;
 
 #[inline]
 pub(crate) fn combine_opt<T>(left: &mut Option<T>, right: Option<T>, combiner: impl FnOnce(&mut T, T)) {

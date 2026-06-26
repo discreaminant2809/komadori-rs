@@ -1,19 +1,33 @@
-//!
+//! Parallel collectors for the unit type.
 
-use std::ops::ControlFlow;
+use std::{fmt::Debug, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    IndexedParallelCollector, IndexedParallelCollectorBase, IntoIndexedParallelCollectorBase,
-    ParallelCollector, plumbing,
+use crate::{
+    collector::{
+        IntoParallelCollectorBase, ParallelCollectorBase, UnindexedParallelCollectorBase,
+        plumbing::{self, DefineSerial, DefineUnindexedSerial},
+    },
+    helpers::{unique, unique_unindexed},
 };
 
+/// A parallel collector that always stops accumulating.
+/// It can collect every item type.
+/// Its [`Output`](ParallelCollectorBase::Output) is `()`.
 ///
-#[derive(Debug, Clone, Default)]
+/// This struct is created by `().into_par_collector()`
+/// and `().par_collector()`.
+#[derive(Clone, Default)]
 pub struct ParCollector(());
 
-impl IntoIndexedParallelCollectorBase for () {
+impl Debug for ParCollector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParCollector").finish()
+    }
+}
+
+impl IntoParallelCollectorBase for () {
     type Output = ();
 
     type IntoParCollector = ParCollector;
@@ -24,7 +38,7 @@ impl IntoIndexedParallelCollectorBase for () {
     }
 }
 
-impl IntoIndexedParallelCollectorBase for &() {
+impl IntoParallelCollectorBase for &() {
     type Output = ();
 
     type IntoParCollector = ParCollector;
@@ -35,7 +49,15 @@ impl IntoIndexedParallelCollectorBase for &() {
     }
 }
 
-impl IndexedParallelCollectorBase for ParCollector {
+impl<'a> DefineSerial<'a> for ParCollector {
+    type Serial = unique::Serial<'a, Self, consumer::Serial>;
+}
+
+impl<'a> DefineUnindexedSerial<'a> for ParCollector {
+    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Serial>;
+}
+
+impl ParallelCollectorBase for ParCollector {
     type Output = ();
 
     #[inline]
@@ -45,68 +67,89 @@ impl IndexedParallelCollectorBase for ParCollector {
     fn break_hint(&self) -> ControlFlow<()> {
         ControlFlow::Break(())
     }
-}
 
-impl<T> IndexedParallelCollector<T> for ParCollector {
-    #[inline]
-    fn with_consumer<F>(&mut self, _: usize, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::ConsumerFnOnce<T>,
-    {
-        (f.call_once(Some(0), Consumer).0, ControlFlow::Break(()))
+    fn parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        usize,
+        impl plumbing::Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+    ) {
+        unique::uniquify((len, consumer::Consumer, |_| ControlFlow::Break(())))
     }
 }
 
-impl<T> ParallelCollector<T> for ParCollector {
-    fn with_unindexed_consumer<F>(&mut self, f: F) -> (F::Output, ControlFlow<()>)
-    where
-        F: plumbing::UnindexedConsumerFnOnce<T>,
-    {
-        (f.call_once(Consumer).0, ControlFlow::Break(()))
+impl UnindexedParallelCollectorBase for ParCollector {
+    fn parts_unindexed<'a>(
+        &'a mut self,
+    ) -> (
+        impl plumbing::UnindexedConsumer<
+            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
+            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        >,
+        impl FnOnce(
+            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+        ) -> ControlFlow<()>,
+    ) {
+        unique_unindexed::uniquify((consumer::Consumer, |_| ControlFlow::Break(())))
     }
 }
 
-struct Consumer;
+mod consumer {
+    use std::ops::ControlFlow;
 
-struct Combiner;
+    use komadori::prelude::*;
 
-impl IntoCollectorBase for Consumer {
-    type Output = ();
+    use crate::collector::plumbing;
 
-    type IntoCollector = <() as IntoCollectorBase>::IntoCollector;
+    pub struct Consumer;
 
-    #[inline]
-    fn into_collector(self) -> Self::IntoCollector {
-        ().into_collector()
-    }
-}
+    pub struct Combiner;
 
-impl plumbing::IndexedConsumerBase for Consumer {
-    type Combiner = Combiner;
+    pub type Serial = <() as IntoCollectorBase>::IntoCollector;
 
-    #[inline]
-    fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-        (Self, Combiner)
-    }
+    impl IntoCollectorBase for Consumer {
+        type Output = ();
 
-    #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Break(())
-    }
-}
+        type IntoCollector = Serial;
 
-impl plumbing::ConsumerBase for Consumer {
-    #[inline]
-    fn split_off_left(&self) -> Self {
-        Self
+        #[inline]
+        fn into_collector(self) -> Self::IntoCollector {
+            ().into_collector()
+        }
     }
 
-    #[inline]
-    fn to_combiner(&self) -> Self::Combiner {
-        Combiner
-    }
-}
+    impl plumbing::Consumer for Consumer {
+        type Combiner = Combiner;
 
-impl plumbing::Combiner<()> for Combiner {
-    fn combine(self, _: &mut (), _: ()) {}
+        #[inline]
+        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
+            (Self, Combiner)
+        }
+
+        #[inline]
+        fn break_hint(&self) -> ControlFlow<()> {
+            ControlFlow::Break(())
+        }
+    }
+
+    impl plumbing::UnindexedConsumer for Consumer {
+        #[inline]
+        fn split_off_left(&self) -> Self {
+            Self
+        }
+
+        #[inline]
+        fn to_combiner(&self) -> Self::Combiner {
+            Combiner
+        }
+    }
+
+    impl plumbing::Combiner<()> for Combiner {
+        fn combine(self, _: &mut (), _: ()) {}
+    }
 }
