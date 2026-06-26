@@ -451,6 +451,8 @@ pub trait UnindexedParallelCollectorBase:
     /// [`take(n)`](ParallelCollectorBase::take) to always take random `n` items
     /// instead of the first `n` for the indexed path.
     ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
+    ///
     /// # Examples
     ///
     /// ```

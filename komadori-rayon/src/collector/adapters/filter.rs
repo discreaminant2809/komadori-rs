@@ -366,11 +366,6 @@ mod proptests {
             },
             should_break_pred: move |mut iter| iter.take_iter().filter(|&num| num >= 0).count() >= take_count,
             pred: move |mut iter, output| {
-                // Properties:
-                // - At most `take_count` items.
-                // - All items must satisfy the predicate.
-                // - Subsequence-ness.
-
                 PredError::assert_fn(
                     &output[..],
                     // We could also add `.min(nums.len())`,
@@ -380,15 +375,9 @@ mod proptests {
                     "excessive amount of items",
                 )?;
 
-                if !output.iter().all(|&num| num >= 0) {
-                    return Err(PredError::IncorrectOutput(format!(
-                        "{output:?} contains an item dissatisfying the predicate"
-                    )));
-                }
-
                 PredError::assert_fn(
                     output,
-                    iter.take_iter().collect::<Vec<_>>(),
+                    iter.take_iter().filter(|&num| num >= 0).collect::<Vec<_>>(),
                     |actual, expected| is_subsequence(actual, expected),
                     "not a subsequence",
                 )

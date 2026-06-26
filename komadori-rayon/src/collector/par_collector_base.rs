@@ -554,6 +554,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
     /// instead).
     ///
+    /// This adapter collects `T` if the underlying parallel collector collects `(usize, T)`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -593,6 +595,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// (use
     /// [`feed_into_indexed()`](crate::iter::RayonParallelIteratorExt::feed_into_indexed)
     /// instead).
+    ///
+    /// This adapter collects `T` if the underlying parallel collector collects `T`.
     ///
     /// # Examples
     ///
