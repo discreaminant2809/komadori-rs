@@ -40,8 +40,8 @@
 //!   Its consumers can only be split with an index, and when converted into a
 //!   (serial) collector, it must be fed the exact amount of items before finishing.
 //!
-//!   For example, `enumerate()` is one of such parallel collectors. It only allows
-//!   items to land on preset indices since it has to assign the correct index for
+//!   For example, [`enumerate()`](ParallelCollectorBase::enumerate) is one of such parallel collectors.
+//!   It only allows items to land on preset indices since it has to assign the correct index for
 //!   each item.
 //!
 //! - [`UnindexedParallelCollectorBase`] and [`UnindexedParallelCollector`]:

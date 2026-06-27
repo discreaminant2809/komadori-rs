@@ -15,8 +15,6 @@ use super::{
 pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// The result this collector yields, via the
     /// [`finish()`](Self::finish) method.
-    ///
-    /// This assosciated type does not appear in trait objects.
     type Output;
 
     /// Consumes the collector and returns the accumulated result.

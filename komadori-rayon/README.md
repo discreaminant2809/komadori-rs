@@ -1,4 +1,4 @@
-# komadori-rayon 0.1.0
+# komadori-rayon 0.1.1
 
 [![Crates.io Version](https://img.shields.io/crates/v/komadori-rayon.svg)](https://crates.io/crates/komadori_rayon)
 [![Docs.rs](https://img.shields.io/docsrs/komadori-rayon)](https://docs.rs/komadori_rayon)
@@ -138,7 +138,7 @@ if you want to delve into how parallel collectors work.
 
 [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 [`ParallelIterator`]: https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html
-[`ParallelCollector`]: https://docs.rs/komadori-rayon/latest/komadori-rayon/collector/trait.ParallelCollector.html
-[`feed_into()`]: https://docs.rs/komadori-rayon/latest/komadori-rayon/iter/trait.RayonParallelIteratorExt.html#method.feed_into
+[`ParallelCollector`]: https://docs.rs/komadori-rayon/0.1.1/komadori_rayon/collector/trait.ParallelCollector.html
+[`feed_into()`]: https://docs.rs/komadori-rayon/0.1.1/komadori_rayon/iter/trait.RayonParallelIteratorExt.html#method.feed_into
 [max_vec_bench_mark]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/benches/max_vec.rs
 [par-iter-example]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/examples/par_iter_crate
