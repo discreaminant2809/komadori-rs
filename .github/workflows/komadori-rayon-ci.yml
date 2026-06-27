@@ -22,7 +22,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           # The latest one that still works for `cargo-semver-checks`.
-          toolchain: 1.96.1
+          toolchain: 1.96.0
 
       - name: Install cargo-semver-checks
         uses: taiki-e/install-action@v2
