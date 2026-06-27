@@ -5,9 +5,9 @@ edition = "2024"
 authors = ["Ayabin"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/discreaminant2809/komadori-rs"
-description = "Multi-reduction library. Provides a composable, declarative way to consume an iterator"
+description = "Multi-reduction library. Provides a composable, declarative way to reduce in parallel"
 readme = "README.md"
-categories = ["concurrency", "rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
+categories = ["concurrency", "rust-patterns", "algorithms"]
 keywords = ["rayon", "parallelism", "collector", "fold", "multi-reduction"]
 exclude = ["DESIGN_NOTES.md"] # Not worth including anyway.
 
