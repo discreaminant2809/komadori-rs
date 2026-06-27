@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@v1
         with:
@@ -36,7 +36,7 @@ jobs:
       # we know exactly it is the case and downgrade the version.
       - name: Upload cargo-semver-checks Crash Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-semver-checks-crash-report
           path: /tmp/report-*.toml
