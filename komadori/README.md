@@ -1,4 +1,4 @@
-# komadori 0.7.0
+# komadori 0.8.0
 
 [![Crates.io Version](https://img.shields.io/crates/v/komadori.svg)](https://crates.io/crates/komadori)
 [![Docs.rs](https://img.shields.io/docsrs/komadori)](https://docs.rs/komadori)

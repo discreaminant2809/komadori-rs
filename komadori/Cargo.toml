@@ -1,6 +1,6 @@
 [package]
 name = "komadori"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 authors = ["Ayabin"]
 license = "MIT OR Apache-2.0"
@@ -11,7 +11,7 @@ categories = ["rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
 keywords = ["collector", "fold", "unzip", "composition", "iterator"]
 
 [dependencies]
-itertools = { version = "0.14.0", optional = true, default-features = false }
+itertools = { version = "0.15.0", optional = true, default-features = false }
 
 [dev-dependencies]
 criterion = "0.8.2"
