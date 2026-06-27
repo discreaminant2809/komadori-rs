@@ -44,7 +44,7 @@ pub trait IntoParallelCollector<T>:
 {
 }
 impl<C, T> IntoParallelCollector<T> for C where
-    C: IntoParallelCollectorBase<IntoParCollector: ParallelCollector<T>>
+    C: IntoParallelCollectorBase<IntoParCollector: ParallelCollector<T>> + ?Sized
 {
 }
 
@@ -61,7 +61,7 @@ pub trait IntoUnindexedParallelCollectorBase:
 {
 }
 impl<C> IntoUnindexedParallelCollectorBase for C where
-    C: IntoParallelCollectorBase<IntoParCollector: UnindexedParallelCollectorBase>
+    C: IntoParallelCollectorBase<IntoParCollector: UnindexedParallelCollectorBase> + ?Sized
 {
 }
 
@@ -78,7 +78,7 @@ pub trait IntoUnindexedParallelCollector<T>:
 {
 }
 impl<C, T> IntoUnindexedParallelCollector<T> for C where
-    C: IntoUnindexedParallelCollectorBase<IntoParCollector: UnindexedParallelCollector<T>>
+    C: IntoUnindexedParallelCollectorBase<IntoParCollector: UnindexedParallelCollector<T>> + ?Sized
 {
 }
 
