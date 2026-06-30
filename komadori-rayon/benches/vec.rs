@@ -1,16 +1,17 @@
 use std::{hint::black_box, time::Duration};
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use komadori::prelude::*;
 use komadori_rayon::prelude::*;
-use rand::{RngExt, SeedableRng, rngs::StdRng};
+use rand::{RngExt, SeedableRng, rngs::Xoshiro128PlusPlus};
 use rayon::prelude::*;
 
 fn reduce(criterion: &mut Criterion) {
     let seed = 0;
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = Xoshiro128PlusPlus::seed_from_u64(seed);
 
     let nums: Box<_> = std::iter::repeat_with(|| rng.random::<i32>())
-        .take(1_000_000)
+        .take(500_000)
         .collect();
 
     println!("Seed: {seed}");
@@ -28,11 +29,16 @@ fn reduce(criterion: &mut Criterion) {
         };
     }
 
-    bench_fn!(vec_komadori_indexed);
-    bench_fn!(vec_rayon_indexed);
-    bench_fn!(vec_komadori_unindexed);
-    bench_fn!(vec_rayon_unindexed);
+    // Different placements may yield vastly different results.
+    // It's important run multiple times with a different arrangement each time
+    // to have a more informed performance judgment.
+    bench_fn!(unindexed_parallel_to_serial);
+    bench_fn!(parallel_to_serial);
     bench_fn!(vec_seq);
+    bench_fn!(vec_rayon_unindexed);
+    bench_fn!(vec_komadori_unindexed);
+    bench_fn!(vec_rayon_indexed);
+    bench_fn!(vec_komadori_indexed);
 
     group.finish();
 }
@@ -65,6 +71,21 @@ fn vec_rayon_unindexed(nums: &[i32]) -> Vec<i32> {
 
 fn vec_komadori_unindexed(nums: &[i32]) -> Vec<i32> {
     ForceUnindexed(nums.par_iter().copied()).feed_into(vec![])
+}
+
+fn parallel_to_serial(nums: &[i32]) -> Vec<i32> {
+    nums.iter()
+        .feed_into(vec![].into_par_collector().into_collector())
+}
+
+#[unsafe(no_mangle)]
+fn unindexed_parallel_to_serial(nums: &[i32]) -> Vec<i32> {
+    nums.iter().feed_into(
+        vec![]
+            .into_par_collector()
+            .unindexed_only() // Force the unindexed path.
+            .into_collector(),
+    )
 }
 
 struct ForceUnindexed<I>(I);

@@ -147,6 +147,7 @@
 // To make doc examples in sync (prevent accidental deprecated items usage in doc).
 #![doc(test(attr(deny(deprecated))))]
 
+pub(crate) mod cell;
 pub mod cmp;
 pub mod collections;
 pub mod collector;

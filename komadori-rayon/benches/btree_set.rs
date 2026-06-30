@@ -1,12 +1,12 @@
 use std::{collections::BTreeSet, hint::black_box, time::Duration};
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use rand::{RngExt, SeedableRng, rngs::StdRng};
+use rand::{prelude::*, rngs::Xoshiro128PlusPlus};
 use rayon::prelude::*;
 
 fn reduce(criterion: &mut Criterion) {
     let seed = 0;
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = Xoshiro128PlusPlus::seed_from_u64(seed);
 
     let nums: Box<_> = std::iter::repeat_with(|| rng.random::<i32>())
         .take(100_000)
