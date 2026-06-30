@@ -9,7 +9,7 @@ use std::{collections::LinkedList, ops::ControlFlow, ptr::NonNull};
 use komadori::prelude::*;
 
 use crate::{
-    collections::linked_vec,
+    collections::linked_vec::{self, Collection},
     collector::{
         IntoParallelCollectorBase, ParallelCollectorBase, assert_unindexed_par_collector,
         plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
@@ -87,7 +87,7 @@ impl<'this, T> DefineUnindexedSerial<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T>>;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -162,8 +162,8 @@ where
             <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
-            unindexed_append_to_original(&mut self.0, chunks, len);
+        unique_unindexed::uniquify((linked_vec::Consumer::new(&mut self.0), |output| {
+            debug_assert!(output.is_left_most());
             ControlFlow::Continue(())
         }))
     }
@@ -180,7 +180,7 @@ impl<'v, 'this, T> DefineUnindexedSerial<'this> for ParCollectorMut<'v, T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<T>>;
+    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
 }
 
 impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
@@ -263,8 +263,8 @@ where
             <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((linked_vec::Consumer::new(), |(chunks, len)| {
-            unindexed_append_to_original(self.0, chunks, len);
+        unique_unindexed::uniquify((linked_vec::Consumer::new(self.0), |output| {
+            debug_assert!(output.is_left_most());
             ControlFlow::Continue(())
         }))
     }
@@ -280,33 +280,51 @@ where
     }
 }
 
-fn unindexed_append_to_original<T>(og: &mut Vec<T>, mut chunks: LinkedList<Vec<T>>, mut append_len: usize) {
-    let Some(mut first_chunk) = chunks.pop_front() else {
-        return;
-    };
-
-    // The idea is that we optimize
-    if og.is_empty() {
-        // If the first chunk has more capacity, it's always reasonable,
-        // and even more if the original has no allocation at all.
-        //
-        // If not, it's purely allocator RNG that we can't model cleanly.
-        // Who knows, having a big enough buffer to accomodate `append_len`
-        // additional items is better than reallocation in some cases?
-        std::mem::swap(og, &mut first_chunk);
-
-        // Can't panic. The reduction of linked vec is assumed to
-        // correctly report the amount to append.
-        append_len -= og.len();
+impl<T> Collection<T> for Vec<T> {
+    #[inline]
+    fn push_back(&mut self, elem: T) {
+        self.push(elem);
     }
-    // If the length isn't 0,
-    // we have no other choice but to obey the original
-    // which already contains some items.
 
-    og.reserve(append_len);
-    og.append(&mut first_chunk);
-    for mut chunk in chunks {
-        og.append(&mut chunk);
+    fn push_back_iter(&mut self, elems: impl IntoIterator<Item = T>) {
+        self.extend(elems);
+    }
+
+    fn push_back_iter_ref<'a>(&mut self, elems: impl IntoIterator<Item = &'a T>)
+    where
+        T: Copy + 'a,
+    {
+        self.extend(elems);
+    }
+
+    fn push_back_linked_vec(&mut self, mut chunks: LinkedList<Vec<T>>, mut append_len: usize) {
+        let Some(mut first_chunk) = chunks.pop_front() else {
+            return;
+        };
+
+        // The idea is that we optimize
+        if self.is_empty() {
+            // If the first chunk has more capacity, it's always reasonable,
+            // and even more if the original has no allocation at all.
+            //
+            // If not, it's purely allocator RNG that we can't model cleanly.
+            // Who knows, having a big enough buffer to accomodate `append_len`
+            // additional items is better than reallocation in some cases?
+            std::mem::swap(self, &mut first_chunk);
+
+            // Can't panic. The reduction of linked vec is assumed to
+            // correctly report the amount to append.
+            append_len -= self.len();
+        }
+        // If the length isn't 0,
+        // we have no other choice but to obey the original
+        // which already contains some items.
+
+        self.reserve(append_len);
+        self.append(&mut first_chunk);
+        for mut chunk in chunks {
+            self.append(&mut chunk);
+        }
     }
 }
 
@@ -363,7 +381,10 @@ impl<T> test_utils::IndexedParallelIterator for test_types::IntoParIter<T> {
 mod miri_tests {
     use komadori::prelude::{Collector, IntoCollectorBase};
 
-    use crate::prelude::*;
+    use crate::{
+        collector::plumbing::{Combiner, UnindexedConsumer},
+        prelude::*,
+    };
 
     #[test]
     fn no_alias_for_collector_mut() {
@@ -376,6 +397,24 @@ mod miri_tests {
 
         collector.finish();
         assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn serial_cell_opt_ref_mut_is_sound() {
+        let mut collector = vec![1, 2, 3].into_par_collector();
+        let (consumer, commit) = collector.take_parts_unindexed();
+
+        let right_consumer = consumer;
+        let left_consumer = right_consumer.split_off_left();
+        let combiner = right_consumer.to_combiner();
+
+        let right_output = right_consumer.into_collector().collect_then_finish([6, 7, 8]);
+        let mut left_output = left_consumer.into_collector().collect_then_finish([4, 5]);
+        combiner.combine(&mut left_output, right_output);
+        let output = left_output;
+
+        commit(output);
+        assert_eq!(collector.finish(), [1, 2, 3, 4, 5, 6, 7, 8]);
     }
 }
 

@@ -3,20 +3,20 @@ use std::{hint::black_box, time::Duration};
 use criterion::{Criterion, criterion_group, criterion_main};
 use komadori::{cmp::Max, prelude::*};
 use komadori_rayon::{cmp::ParMax, prelude::*};
-use rand::{RngExt, SeedableRng, rngs::StdRng};
+use rand::{prelude::*, rngs::Xoshiro128PlusPlus};
 use rayon::prelude::*;
 
 fn reduce(criterion: &mut Criterion) {
     let seed = 0;
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = Xoshiro128PlusPlus::seed_from_u64(seed);
 
     let nums: Box<_> = std::iter::repeat_with(|| rng.random::<i32>())
-        .take(1_000_000)
+        .take(500_000)
         .collect();
 
     println!("Seed: {seed}");
     println!("First 10 elements: {:?}", &nums[..10]);
-    let expected = seq_one_pass(&nums);
+    let expected = direct_serial(&nums);
 
     let mut group = criterion.benchmark_group("max_vec");
 
@@ -29,13 +29,14 @@ fn reduce(criterion: &mut Criterion) {
         };
     }
 
+    bench_fn!(direct_serial);
+    bench_fn!(parallel_to_serial);
     bench_fn!(rayon_komadori);
     bench_fn!(rayon_komadori_indexed);
     bench_fn!(rayon_extend);
     bench_fn!(rayon_two_pass);
     bench_fn!(rayon_fold_reduce);
     bench_fn!(rayon_atomic);
-    bench_fn!(seq_one_pass);
 
     group.finish();
 }
@@ -50,10 +51,22 @@ criterion_group! {
 }
 criterion_main!(benches);
 
-fn seq_one_pass(nums: &[i32]) -> (i32, Vec<i32>) {
-    nums.iter()
-        .copied()
-        .feed_into(Max::new().map_output(Option::unwrap).tee(vec![]))
+fn direct_serial(nums: &[i32]) -> (i32, Vec<i32>) {
+    nums.iter().copied().feed_into(
+        Max::new()
+            .map_output(Option::unwrap)
+            .tee(Vec::with_capacity(nums.len())),
+    )
+}
+
+fn parallel_to_serial(nums: &[i32]) -> (i32, Vec<i32>) {
+    nums.iter().copied().feed_into(
+        // Use a parallel collector as a (serial) collector!
+        ParMax::new()
+            .map_output(Option::unwrap)
+            .tee(vec![])
+            .into_collector(),
+    )
 }
 
 fn rayon_two_pass(nums: &[i32]) -> (i32, Vec<i32>) {
