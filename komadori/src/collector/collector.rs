@@ -1,4 +1,4 @@
-use super::CollectorBase;
+use super::{CollectorBase, break_hint};
 
 use std::ops::ControlFlow;
 
@@ -130,7 +130,9 @@ pub trait Collector<T>: CollectorBase {
     where
         Self: Sized,
     {
-        self.break_hint()?;
+        // Guard against something like `take(0)` when we can avoid
+        // consuming one item prematurely.
+        break_hint(self)?;
 
         // Use `try_for_each` instead of `for` loop since the iterator may not be optimal for `for` loop
         // (e.g. `skip`, `chain`, etc.)
@@ -171,6 +173,12 @@ pub trait Collector<T>: CollectorBase {
         // completely depleted the iterator so... we just finish--nothing changed.
         let _ = this.collect_many(items);
         this.finish()
+    }
+
+    ///
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        self.collect(item)
     }
 
     // /// A special case for [`map()`](Collector::map) that works around

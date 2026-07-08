@@ -364,11 +364,11 @@ macro_rules! unsigned_saturating_add_impl {
             }
 
             #[inline]
-            fn break_hint(&self) -> ControlFlow<()> {
+            fn max_afford(&self, request: usize) -> usize {
                 if self.0.0 < <$IntTy>::MAX {
-                    ControlFlow::Continue(())
+                    request
                 } else {
-                    ControlFlow::Break(())
+                    0
                 }
             }
         }

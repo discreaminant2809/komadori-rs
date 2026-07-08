@@ -83,11 +83,11 @@ impl<P, R> CollectorBase for FindMap<P, R> {
     // But we will have a support of `FUSED` const variable later,
     // making this neccessary.
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
+    fn max_afford(&self, request: usize) -> usize {
         if matches!(self.state, State::Found(_)) {
-            ControlFlow::Break(())
+            0
         } else {
-            ControlFlow::Continue(())
+            request
         }
     }
 }

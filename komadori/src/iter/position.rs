@@ -71,12 +71,9 @@ impl<P> CollectorBase for Position<P> {
         self.pred.is_none().then_some(self.idx)
     }
 
-    fn break_hint(&self) -> ControlFlow<()> {
-        if self.pred.is_some() {
-            ControlFlow::Continue(())
-        } else {
-            ControlFlow::Break(())
-        }
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        if self.pred.is_none() { 0 } else { request }
     }
 }
 

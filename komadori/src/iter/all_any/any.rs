@@ -76,8 +76,8 @@ impl<F> CollectorBase for Any<F> {
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.inner.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        if self.inner.stopped() { 0 } else { request }
     }
 }
 

@@ -27,6 +27,7 @@ mod iterator_ext;
 mod last;
 mod position;
 mod reduce;
+mod size_hint;
 mod try_fold;
 mod try_for_each;
 
@@ -42,5 +43,6 @@ pub use iterator_ext::*;
 pub use last::*;
 pub use position::*;
 pub use reduce::*;
+pub(crate) use size_hint::*;
 pub use try_fold::*;
 pub use try_for_each::*;

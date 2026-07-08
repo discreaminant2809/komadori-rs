@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::ControlFlow};
 
 use proptest::{prelude::*, test_runner::TestCaseResult};
 
@@ -178,10 +178,11 @@ where
 
         // Simulate the fact that break_hint is used before looping,
         // which is the intended use case.
-        let has_stopped = (|| {
-            test_parts.collector.break_hint()?;
+        let has_stopped = if test_parts.collector.max_afford(1) == 0 {
+            ControlFlow::Break(())
+        } else {
             overreach_detector.try_for_each(|item| test_parts.collector.collect(item))
-        })()
+        }
         .is_break();
 
         prop_assert_eq!(

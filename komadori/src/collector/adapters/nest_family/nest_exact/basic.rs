@@ -36,8 +36,13 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.0.break_hint()
+    fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        self.0.max_afford(request)
     }
 }
 

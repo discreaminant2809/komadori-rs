@@ -10,7 +10,7 @@ use crate::collector::{Collector, CollectorBase};
 #[derive(Debug, Clone)]
 pub struct Fuse<C> {
     collector: C,
-    break_hint: ControlFlow<()>,
+    stopped: bool,
 }
 
 impl<C> Fuse<C>
@@ -20,19 +20,26 @@ where
     #[inline]
     pub(in crate::collector) fn new(collector: C) -> Self {
         Self {
-            break_hint: collector.break_hint(),
+            stopped: collector.max_afford(1) == 0,
             collector,
         }
     }
 }
 
-impl<C> Fuse<C> {
+impl<C> Fuse<C>
+where
+    C: CollectorBase,
+{
     #[inline]
     fn collect_impl(&mut self, f: impl FnOnce(&mut C) -> ControlFlow<()>) -> ControlFlow<()> {
-        self.break_hint?;
-
-        self.break_hint = f(&mut self.collector);
-        self.break_hint
+        if self.stopped {
+            ControlFlow::Break(())
+        } else if f(&mut self.collector).is_continue() {
+            ControlFlow::Continue(())
+        } else {
+            self.stopped = true;
+            ControlFlow::Break(())
+        }
     }
 }
 
@@ -48,8 +55,19 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.break_hint
+    fn reserve(&mut self, additional: usize) {
+        if !self.stopped {
+            self.collector.reserve(additional);
+        }
+    }
+
+    #[inline]
+    fn max_afford(&self, amount: usize) -> usize {
+        if self.stopped {
+            0
+        } else {
+            self.collector.max_afford(amount)
+        }
     }
 }
 
@@ -69,11 +87,19 @@ where
 
     #[inline]
     fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        if self.break_hint.is_break() {
+        if self.stopped {
             self.finish()
         } else {
             self.collector.collect_then_finish(items)
         }
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        self.collect_impl(|collector| unsafe {
+            // SAFETY: We've reserved for at least one item.
+            collector.assume_reserved_collect(item)
+        })
     }
 }
 

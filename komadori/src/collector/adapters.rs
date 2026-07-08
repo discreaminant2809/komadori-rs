@@ -1,5 +1,3 @@
-#[cfg(feature = "unstable")]
-mod alt_break_hint;
 mod chain;
 mod cloning;
 mod copying;
@@ -17,19 +15,20 @@ mod map_output;
 mod map_while;
 #[cfg(feature = "unstable")]
 mod nest_family;
-mod partition;
-#[cfg(feature = "itertools")]
-mod partition_map;
+// mod partition;
+// #[cfg(feature = "itertools")]
+// mod partition_map;
 mod skip;
 mod skip_while;
 mod take;
 mod take_while;
 mod tee;
+mod tee_base;
 mod tee_clone;
 mod tee_funnel;
 mod tee_mut;
-#[cfg(feature = "unstable")]
-mod tee_with;
+// #[cfg(feature = "unstable")]
+// mod tee_with;
 #[cfg(feature = "unstable")]
 mod then;
 mod trying_options;
@@ -39,8 +38,6 @@ mod unzip;
 #[cfg(feature = "itertools")]
 mod update;
 
-#[cfg(feature = "unstable")]
-pub use alt_break_hint::*;
 pub use chain::*;
 pub use cloning::*;
 pub use copying::*;
@@ -58,9 +55,9 @@ pub use map_output::*;
 pub use map_while::*;
 #[cfg(feature = "unstable")]
 pub use nest_family::*;
-pub use partition::*;
-#[cfg(feature = "itertools")]
-pub use partition_map::*;
+// pub use partition::*;
+// #[cfg(feature = "itertools")]
+// pub use partition_map::*;
 pub use skip::*;
 pub use skip_while::*;
 pub use take::*;
@@ -69,8 +66,8 @@ pub use tee::*;
 pub use tee_clone::*;
 pub use tee_funnel::*;
 pub use tee_mut::*;
-#[cfg(feature = "unstable")]
-pub use tee_with::*;
+// #[cfg(feature = "unstable")]
+// pub use tee_with::*;
 #[cfg(feature = "unstable")]
 pub use then::*;
 pub use trying_options::*;
@@ -79,3 +76,5 @@ pub use unbatching::*;
 pub use unzip::*;
 #[cfg(feature = "itertools")]
 pub use update::*;
+
+use tee_base::*;

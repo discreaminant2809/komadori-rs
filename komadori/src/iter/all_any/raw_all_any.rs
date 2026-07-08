@@ -61,11 +61,7 @@ impl<F, const ALL: bool> RawAllAny<F, ALL> {
     }
 
     #[inline]
-    pub fn break_hint(&self) -> ControlFlow<()> {
-        if self.pred.is_some() {
-            ControlFlow::Continue(())
-        } else {
-            ControlFlow::Break(())
-        }
+    pub fn stopped(&self) -> bool {
+        self.pred.is_none()
     }
 }

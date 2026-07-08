@@ -2,6 +2,15 @@
 
 ## 0.8.0
 
+### Added
+
+- Reserve API.
+
+### Removed
+
+- `CollectorBase::break_hint()`.
+- Unstable: `CollectorBase::alt_break_hint()`.
+
 ## 0.7.0
 
 ### Added

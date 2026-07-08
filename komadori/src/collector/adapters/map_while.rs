@@ -28,11 +28,11 @@ where
         self.collector.finish()
     }
 
+    // We don't know how many left to reserve
+
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        // Despite short-circuiting due to the predicate, we can't
-        // do anything besides delegating to the underlying collector.
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.max_afford(request)
     }
 }
 

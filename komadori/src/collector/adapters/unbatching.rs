@@ -28,9 +28,16 @@ where
         self.collector.finish()
     }
 
+    // We're just like `filter()`; we can't guarantee a `collect()`
+    // in every call.
+
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        if self.collector.max_afford(request) == 0 {
+            0
+        } else {
+            request
+        }
     }
 }
 
@@ -44,7 +51,7 @@ where
         (self.f)(&mut self.collector, item)
     }
 
-    // Can't meaningfully override `collect_many` and `collect_then_finish`.
+    // Can't meaningfully override the other three methods.
 }
 
 impl<C: Debug, F> Debug for Unbatching<C, F> {
