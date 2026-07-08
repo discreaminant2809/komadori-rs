@@ -27,9 +27,17 @@ where
         self.collector.finish()
     }
 
+    // We don't know how many exactly to reserve.
+
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        if self.collector.max_afford(request) == 0 {
+            0
+        } else {
+            // There can also be the case that we're only fed
+            // empty iterators!
+            request
+        }
     }
 }
 

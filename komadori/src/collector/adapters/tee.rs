@@ -1,6 +1,8 @@
-use std::{iter, ops::ControlFlow};
+use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase, Fuse};
+use crate::collector::{Collector, CollectorBase};
+
+use super::{DefinePassDown, TeeBase, Teer};
 
 /// A collector that lets both collectors collect the same item.
 ///
@@ -8,8 +10,7 @@ use crate::collector::{Collector, CollectorBase, Fuse};
 /// See its documentation for more.
 #[derive(Debug, Clone)]
 pub struct Tee<C1, C2> {
-    collector1: Fuse<C1>,
-    collector2: Fuse<C2>,
+    base: TeeBase<C1, C2, CopyTeer>,
 }
 
 impl<C1, C2> Tee<C1, C2>
@@ -19,8 +20,7 @@ where
 {
     pub(in crate::collector) fn new(collector1: C1, collector2: C2) -> Self {
         Self {
-            collector1: Fuse::new(collector1),
-            collector2: Fuse::new(collector2),
+            base: TeeBase::new(collector1, collector2, CopyTeer),
         }
     }
 }
@@ -34,16 +34,17 @@ where
 
     #[inline]
     fn finish(self) -> Self::Output {
-        (self.collector1.finish(), self.collector2.finish())
+        self.base.finish()
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        if self.collector1.break_hint().is_break() && self.collector2.break_hint().is_break() {
-            ControlFlow::Break(())
-        } else {
-            ControlFlow::Continue(())
-        }
+    fn reserve(&mut self, additional: usize) {
+        self.base.reserve(additional);
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        self.base.max_afford(request)
     }
 }
 
@@ -53,64 +54,53 @@ where
     C2: Collector<T>,
     T: Copy,
 {
+    #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        match (self.collector1.collect(item), self.collector2.collect(item)) {
-            (ControlFlow::Break(_), ControlFlow::Break(_)) => ControlFlow::Break(()),
-            _ => ControlFlow::Continue(()),
-        }
+        self.base.collect(item)
     }
 
+    #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.break_hint()?;
-
-        let mut items = items.into_iter();
-
-        match items.try_for_each(|item| {
-            if self.collector1.collect(item).is_break() {
-                ControlFlow::Break(Which::First(item))
-            } else {
-                self.collector2.collect(item).map_break(|_| Which::Second)
-            }
-        }) {
-            ControlFlow::Break(Which::First(item)) => {
-                self.collector2.collect_many(iter::once(item).chain(items))
-            }
-            ControlFlow::Break(Which::Second) => self.collector1.collect_many(items),
-            ControlFlow::Continue(_) => ControlFlow::Continue(()),
-        }
+        self.base.collect_many(items)
     }
 
-    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        if self.break_hint().is_break() {
-            return self.finish();
-        }
+    #[inline]
+    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
+        self.base.collect_then_finish(items)
+    }
 
-        let mut items = items.into_iter();
-
-        match items.try_for_each(|item| {
-            if self.collector1.collect(item).is_break() {
-                ControlFlow::Break(Which::First(item))
-            } else {
-                self.collector2.collect(item).map_break(|_| Which::Second)
-            }
-        }) {
-            ControlFlow::Break(Which::First(item)) => (
-                self.collector1.finish(),
-                self.collector2
-                    .collect_then_finish(iter::once(item).chain(items)),
-            ),
-            ControlFlow::Break(Which::Second) => (
-                self.collector1.collect_then_finish(items),
-                self.collector2.finish(),
-            ),
-            ControlFlow::Continue(_) => self.finish(),
-        }
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        // SAFETY: `TeeBase` alerady handles the invariants.
+        unsafe { self.base.assume_reserved_collect(item) }
     }
 }
 
-enum Which<T> {
-    First(T),
-    Second,
+impl<'this, T> DefinePassDown<'this, T> for CopyTeer
+where
+    T: Copy,
+{
+    type PassDown = T;
+}
+
+#[derive(Debug, Clone)]
+struct CopyTeer;
+
+impl<T> Teer<T> for CopyTeer
+where
+    T: Copy,
+{
+    const ITEM_IS_COPY: bool = true;
+
+    #[inline]
+    fn pass_down(&mut self, item: &mut T) -> T {
+        *item
+    }
+
+    #[inline]
+    fn no_tee_collect(&mut self, collector: &mut impl Collector<T>, item: T) -> ControlFlow<()> {
+        collector.collect(item)
+    }
 }
 
 #[cfg(all(test, feature = "std"))]

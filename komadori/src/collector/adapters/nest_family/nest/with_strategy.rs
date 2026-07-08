@@ -3,7 +3,7 @@ use std::{
     ops::ControlFlow,
 };
 
-use crate::collector::{Collector, CollectorBase, Fuse};
+use crate::collector::{Collector, CollectorBase, Fuse, break_hint};
 
 use super::super::strategy::{Strategy, StrategyBase};
 
@@ -21,6 +21,8 @@ where
     // we call `finish()` right away, it is incorrect for the outer
     // to collect this.
     inner: Option<S::Collector>,
+    // Cache this so that we can propagate the reservation to future inners.
+    reserved: usize,
 }
 
 impl<CO, S> WithStrategy<CO, S>
@@ -33,6 +35,7 @@ where
             outer: outer.fuse(),
             strategy,
             inner: None,
+            reserved: 0,
         }
     }
 }
@@ -54,8 +57,18 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.outer.break_hint()
+    fn reserve(&mut self, additional: usize) {
+        if let Some(inner) = &mut self.inner {
+            inner.reserve(additional);
+            let max_afford1 = inner.max_afford(additional);
+            assert!(
+                additional >= max_afford1,
+                "`max_afford()` of the inner collector is implemented incorrectly"
+            );
+            self.reserved = additional - max_afford1;
+        } else {
+            self.reserved = additional;
+        }
     }
 }
 
@@ -76,8 +89,15 @@ where
             // it hasn't exhausted the iterator, leading to more guards
             // => goodbye optimization.
             loop {
-                let inner = self.strategy.next_collector();
-                if inner.break_hint().is_continue() {
+                let mut inner = self.strategy.next_collector();
+                if inner.max_afford(1) > 0 {
+                    inner.reserve(self.reserved);
+                    let max_afford = inner.max_afford(self.reserved);
+                    assert!(
+                        self.reserved >= max_afford,
+                        "`max_afford()` of the inner collector is implemented incorrectly"
+                    );
+                    self.reserved -= inner.max_afford(self.reserved);
                     break self.inner.insert(inner);
                 }
 
@@ -93,7 +113,54 @@ where
                     .finish(),
             )
         } else {
-            self.outer.break_hint()
+            break_hint(&self.outer)
+        }
+    }
+
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        let inner = if let Some(inner) = &mut self.inner {
+            inner
+        } else {
+            debug_assert!(
+                self.reserved > 0,
+                "contract violation for calling this with zero reservation"
+            );
+
+            // We collect in a loop. Should we use `collect_many()` for the outer?
+            // Nah. The best I've tried is `iter::repeat_with(...).map_while(...)`.
+            // This combo guarantees a `(0, None)` size hint, which has little
+            // to no chance of optimize. Not to mention "fraudulent" `collect_many()`
+            // implementation. The outer may return `Continue(())` even tho
+            // it hasn't exhausted the iterator, leading to more guards
+            // => goodbye optimization.
+            loop {
+                let mut inner = self.strategy.next_collector();
+                if inner.max_afford(1) > 0 {
+                    inner.reserve(self.reserved);
+                    let max_afford = inner.max_afford(self.reserved);
+                    assert!(
+                        self.reserved >= max_afford,
+                        "`max_afford()` of the inner collector is implemented incorrectly"
+                    );
+                    self.reserved -= max_afford;
+                    break self.inner.insert(inner);
+                }
+
+                self.outer.collect(inner.finish())?;
+            }
+        };
+
+        // SAFETY: We've reserved at least 1 item for the inner
+        // in `reserve()` and/or the above loop.
+        if unsafe { inner.assume_reserved_collect(item).is_break() } {
+            self.outer.collect(
+                self.inner
+                    .take()
+                    .expect("inner collector should exist")
+                    .finish(),
+            )
+        } else {
+            break_hint(&self.outer)
         }
     }
 

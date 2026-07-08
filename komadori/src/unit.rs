@@ -40,8 +40,8 @@ impl CollectorBase for Collector {
     fn finish(self) -> Self::Output {}
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Break(())
+    fn max_afford(&self, _request: usize) -> usize {
+        0
     }
 }
 

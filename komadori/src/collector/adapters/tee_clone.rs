@@ -1,6 +1,8 @@
-use std::{iter, ops::ControlFlow};
+use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase, Fuse};
+use crate::collector::{Collector, CollectorBase};
+
+use super::{DefinePassDown, TeeBase, Teer};
 
 /// A collector that lets both collectors collect the same item.
 ///
@@ -8,8 +10,7 @@ use crate::collector::{Collector, CollectorBase, Fuse};
 /// See its documentation for more.
 #[derive(Debug, Clone)]
 pub struct TeeClone<C1, C2> {
-    collector1: Fuse<C1>,
-    collector2: Fuse<C2>,
+    base: TeeBase<C1, C2, CloneTeer>,
 }
 
 impl<C1, C2> TeeClone<C1, C2>
@@ -19,8 +20,7 @@ where
 {
     pub(in crate::collector) fn new(collector1: C1, collector2: C2) -> Self {
         Self {
-            collector1: Fuse::new(collector1),
-            collector2: Fuse::new(collector2),
+            base: TeeBase::new(collector1, collector2, CloneTeer),
         }
     }
 }
@@ -34,16 +34,17 @@ where
 
     #[inline]
     fn finish(self) -> Self::Output {
-        (self.collector1.finish(), self.collector2.finish())
+        self.base.finish()
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        if self.collector1.break_hint().is_break() && self.collector2.break_hint().is_break() {
-            ControlFlow::Break(())
-        } else {
-            ControlFlow::Continue(())
-        }
+    fn reserve(&mut self, additional: usize) {
+        self.base.reserve(additional);
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        self.base.max_afford(request)
     }
 }
 
@@ -53,85 +54,62 @@ where
     C2: Collector<T>,
     T: Clone,
 {
+    #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        // If one of the collectors has stopped, we can avoid cloning!
-        if self.collector1.break_hint().is_break() {
-            self.collector2.collect(item)
-        } else if self.collector2.break_hint().is_break() {
-            self.collector1.collect(item)
-        } else {
-            let (item1, item2) = (item.clone(), item);
-            match (
-                self.collector1.collect(item1),
-                self.collector2.collect(item2),
-            ) {
-                (ControlFlow::Break(_), ControlFlow::Break(_)) => ControlFlow::Break(()),
-                _ => ControlFlow::Continue(()),
-            }
-        }
+        self.base.collect(item)
     }
 
+    #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.break_hint()?;
-
-        let mut items = items.into_iter();
-
-        match items.try_for_each(|item| {
-            // We don't need to check like the `collect` implementation.
-            // `self.break_hint()?` has already handled it,
-            // and we trust that both underlying collectors
-            // return `Break` as soon as it can't afford more items.
-            if self.collector1.collect(item.clone()).is_break() {
-                ControlFlow::Break(Which::First(item))
-            } else {
-                self.collector2.collect(item).map_break(|_| Which::Second)
-            }
-        }) {
-            ControlFlow::Break(Which::First(item)) => {
-                self.collector2.collect_many(iter::once(item).chain(items))
-            }
-            ControlFlow::Break(Which::Second) => self.collector1.collect_many(items),
-            ControlFlow::Continue(_) => ControlFlow::Continue(()),
-        }
+        self.base.collect_many(items)
     }
 
-    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        if self.break_hint().is_break() {
-            return self.finish();
-        }
+    #[inline]
+    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
+        self.base.collect_then_finish(items)
+    }
 
-        let mut items = items.into_iter();
-
-        match items.try_for_each(|item| {
-            // We don't need to check like the `collect` implementation.
-            // `self.break_hint()?` has already handled it,
-            // and we trust that both underlying collectors
-            // return `Break` as soon as it can't afford more items.
-            if self.collector1.collect(item.clone()).is_break() {
-                ControlFlow::Break(Which::First(item))
-            } else {
-                self.collector2.collect(item).map_break(|_| Which::Second)
-            }
-        }) {
-            // If one of the collectors has stopped, we can avoid cloning
-            // for the rest of the items!
-            ControlFlow::Break(Which::First(item)) => (
-                self.collector1.finish(),
-                self.collector2
-                    .collect_then_finish(iter::once(item).chain(items)),
-            ),
-            ControlFlow::Break(Which::Second) => (
-                self.collector1.collect_then_finish(items),
-                self.collector2.finish(),
-            ),
-            ControlFlow::Continue(_) => self.finish(),
-        }
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        // SAFETY: `TeeBase` alerady handles the invariants.
+        unsafe { self.base.assume_reserved_collect(item) }
     }
 }
 
-enum Which<T> {
-    First(T),
-    Second,
+#[derive(Debug, Clone)]
+struct CloneTeer;
+
+impl<'a, T> DefinePassDown<'a, T> for CloneTeer {
+    type PassDown = T;
+}
+
+impl<T> Teer<T> for CloneTeer
+where
+    T: Clone,
+{
+    #[inline]
+    fn pass_down<'a>(&mut self, item: &'a mut T) -> <Self as DefinePassDown<'a, T>>::PassDown {
+        item.clone()
+    }
+
+    #[inline]
+    fn no_tee_collect(
+        &mut self,
+        collector: &mut impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown>,
+        item: T,
+    ) -> ControlFlow<()> {
+        collector.collect(item)
+    }
+
+    #[inline]
+    unsafe fn no_tee_assume_reserved_collect(
+        &mut self,
+        collector: &mut impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown>,
+        item: T,
+    ) -> ControlFlow<()> {
+        // SAFETY: The caller has reserved for one item.
+        unsafe { collector.assume_reserved_collect(item) }
+    }
 }
 
 #[cfg(all(test, feature = "std"))]

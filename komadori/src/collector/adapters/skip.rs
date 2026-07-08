@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, break_hint};
 
 /// A collector that skips the first `n` collected items before it begins
 /// accumulating them.
@@ -33,8 +33,19 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn reserve(&mut self, additional: usize) {
+        self.collector
+            .reserve(additional.saturating_sub(self.remaining));
+    }
+
+    fn max_afford(&self, request: usize) -> usize {
+        if self.collector.max_afford(1) == 0 {
+            0
+        } else if request <= self.remaining {
+            request
+        } else {
+            request + self.collector.max_afford(request - self.remaining)
+        }
     }
 }
 
@@ -48,13 +59,15 @@ where
         }
 
         self.remaining -= 1;
-        self.collector.break_hint()
+        break_hint(&self.collector)
     }
 
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
         // Unlike `Collector::take()`, a guard is needed because we drop
         // items (via `drop_n_items`) before forwarding to the underlying collector.
-        self.break_hint()?;
+        if self.max_afford(1) == 0 {
+            return ControlFlow::Break(());
+        }
 
         let mut items = items.into_iter();
         let (lower_sh, _) = items.size_hint();
@@ -63,7 +76,7 @@ where
             items
                 .by_ref()
                 .take(std::mem::take(&mut self.remaining))
-                .try_for_each(|_| self.collector.break_hint())?;
+                .try_for_each(|_| break_hint(&self.collector))?;
 
             return self.collector.collect_many(items);
         }
@@ -72,12 +85,10 @@ where
         items
             .by_ref()
             .take(lower_sh)
-            .try_for_each(|_| self.collector.break_hint())?;
+            .try_for_each(|_| break_hint(&self.collector))?;
 
         match items.by_ref().try_for_each(|_| {
-            self.collector
-                .break_hint()
-                .map_break(|_| ControlFlow::Break(()))?;
+            break_hint(&self.collector).map_break(|_| ControlFlow::Break(()))?;
             self.remaining -= 1;
             if self.remaining == 0 {
                 ControlFlow::Break(ControlFlow::Continue(()))
@@ -92,7 +103,7 @@ where
     }
 
     fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        if self.break_hint().is_break() {
+        if self.max_afford(1) == 0 {
             return self.collector.finish();
         }
 
@@ -103,7 +114,7 @@ where
             return if items
                 .by_ref()
                 .take(std::mem::take(&mut self.remaining))
-                .try_for_each(|_| self.collector.break_hint())
+                .try_for_each(|_| break_hint(&self.collector))
                 .is_break()
             {
                 self.collector.finish()
@@ -116,16 +127,14 @@ where
         if items
             .by_ref()
             .take(lower_sh)
-            .try_for_each(|_| self.collector.break_hint())
+            .try_for_each(|_| break_hint(&self.collector))
             .is_break()
         {
             return self.collector.finish();
         }
 
         match items.by_ref().try_for_each(|_| {
-            self.collector
-                .break_hint()
-                .map_break(|_| ControlFlow::Break(()))?;
+            break_hint(&self.collector).map_break(|_| ControlFlow::Break(()))?;
 
             self.remaining -= 1;
             if self.remaining == 0 {

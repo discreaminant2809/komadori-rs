@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, break_hint};
 
 /// A collector that both filters and maps each item before collecting.
 ///
@@ -29,9 +29,17 @@ where
         self.collector.finish()
     }
 
+    // We don't know how many exactly to reserve.
+
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        if self.collector.max_afford(request) == 0 {
+            0
+        } else {
+            // There can also be the case that we're only fed
+            // items that make the predicate false!
+            request
+        }
     }
 }
 
@@ -44,7 +52,7 @@ where
         if let Some(item) = (self.pred)(item) {
             self.collector.collect(item)
         } else {
-            self.collector.break_hint()
+            break_hint(&self.collector)
         }
     }
 

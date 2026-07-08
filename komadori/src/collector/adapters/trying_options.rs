@@ -35,11 +35,13 @@ where
         self.collector.map(CollectorBase::finish)
     }
 
+    // No reserve
+
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
+    fn max_afford(&self, request: usize) -> usize {
         self.collector
             .as_ref()
-            .map_or(ControlFlow::Break(()), |collector| collector.break_hint())
+            .map_or(0, move |collector| collector.max_afford(request))
     }
 }
 
@@ -91,6 +93,8 @@ where
 
         (!any_none).then(|| collector.finish())
     }
+
+    // No override for `assume_reserved_collect()` because we don't override `reserve()`.
 }
 
 #[cfg(all(test, feature = "std"))]

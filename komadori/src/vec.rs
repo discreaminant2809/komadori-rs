@@ -59,6 +59,11 @@ impl<T> CollectorBase for IntoCollector<T> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
+    }
 }
 
 impl<T> Collector<T> for IntoCollector<T> {
@@ -78,6 +83,16 @@ impl<T> Collector<T> for IntoCollector<T> {
     fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
         self.0.extend(items);
         self.0
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: the caller has reserved for at least one element.
+            push_unchecked(&mut self.0, item);
+        }
+
+        ControlFlow::Continue(())
     }
 }
 
@@ -102,6 +117,16 @@ where
         self.0.extend(items);
         self.0
     }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, &item: &'i T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: the caller has reserved for at least one element.
+            push_unchecked(&mut self.0, item);
+        }
+
+        ControlFlow::Continue(())
+    }
 }
 
 impl<'i, T> Collector<&'i mut T> for IntoCollector<T>
@@ -125,6 +150,16 @@ where
         self.0.extend(items.into_iter().map(|&mut item| item));
         self.0
     }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: the caller has reserved for at least one element.
+            push_unchecked(&mut self.0, item);
+        }
+
+        ControlFlow::Continue(())
+    }
 }
 
 impl<'a, T> CollectorBase for CollectorMut<'a, T> {
@@ -133,6 +168,11 @@ impl<'a, T> CollectorBase for CollectorMut<'a, T> {
     #[inline]
     fn finish(self) -> Self::Output {
         self.0
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
     }
 }
 
@@ -153,6 +193,16 @@ impl<'a, T> Collector<T> for CollectorMut<'a, T> {
     fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
         self.0.extend(items);
         self.0
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: the caller has reserved for at least one element.
+            push_unchecked(self.0, item);
+        }
+
+        ControlFlow::Continue(())
     }
 }
 
@@ -177,6 +227,16 @@ where
         self.0.extend(items);
         self.0
     }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, &item: &'i T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: the caller has reserved for at least one element.
+            push_unchecked(self.0, item);
+        }
+
+        ControlFlow::Continue(())
+    }
 }
 
 impl<'a, 'i, T> Collector<&'i mut T> for CollectorMut<'a, T>
@@ -200,11 +260,40 @@ where
         self.0.extend(items.into_iter().map(|&mut item| item));
         self.0
     }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: the caller has reserved for at least one element.
+            push_unchecked(self.0, item);
+        }
+
+        ControlFlow::Continue(())
+    }
 }
 
 impl<T> Default for IntoCollector<T> {
     fn default() -> Self {
         Self(Default::default())
+    }
+}
+
+/// # Safety
+///
+/// Must have reserved for at least one element via [`Vec::reserve()`] or similar methods.
+unsafe fn push_unchecked<T>(v: &mut Vec<T>, item: T) {
+    let len = v.len();
+
+    unsafe {
+        v.as_mut_ptr()
+            // SAFETY: the allocated object is `sizeof(T) * len` big.
+            .add(len)
+            // SAFETY: We've reserved for at least one element.
+            .write(item);
+
+        // SAFETY: We've reserved for at least one element,
+        // and the element at index `len` is initialized.
+        v.set_len(len + 1);
     }
 }
 

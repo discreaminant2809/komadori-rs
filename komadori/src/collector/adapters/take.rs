@@ -19,24 +19,6 @@ impl<C> Take<C> {
             remaining: n,
         }
     }
-
-    #[inline]
-    fn collect_impl(&mut self, f: impl FnOnce(&mut C) -> ControlFlow<()>) -> ControlFlow<()> {
-        // Must NOT remove it. The user may construct with `take(0)` and
-        // because it hasn't yielded Break, it shouldn't panic!
-        if self.remaining == 0 {
-            return ControlFlow::Break(());
-        }
-
-        self.remaining -= 1;
-        let cf = f(&mut self.collector);
-
-        if self.remaining == 0 {
-            ControlFlow::Break(())
-        } else {
-            cf
-        }
-    }
 }
 
 impl<C> CollectorBase for Take<C>
@@ -50,12 +32,14 @@ where
         self.collector.finish()
     }
 
-    fn break_hint(&self) -> ControlFlow<()> {
-        if self.remaining == 0 {
-            ControlFlow::Break(())
-        } else {
-            self.collector.break_hint()
-        }
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.collector.reserve(self.remaining.min(additional));
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.max_afford(request).min(self.remaining)
     }
 }
 
@@ -65,25 +49,42 @@ where
 {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        self.collect_impl(|collector| collector.collect(item))
+        // Must NOT remove it. The user may construct with `take(0)` and
+        // because it hasn't yielded Break, it shouldn't panic!
+        if self.remaining == 0 {
+            return ControlFlow::Break(());
+        }
+
+        self.remaining -= 1;
+        let cf = self.collector.collect(item);
+
+        if self.remaining == 0 {
+            ControlFlow::Break(())
+        } else {
+            cf
+        }
     }
 
-    // fn size_hint(&self) -> (usize, Option<usize>) {
-    //     let (lower, upper) = self.collector.size_hint();
-    //     (
-    //         lower.min(self.remaining),
-    //         upper.map(|u| u.min(self.remaining)),
-    //     )
-    // }
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        // Must NOT remove it. The user may construct with `take(0)` and
+        // because it hasn't yielded Break, it shouldn't panic!
+        if self.remaining == 0 {
+            return ControlFlow::Break(());
+        }
 
-    // fn reserve(&mut self, mut additional_min: usize, mut additional_max: Option<usize>) {
-    //     additional_min = additional_min.min(self.remaining);
-    //     additional_max = Some(additional_max.map_or(self.remaining, |additional_max| {
-    //         additional_max.min(self.remaining)
-    //     }));
+        self.remaining -= 1;
+        let cf = unsafe {
+            // SAFETY: Since `remaining` > 0, we've reserved at least 1 item.
+            self.collector.assume_reserved_collect(item)
+        };
 
-    //     self.collector.reserve(additional_min, additional_max);
-    // }
+        if self.remaining == 0 {
+            ControlFlow::Break(())
+        } else {
+            cf
+        }
+    }
 
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
         // FIXED: utilize specialization after it's stabilized.
@@ -91,14 +92,16 @@ where
         let mut items = items.into_iter();
         let (lower_sh, _) = items.size_hint();
 
-        // Implementation note: we trust the iterator's hint.
+        // Implementation note: we trust the iterator's hint, but only for safe code.
+        // No reserve calls and unsafe code for now because
+        // we don't use `assume_reserved_collect()`,
+        // but it's worth keeping this in mind.
 
         // The collector may end early. We risk tracking the state wrong?
         // Worry not. By then, the `remaining` becomes useless
         // and acts as a *soft* fuse.
         if self.remaining <= lower_sh {
-            let n = self.remaining;
-            self.remaining = 0;
+            let n = std::mem::take(&mut self.remaining);
             let _ = self.collector.collect_many(items.take(n));
             return ControlFlow::Break(());
         }
@@ -123,7 +126,7 @@ where
     }
 
     fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        // No need to track the state anymore - we'll be gone!
+        // No need to track the state anymore. We'll be gone!
         self.collector
             .collect_then_finish(items.into_iter().take(self.remaining))
     }

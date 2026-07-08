@@ -225,6 +225,8 @@ pub use collector_by_mut::*;
 pub use collector_by_ref::*;
 pub use into_collector::*;
 
+use std::ops::ControlFlow;
+
 #[inline(always)]
 pub(crate) const fn assert_collector_base<C>(collector: C) -> C
 where
@@ -239,4 +241,13 @@ where
     C: Collector<T>,
 {
     collector
+}
+
+#[inline]
+fn break_hint(collector: &impl CollectorBase) -> ControlFlow<()> {
+    if collector.max_afford(1) > 0 {
+        ControlFlow::Continue(())
+    } else {
+        ControlFlow::Break(())
+    }
 }

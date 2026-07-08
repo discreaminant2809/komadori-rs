@@ -30,8 +30,13 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn reserve(&mut self, additional: usize) {
+        self.collector.reserve(additional);
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.max_afford(request)
     }
 }
 
@@ -43,6 +48,12 @@ where
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
         self.collector.collect(item)
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        // SAFETY: The caller has reserved at least 1 item.
+        unsafe { self.collector.assume_reserved_collect(item) }
     }
 
     #[inline]

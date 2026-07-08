@@ -1,18 +1,18 @@
 use std::ops::ControlFlow;
 
-#[cfg(feature = "itertools")]
-use itertools::Either;
+// #[cfg(feature = "itertools")]
+// use itertools::Either;
 
-#[cfg(feature = "unstable")]
-use super::{AltBreakHint, Funnel, Nest, NestExact, TeeWith, Then};
+#[cfg(feature = "itertools")]
+use super::Update;
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
-    Inspect, IntoCollector, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip,
-    SkipWhile, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults,
-    Unbatching, Unzip, assert_collector, assert_collector_base,
+    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Skip, SkipWhile, Take, TakeWhile, Tee,
+    TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching, Unzip, assert_collector,
+    assert_collector_base,
 };
-#[cfg(feature = "itertools")]
-use super::{PartitionMap, Update};
+#[cfg(feature = "unstable")]
+use super::{Funnel, Nest, NestExact, Then};
 
 /// The base trait of a collector.
 ///
@@ -64,84 +64,17 @@ pub trait CollectorBase {
     where
         Self: Sized;
 
-    /// Returns a hint whether the collector has stopped accumulating.
     ///
-    /// Returns [`Break(())`] if it is guaranteed that the collector
-    /// has stopped accumulating, or returns [`Continue(())`] otherwise.
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        let _additional = additional;
+        // Does nothing.
+    }
+
     ///
-    /// As specified in the [module-level documentation](crate::collector),
-    /// after the stop is signaled somewhere else,
-    /// including through [`collect()`] or similar methods or this method itself,
-    /// the behavior of this method is unspecified.
-    /// This may include returning [`Continue(())`] even if the collector has conceptually stopped.
-    ///
-    /// This method should be called once and only once before collecting
-    /// items in a loop to avoid consuming one item prematurely.
-    /// It is not intended for repeatedly checking whether the
-    /// collector has stopped. Use [`fuse()`](CollectorBase::fuse)
-    /// if you find yourself needing such behavior.
-    ///
-    /// If the collector is uncertain, like "maybe I won’t accumulate… uh, fine, I will,"
-    /// it is recommended to just return [`Continue(())`].
-    /// For example, [`filter()`] might skip some items it collects,
-    /// but still returns [`Continue(())`] as long as the underlying collector can still accumulate.
-    /// The filter just denies "undesirable" items and does not signal termination
-    /// (this is the job of [`take_while()`] instead).
-    ///
-    /// The default implementation always returns [`Continue(())`].
-    ///
-    /// # Examples
-    ///
-    /// Correct usage:
-    ///
-    /// ```
-    /// use komadori::prelude::*;
-    ///
-    /// let mut collector = vec![]
-    ///     .into_collector()
-    ///     .take_while(|&x| x != 3);
-    ///
-    /// let mut has_stopped = collector.break_hint().is_break();
-    /// let mut num = 0;
-    /// while !has_stopped {
-    ///     has_stopped = collector.collect(num).is_break();
-    ///     num += 1;
-    /// }
-    ///
-    /// assert_eq!(collector.finish(), [0, 1, 2]);
-    /// ```
-    ///
-    /// Incorrect usage:
-    ///
-    /// ```no_run
-    /// use komadori::prelude::*;
-    ///
-    /// let mut collector = vec![]
-    ///     .into_collector()
-    ///     .take_while(|&x| x != 3);
-    ///
-    /// let mut num = 0;
-    /// // If `collect()` has returned `Break(())` in the previous iteration,
-    /// // The usage of `break_hint()` here is NOT valid. ⚠️
-    /// // By the current implementation, this may loop indefinitely
-    /// // until your RAM explodes! (the `Vec` keeps expanding)
-    /// while collector.break_hint().is_continue() {
-    ///     let _ = collector.collect(num);
-    ///     num += 1;
-    /// }
-    ///
-    /// // May not be correct anymore. ⚠️
-    /// assert_eq!(collector.finish(), [0, 1, 2]);
-    /// ```
-    ///
-    /// [`Break(())`]: std::ops::ControlFlow::Break
-    /// [`Continue(())`]: std::ops::ControlFlow::Continue
-    /// [`Collector`]: crate::collector::Collector
-    /// [`collect()`]: crate::collector::Collector::collect
-    /// [`filter()`]: crate::collector::CollectorBase::filter
-    /// [`take_while()`]: crate::collector::CollectorBase::take_while
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Continue(())
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        request
     }
 
     /// Creates a collector that can "safely" collect items even after
@@ -827,64 +760,64 @@ pub trait CollectorBase {
 
     // fn step_by()
 
-    /// Creates a collector that distributes items between two collectors based on a predicate.
-    ///
-    /// Items for which the predicate returns `true` are sent to the first collector,
-    /// and those for which it returns `false` go to the second collector.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use komadori::prelude::*;
-    ///
-    /// let collector = vec![]
-    ///     .into_collector()
-    ///     .partition(|&mut x| x % 2 == 0, vec![]);
-    /// let (evens, odds) = collector.collect_then_finish(-5..5);
-    ///
-    /// assert_eq!(evens, [-4, -2, 0, 2, 4]);
-    /// assert_eq!(odds, [-5, -3, -1, 1, 3]);
-    /// ```
-    #[inline]
-    fn partition<C, F, T>(self, pred: F, other_if_false: C) -> Partition<Self, C::IntoCollector, F>
-    where
-        Self: Collector<T> + Sized,
-        C: IntoCollector<T>,
-        F: FnMut(&mut T) -> bool,
-    {
-        assert_collector::<_, T>(Partition::new(self, other_if_false.into_collector(), pred))
-    }
+    // /// Creates a collector that distributes items between two collectors based on a predicate.
+    // ///
+    // /// Items for which the predicate returns `true` are sent to the first collector,
+    // /// and those for which it returns `false` go to the second collector.
+    // ///
+    // /// # Examples
+    // ///
+    // /// ```
+    // /// use komadori::prelude::*;
+    // ///
+    // /// let collector = vec![]
+    // ///     .into_collector()
+    // ///     .partition(|&mut x| x % 2 == 0, vec![]);
+    // /// let (evens, odds) = collector.collect_then_finish(-5..5);
+    // ///
+    // /// assert_eq!(evens, [-4, -2, 0, 2, 4]);
+    // /// assert_eq!(odds, [-5, -3, -1, 1, 3]);
+    // /// ```
+    // #[inline]
+    // fn partition<C, F, T>(self, pred: F, other_if_false: C) -> Partition<Self, C::IntoCollector, F>
+    // where
+    //     Self: Collector<T> + Sized,
+    //     C: IntoCollector<T>,
+    //     F: FnMut(&mut T) -> bool,
+    // {
+    //     assert_collector::<_, T>(Partition::new(self, other_if_false.into_collector(), pred))
+    // }
 
-    /// Creates a collector that lets both collectors collect the same item.
-    ///
-    /// For each item collected, the first collector collects the item
-    /// mapped by a given closure before the second collector collects it.
-    /// If the second collector stops accumulating, the item will **not**
-    /// be mapped, and instead is fed directly into the first collector.
-    ///
-    /// `tee_with()` only stops when **both** collectors have stopped.
-    ///
-    /// If the item type of this adapter is `T`, the first collector must implement
-    /// [`Collector<T>`](super::Collector) and [`Collector<U>`](super::Collector),
-    /// and the second collector must implement [`Collector<T>`](super::Collector).
-    /// Since many collectors do not collect two or more types of items,
-    /// `U` is effectively also `T` in this case.
-    ///
-    /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    /// both underlying collectors, in order.
-    ///
-    /// See the [module-level documentation](crate::collector) for
-    /// when this adapter is used and other variants of `tee` adapters.
-    #[inline]
-    #[cfg(feature = "unstable")]
-    fn tee_with<C, F, T, U>(self, f: F, other: C) -> TeeWith<Self, C::IntoCollector, F>
-    where
-        Self: Collector<T> + Collector<U> + Sized,
-        C: IntoCollector<T>,
-        F: FnMut(&mut T) -> U,
-    {
-        assert_collector::<_, T>(TeeWith::new(self, other.into_collector(), f))
-    }
+    // /// Creates a collector that lets both collectors collect the same item.
+    // ///
+    // /// For each item collected, the first collector collects the item
+    // /// mapped by a given closure before the second collector collects it.
+    // /// If the second collector stops accumulating, the item will **not**
+    // /// be mapped, and instead is fed directly into the first collector.
+    // ///
+    // /// `tee_with()` only stops when **both** collectors have stopped.
+    // ///
+    // /// If the item type of this adapter is `T`, the first collector must implement
+    // /// [`Collector<T>`](super::Collector) and [`Collector<U>`](super::Collector),
+    // /// and the second collector must implement [`Collector<T>`](super::Collector).
+    // /// Since many collectors do not collect two or more types of items,
+    // /// `U` is effectively also `T` in this case.
+    // ///
+    // /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
+    // /// both underlying collectors, in order.
+    // ///
+    // /// See the [module-level documentation](crate::collector) for
+    // /// when this adapter is used and other variants of `tee` adapters.
+    // #[inline]
+    // #[cfg(feature = "unstable")]
+    // fn tee_with<C, F, T, U>(self, f: F, other: C) -> TeeWith<Self, C::IntoCollector, F>
+    // where
+    //     Self: Collector<T> + Collector<U> + Sized,
+    //     C: IntoCollector<T>,
+    //     F: FnMut(&mut T) -> U,
+    // {
+    //     assert_collector::<_, T>(TeeWith::new(self, other.into_collector(), f))
+    // }
 
     /// Creates a collector with a custom collection logic.
     ///
@@ -1346,97 +1279,43 @@ pub trait CollectorBase {
         TryingResults::new(self)
     }
 
-    /// Creates a collector that alternates the behavior of [`break_hint()`](Self::break_hint).
-    ///
-    /// This is useful for [`unbatching()`](Self::unbatching) and
-    /// [`TryFold`](crate::iter::TryFold), when you want to configure
-    /// whether those stop accumulating on construction.
-    ///
-    /// You can leverage the fact that "after any of
-    /// [`Collector::collect()`], [`Collector::collect_many()`], or
-    /// [`CollectorBase::break_hint()`] have returned [`Break(())`] once,
-    /// behaviors of subsequent calls to any method other than
-    /// [`finish()`](CollectorBase::finish) are unspecified"
-    /// to calculate the hint before collecting only.
-    ///
-    /// [`Break(())`]: ControlFlow::Break
-    //    ///
-    //    /// # Examples
-    //    ///
-    //    /// ```
-    //    /// use std::ops::ControlFlow;
-    //    /// use komadori::prelude::*;
-    //    ///
-    //    /// fn vec_zip(nums: impl IntoIterator<Item = i32>) -> impl Collector<i32, Output = Vec<i32>> {
-    //    ///     let mut nums = nums.into_iter();
-    //    ///     let sh = nums.size_hint();
-    //    ///
-    //    ///     vec![]
-    //    ///         .into_collector()
-    //    ///         .unbatching(move |collector, item| {
-    //    ///             if let Some(num) = nums.next() {
-    //    ///                 collector.collect(item)
-    //    ///             } else {
-    //    ///                 ControlFlow::Break(())
-    //    ///             }
-    //    ///         })
-    //    ///         .alt_break_hint(move |_| {
-    //    ///             if let (0, Some(0)) = sh {
-    //    ///                 ControlFlow::Break(())
-    //    ///             } else {
-    //    ///                 ControlFlow::Continue(())
-    //    ///             }
-    //    ///         })
-    //    /// }
-    //    /// ```
-    //    ///
-    #[cfg(feature = "unstable")]
-    #[inline]
-    fn alt_break_hint<F>(self, f: F) -> AltBreakHint<Self, F>
-    where
-        Self: Sized,
-        F: Fn(&Self) -> ControlFlow<()>,
-    {
-        assert_collector_base(AltBreakHint::new(self, f))
-    }
-
-    /// Creates a collector that distributes items between two collectors based on a predicate.
-    ///
-    /// Items for which the predicate returns [`Either::Left`] go to the first collector,
-    /// and those for which it returns [`Either::Right`] go to the second collector.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use komadori::prelude::*;
-    ///
-    /// let mut collector = vec![]
-    ///     .into_collector()
-    ///     .partition_map(From::from, vec![]);
-    ///
-    /// assert!(collector.collect(Ok(1)).is_continue());
-    /// assert!(collector.collect(Err("Error")).is_continue());
-    /// assert!(collector.collect(Ok(2)).is_continue());
-    ///
-    /// let (errs, oks) = collector.finish();
-    ///
-    /// assert_eq!(oks, [1, 2]);
-    /// assert_eq!(errs, ["Error"]);
-    /// ```
-    #[cfg(feature = "itertools")]
-    #[inline]
-    fn partition_map<C, F, T, L, R>(
-        self,
-        pred: F,
-        collector_right: C,
-    ) -> PartitionMap<Self, C::IntoCollector, F>
-    where
-        Self: Collector<L> + Sized,
-        C: IntoCollector<R>,
-        F: FnMut(T) -> Either<L, R>,
-    {
-        PartitionMap::new(self, collector_right.into_collector(), pred)
-    }
+    // /// Creates a collector that distributes items between two collectors based on a predicate.
+    // ///
+    // /// Items for which the predicate returns [`Either::Left`] go to the first collector,
+    // /// and those for which it returns [`Either::Right`] go to the second collector.
+    // ///
+    // /// # Examples
+    // ///
+    // /// ```
+    // /// use komadori::prelude::*;
+    // ///
+    // /// let mut collector = vec![]
+    // ///     .into_collector()
+    // ///     .partition_map(From::from, vec![]);
+    // ///
+    // /// assert!(collector.collect(Ok(1)).is_continue());
+    // /// assert!(collector.collect(Err("Error")).is_continue());
+    // /// assert!(collector.collect(Ok(2)).is_continue());
+    // ///
+    // /// let (errs, oks) = collector.finish();
+    // ///
+    // /// assert_eq!(oks, [1, 2]);
+    // /// assert_eq!(errs, ["Error"]);
+    // /// ```
+    // #[cfg(feature = "itertools")]
+    // #[inline]
+    // fn partition_map<C, F, T, L, R>(
+    //     self,
+    //     pred: F,
+    //     collector_right: C,
+    // ) -> PartitionMap<Self, C::IntoCollector, F>
+    // where
+    //     Self: Collector<L> + Sized,
+    //     C: IntoCollector<R>,
+    //     F: FnMut(T) -> Either<L, R>,
+    // {
+    //     PartitionMap::new(self, collector_right.into_collector(), pred)
+    // }
 
     /// Creates a collector that mutates each item first before collecting.
     ///
@@ -1630,10 +1509,17 @@ where
 {
     type Output = ();
 
+    #[inline]
     fn finish(self) -> Self::Output {}
 
-    fn break_hint(&self) -> ControlFlow<()> {
-        C::break_hint(self)
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        C::reserve(self, additional);
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        C::max_afford(self, request)
     }
 }
 
@@ -1646,8 +1532,13 @@ macro_rules! dyn_impl {
             fn finish(self) -> Self::Output {}
 
             #[inline]
-            fn break_hint(&self) -> ControlFlow<()> {
-                <dyn CollectorBase>::break_hint(self)
+            fn reserve(&mut self, additional: usize) {
+                <dyn CollectorBase>::reserve(self, additional)
+            }
+
+            #[inline]
+            fn max_afford(&self, request: usize) -> usize {
+                <dyn CollectorBase>::max_afford(self, request)
             }
         }
 
@@ -1658,8 +1549,13 @@ macro_rules! dyn_impl {
             fn finish(self) -> Self::Output {}
 
             #[inline]
-            fn break_hint(&self) -> ControlFlow<()> {
-                <dyn super::Collector<T>>::break_hint(self)
+            fn reserve(&mut self, additional: usize) {
+                <dyn Collector<T>>::reserve(self, additional)
+            }
+
+            #[inline]
+            fn max_afford(&self, request: usize) -> usize {
+                <dyn Collector<T>>::max_afford(self, request)
             }
         }
     };

@@ -42,11 +42,11 @@ impl<T> CollectorBase for AllEqual<T> {
         matches!(self.state, State::StillEqual { .. })
     }
 
-    fn break_hint(&self) -> ControlFlow<()> {
+    fn max_afford(&self, request: usize) -> usize {
         if matches!(self.state, State::StillEqual { .. }) {
-            ControlFlow::Continue(())
+            request
         } else {
-            ControlFlow::Break(())
+            0
         }
     }
 }

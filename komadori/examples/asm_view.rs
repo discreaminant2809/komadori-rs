@@ -7,12 +7,64 @@ use komadori::{
 fn main() {}
 
 #[unsafe(no_mangle)]
-fn bc_tee_with_max(nums: &[i32]) -> (i32, Option<i32>) {
+fn komadori_sum_vec(nums: &[i32]) -> (i32, Vec<i32>) {
+    nums.iter().copied().feed_into(0_i32.into_sum().tee(vec![]))
+}
+
+// Does get vectorized!
+#[unsafe(no_mangle)]
+fn komadori_max_vec(nums: &[i32]) -> (Option<i32>, Vec<i32>) {
+    nums.iter().copied().feed_into(
+        Fold::new(None::<i32>, |max, num| match max {
+            Some(max) => *max = (*max).max(num),
+            max => *max = Some(num),
+        })
+        .tee(vec![]),
+    )
+}
+
+// Does get vectorized!
+#[unsafe(no_mangle)]
+fn komadori_max(nums: &[i32]) -> Option<i32> {
+    let mut max = Max::new();
+    for &num in nums {
+        let _ = max.collect(num);
+    }
+    max.finish()
+}
+
+#[unsafe(no_mangle)]
+fn komadori_sum_max(nums: &[i32]) -> (i32, Option<i32>) {
     nums.iter()
         .copied()
         .feed_into(0_i32.into_sum().tee(Max::new()))
 }
 
+#[unsafe(no_mangle)]
+fn manual_sum_max(nums: &[i32]) -> (i32, Option<i32>) {
+    #[inline]
+    fn max_assign<T: Ord>(max: &mut T, value: T) {
+        if value < *max {
+        } else {
+            *max = value
+        }
+    }
+
+    let mut sum = 0;
+    let mut max: Option<i32> = None;
+
+    for &num in nums {
+        sum += num;
+        match &mut max {
+            None => max = Some(num),
+            Some(max) => max_assign(max, num),
+        }
+    }
+
+    (sum, max)
+}
+
+// Stil vectorized!
 #[unsafe(no_mangle)]
 fn for_loop_wo_initial(nums: &[i32]) -> (i32, Option<i32>) {
     let mut sum = 0;

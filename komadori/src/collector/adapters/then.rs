@@ -25,7 +25,7 @@ where
 {
     pub(in crate::collector) fn new(collector: C1, f: F) -> Self {
         Self {
-            state: if collector.break_hint().is_continue() {
+            state: if collector.max_afford(1) > 0 {
                 State::First { collector, f }
             } else {
                 State::Second {
@@ -92,12 +92,22 @@ where
         }
     }
 
-    fn break_hint(&self) -> ControlFlow<()> {
+    fn reserve(&mut self, additional: usize) {
+        match &mut self.state {
+            State::Invalid => invalid_state(),
+            State::First { collector, .. } => collector.reserve(additional),
+            State::Second { collector } => collector.reserve(additional),
+        }
+    }
+
+    fn max_afford(&self, request: usize) -> usize {
         match &self.state {
             State::Invalid => invalid_state(),
             // We still have the second collector. Be careful!
-            State::First { .. } => ControlFlow::Continue(()),
-            State::Second { collector } => collector.break_hint(),
+            // Even if the first returns less than `request`,
+            // we can't know how many the second can afford.
+            State::First { .. } => request,
+            State::Second { collector } => collector.max_afford(request),
         }
     }
 }
@@ -111,7 +121,7 @@ where
     fn collect(&mut self, item: T) -> ControlFlow<()> {
         match &mut self.state {
             State::Invalid => invalid_state(),
-            State::First { collector, f } if collector.break_hint().is_break() => {
+            State::First { collector, f } if collector.max_afford(1) == 0 => {
                 let (collector, f) = self.state.take_first_state();
                 let mut collector = f(collector.finish()).into_collector();
                 let cf = collector.collect(item);
@@ -125,13 +135,19 @@ where
 
                 let (collector, f) = self.state.take_first_state();
                 let collector = f(collector.finish()).into_collector();
-                let cf = collector.break_hint();
+                let cf = if collector.max_afford(1) > 0 {
+                    ControlFlow::Continue(())
+                } else {
+                    ControlFlow::Break(())
+                };
                 self.state = State::Second { collector };
                 cf
             }
             State::Second { collector } => collector.collect(item),
         }
     }
+
+    // TODO: Override `assume_reserved_collect()` later when this adapter is stabilized.
 
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
         let mut items = items.into_iter();

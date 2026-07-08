@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, break_hint};
 
 /// A collector that skips the first collected items that satisfy a predicate
 /// before accumulating.
@@ -32,9 +32,15 @@ where
         self.collector.finish()
     }
 
+    // We don't know how many items left to reserve
+
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        if self.collector.max_afford(request) == 0 {
+            0
+        } else {
+            request
+        }
     }
 }
 
@@ -45,7 +51,7 @@ where
 {
     fn collect(&mut self, item: T) -> ControlFlow<()> {
         if self.pred.as_mut().is_some_and(|pred| pred(&item)) {
-            self.collector.break_hint()
+            break_hint(&self.collector)
         } else {
             self.pred.take();
             self.collector.collect(item)
@@ -58,14 +64,14 @@ where
         };
 
         // Edge case:
-        self.collector.break_hint()?;
+        break_hint(&self.collector)?;
 
         let mut items = items.into_iter();
         match items.by_ref().try_for_each({
             let collector = &mut self.collector;
             move |item| {
                 let skipping = pred(&item);
-                collector.break_hint().map_break(|_| None)?;
+                break_hint(collector).map_break(|_| None)?;
                 if skipping {
                     ControlFlow::Continue(())
                 } else {
@@ -91,7 +97,7 @@ where
         };
 
         // Edge case:
-        if self.collector.break_hint().is_break() {
+        if self.collector.max_afford(1) == 0 {
             return self.collector.finish();
         }
 
@@ -100,7 +106,7 @@ where
             let collector = &mut self.collector;
             move |item| {
                 let skipping = pred(&item);
-                collector.break_hint().map_break(|_| None)?;
+                break_hint(collector).map_break(|_| None)?;
                 if skipping {
                     ControlFlow::Continue(())
                 } else {

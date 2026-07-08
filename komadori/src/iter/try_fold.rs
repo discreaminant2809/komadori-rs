@@ -150,10 +150,10 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
+    fn max_afford(&self, request: usize) -> usize {
         match self.state {
-            State::Continue { .. } => ControlFlow::Continue(()),
-            State::Break(_) => ControlFlow::Break(()),
+            State::Continue { .. } => request,
+            State::Break(_) => 0,
         }
     }
 }
