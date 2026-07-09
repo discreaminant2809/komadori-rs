@@ -1,8 +1,7 @@
 use std::ops::ControlFlow;
 
-use crate::{
-    collector::{Collector, CollectorBase, Fuse},
-    iter::SizeHint,
+use crate::collector::{
+    Collector, CollectorBase, Fuse, advanced_collect_many_default_impl, and_break,
 };
 
 /// A collector that destructures each 2-tuple `(A, B)` item and distributes its fields:
@@ -62,207 +61,30 @@ where
     C1: Collector<T1>,
     C2: Collector<T2>,
 {
+    #[inline]
     fn collect(&mut self, (item1, item2): (T1, T2)) -> ControlFlow<()> {
-        let res1 = self.collector1.collect(item1);
-        let res2 = self.collector2.collect(item2);
-
-        if res1.is_break() && res2.is_break() {
-            ControlFlow::Break(())
-        } else {
-            ControlFlow::Continue(())
-        }
+        let cf1 = self.collector1.collect(item1);
+        let cf2 = self.collector2.collect(item2);
+        and_break(cf1, cf2)
     }
 
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, (item1, item2): (T1, T2)) -> ControlFlow<()> {
+        // SAFETY: The caller has reserved at least 1 item.
+        let cf1 = unsafe { self.collector1.assume_reserved_collect(item1) };
+        // SAFETY: The caller has reserved at least 1 item.
+        let cf2 = unsafe { self.collector2.assume_reserved_collect(item2) };
+
+        and_break(cf1, cf2)
+    }
+
+    #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = (T1, T2)>) -> ControlFlow<()> {
-        match (
-            self.collector1.max_afford(1) == 0,
-            self.collector2.max_afford(1) == 0,
-        ) {
-            (true, true) => return ControlFlow::Break(()),
-            (false, true) => {
-                return self
-                    .collector1
-                    .collect_many(items.into_iter().map(|(item1, _)| item1));
-            }
-            (true, false) => {
-                return self
-                    .collector2
-                    .collect_many(items.into_iter().map(|(_, item2)| item2));
-            }
-            (false, false) => {}
-        }
-
-        let mut items = items.into_iter();
-        // Be aware that the size hint can lie!
-        let sh = SizeHint::from_iter(&items);
-
-        self.reserve(sh.lower());
-
-        let mut reserve_range = 0..sh.lower();
-
-        // We assume that the iterator is not buggy and
-        // should only yield `Some` for the next `sh.lower()` calls of `next()`.
-
-        let status = reserve_range
-            // Put this first since it must be pulled first.
-            // We can't put `items` first because of the risk of overshooting.
-            .by_ref()
-            .zip(&mut items)
-            .try_for_each(|(_, (item1, item2))| unsafe {
-                // SAFETY: We've reserved for `sh.lower()` items.
-                if self.collector1.assume_reserved_collect(item1).is_break() {
-                    ControlFlow::Break(Which::First { item2 })
-                } else if self.collector2.assume_reserved_collect(item2).is_break() {
-                    ControlFlow::Break(Which::Second)
-                } else {
-                    ControlFlow::Continue(())
-                }
-            });
-
-        let status = match status {
-            ControlFlow::Continue(()) if reserve_range.is_empty() => {
-                // The iterator has only yielded `Some` by the assumption.
-                items.try_for_each(|(item1, item2)| {
-                    // Note that we've out of the reserved amount.
-                    if self.collector1.collect(item1).is_break() {
-                        ControlFlow::Break(Which::First { item2 })
-                    } else if self.collector2.collect(item2).is_break() {
-                        ControlFlow::Break(Which::Second)
-                    } else {
-                        ControlFlow::Continue(())
-                    }
-                })
-            }
-            status => status,
-        };
-
-        match status {
-            ControlFlow::Continue(_) => ControlFlow::Continue(()),
-            ControlFlow::Break(Which::First { item2 }) => {
-                if reserve_range.is_empty() {
-                    self.collector2.collect(item2)
-                } else {
-                    // SAFETY: there's still one more reserved item.
-                    unsafe { self.collector2.assume_reserved_collect(item2) }
-                }?;
-
-                // There may be more reserved items but we don't care.
-                // We let the internal of this collector handle instead.
-                self.collector2.collect_many(items.map(|(_, item2)| item2))
-            }
-            ControlFlow::Break(Which::Second) => {
-                // There may be more reserved items but we don't care.
-                // We let the internal of this collector handle instead.
-                self.collector1.collect_many(items.map(|(item1, _)| item1))
-            }
-        }
+        advanced_collect_many_default_impl(self, items)
     }
 
-    fn collect_then_finish(mut self, items: impl IntoIterator<Item = (T1, T2)>) -> Self::Output {
-        match (
-            self.collector1.max_afford(1) == 0,
-            self.collector2.max_afford(1) == 0,
-        ) {
-            (true, true) => return self.finish(),
-            (false, true) => {
-                return (
-                    self.collector1
-                        .collect_then_finish(items.into_iter().map(|(item1, _)| item1)),
-                    self.collector2.finish(),
-                );
-            }
-            (true, false) => {
-                return (
-                    self.collector1.finish(),
-                    self.collector2
-                        .collect_then_finish(items.into_iter().map(|(_, item2)| item2)),
-                );
-            }
-            (false, false) => {}
-        }
-
-        let mut items = items.into_iter();
-        // Be aware that the size hint can lie!
-        let sh = SizeHint::from_iter(&items);
-
-        self.reserve(sh.lower());
-
-        let mut reserve_range = 0..sh.lower();
-
-        // We assume that the iterator is not buggy and
-        // should only yield `Some` for the next `sh.lower()` calls of `next()`.
-
-        let status = reserve_range
-            // Put this first since it must be pulled first.
-            // We can't put `items` first because of the risk of overshooting.
-            .by_ref()
-            .zip(&mut items)
-            .try_for_each(|(_, (item1, item2))| unsafe {
-                // SAFETY: We've reserved for `sh.lower()` items.
-                if self.collector1.assume_reserved_collect(item1).is_break() {
-                    ControlFlow::Break(Which::First { item2 })
-                } else if self.collector2.assume_reserved_collect(item2).is_break() {
-                    ControlFlow::Break(Which::Second)
-                } else {
-                    ControlFlow::Continue(())
-                }
-            });
-
-        let status = match status {
-            ControlFlow::Continue(()) if reserve_range.is_empty() => {
-                // The iterator has only yielded `Some` by the assumption.
-                items.try_for_each(|(item1, item2)| {
-                    // Note that we've out of the reserved amount.
-                    if self.collector1.collect(item1).is_break() {
-                        ControlFlow::Break(Which::First { item2 })
-                    } else if self.collector2.collect(item2).is_break() {
-                        ControlFlow::Break(Which::Second)
-                    } else {
-                        ControlFlow::Continue(())
-                    }
-                })
-            }
-            status => status,
-        };
-
-        match status {
-            ControlFlow::Continue(_) => self.finish(),
-            ControlFlow::Break(Which::First { item2 }) => {
-                let cf = if reserve_range.is_empty() {
-                    self.collector2.collect(item2)
-                } else {
-                    // SAFETY: there's still one more reserved item.
-                    unsafe { self.collector2.assume_reserved_collect(item2) }
-                };
-
-                if cf.is_break() {
-                    self.finish()
-                } else {
-                    // There may be more reserved items but we don't care.
-                    // We let the internal of this collector handle instead.
-                    (
-                        self.collector1.finish(),
-                        self.collector2
-                            .collect_then_finish(items.map(|(_, item2)| item2)),
-                    )
-                }
-            }
-            ControlFlow::Break(Which::Second) => {
-                // There may be more reserved items but we don't care.
-                // We let the internal of this collector handle instead.
-                (
-                    self.collector1
-                        .collect_then_finish(items.map(|(item1, _)| item1)),
-                    self.collector2.finish(),
-                )
-            }
-        }
-    }
-}
-
-enum Which<T> {
-    First { item2: T },
-    Second,
+    // No meaningful override for this method.
+    // fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {}
 }
 
 #[cfg(all(test, feature = "std"))]

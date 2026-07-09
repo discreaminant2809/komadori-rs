@@ -34,9 +34,6 @@ use super::{Funnel, Nest, NestExact, Then};
 /// You do not need to specify the [`Output`](CollectorBase::Output) type.
 /// The compiler will even emit a warning if you add the
 /// [`Output`](CollectorBase::Output) type.
-///
-/// However, as a trait object, it is pretty much useless, as the only method
-/// available is [`break_hint()`](CollectorBase::break_hint).
 pub trait CollectorBase {
     /// The result this collector yields, via the [`finish()`](CollectorBase::finish) method.
     ///
@@ -64,14 +61,101 @@ pub trait CollectorBase {
     where
         Self: Sized;
 
+    /// Reserves for `additional` items before collecting.
     ///
+    /// It does nothing for the default implementation and most collectors,
+    /// but it calls [`reserve()`](Vec::reserve) for [`Vec`].
+    ///
+    /// This method has an interaction with [`assume_reserved_collect()`](Collector::assume_reserved_collect).
+    /// See the ["Safety" section of the module-level documentation][safety-section] for more.
+    ///
+    /// [safety-section]: super#safety
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .take(2)
+    ///     .tee(vec![]);
+    ///
+    /// // The first collector only reserves for 2 items,
+    /// // while the second collector reserves for 4 items as usual.
+    /// collector.reserve(4);
+    ///
+    /// for num in 1..=4 {
+    ///     assert!(collector.collect(num).is_continue(), "can't collect {num}");
+    /// }
+    ///
+    /// let (first, second) = collector.finish();
+    /// assert_eq!(first, [1, 2]);
+    /// assert_eq!(second, [1, 2, 3, 4]);
+    /// ```
     #[inline]
     fn reserve(&mut self, additional: usize) {
         let _additional = additional;
         // Does nothing.
     }
 
+    /// Queries the maximum amount of items this collector can afford
+    /// given the requested amount of items.
     ///
+    /// Be aware that the returned `usize` is just the maximum.
+    /// The collector is permitted to stop earlier than the maximum amount.
+    /// Also, the returned `usize` must be less than or equal to `request`,
+    /// or else the behavior is unspecified.
+    ///
+    /// `max_afford(1) == 0` can serve as a test whether this collector
+    /// has stopped or not. For infinite collectors, this method
+    /// always returns `request`.
+    ///
+    /// The default implementation returns `request`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .take(3);
+    ///
+    /// // This collector can afford 2 items!
+    /// assert_eq!(collector.max_afford(2), 2);
+    ///
+    /// assert!(collector.collect_many([1, 2]).is_continue());
+    /// // This collector can only afford 1 more now.
+    /// assert_eq!(collector.max_afford(2), 1);
+    ///
+    /// assert!(collector.collect(3).is_break());
+    ///
+    /// assert_eq!(collector.finish(), [1, 2, 3]);
+    /// ```
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// assert_eq!(0_i32.into_sum().max_afford(999_999_999), 999_999_999);
+    /// ```
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .take_while(|&num| num != 4);
+    ///
+    /// // This collector can afford 1 million items (at best)!
+    /// assert_eq!(collector.max_afford(1_000_000), 1_000_000);
+    ///
+    /// // Well, it is just "at best"...
+    /// assert!(collector.collect_many([1, 2, 3]).is_continue());
+    /// assert!(collector.collect(4).is_break());
+    ///
+    /// assert_eq!(collector.finish(), [1, 2, 3]);
+    /// ```
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
         request
@@ -85,19 +169,8 @@ pub trait CollectorBase {
     /// including accumulating again.
     /// `fuse()` ensures that once a collector has stopped, subsequent items
     /// are guaranteed to **not** be accumulated. This means that at that point,
-    /// [`collect()`](Collector::collect), [`collect_many()`](Collector::collect_many)
-    /// and [`break_hint()`](CollectorBase::break_hint) are
-    /// guaranteed to return [`Break(())`].
-    ///
-    /// # Notes
-    ///
-    /// Since this collector effectively caches the stop signal,
-    /// [`break_hint()`](Self::break_hint) may be lag behind
-    /// the underlying collector when called.
-    /// This might be an issue if the signal is obtained by side effects
-    /// (e.g. from an [`AtomicBool`](std::sync::atomic::AtomicBool) flag).
-    /// Even that, it only results in more item consumption, and other methods
-    /// still do update the cached signal correctly.
+    /// [`collect()`](Collector::collect) and [`collect_many()`](Collector::collect_many)
+    /// are guaranteed to return [`Break(())`].
     ///
     /// # Examples
     ///
@@ -431,6 +504,9 @@ pub trait CollectorBase {
     ///     .into_collector()
     ///     .take(3);
     ///
+    /// // Can only afford 3 items!
+    /// assert_eq!(collector.max_afford(5), 3);
+    ///
     /// assert!(collector.collect(1).is_continue());
     /// assert!(collector.collect(2).is_continue());
     ///
@@ -440,18 +516,6 @@ pub trait CollectorBase {
     /// # assert!(collector.collect(4).is_break());
     ///
     /// assert_eq!(collector.finish(), [1, 2, 3]);
-    /// ```
-    ///
-    /// ```
-    /// use komadori::prelude::*;
-    ///
-    /// let mut collector = String::new()
-    ///     .into_collector()
-    ///     .take(0);
-    ///
-    /// // This collector stops accumulating from construction.
-    /// assert!(collector.break_hint().is_break());
-    /// assert_eq!(collector.finish(), "");
     /// ```
     #[inline]
     fn take(self, n: usize) -> Take<Self>
@@ -469,7 +533,7 @@ pub trait CollectorBase {
     ///
     /// Note that in the current implementation,
     /// if the underlying collector has stopped accumulating during skipping,
-    /// its [`collect()`], [`break_hint()`] and similar methods may return [`Break(())`],
+    /// its [`collect()`] and [`collect_many()`] may return [`Break(())`],
     /// regardless of whether the adaptor has skipped enough items or not.
     ///
     /// # Examples
@@ -493,8 +557,8 @@ pub trait CollectorBase {
     /// ```
     ///
     /// [`Break(())`]: ControlFlow::Break
-    /// [`collect()`]: super::Collector::collect
-    /// [`break_hint()`]: CollectorBase::break_hint
+    /// [`collect()`]: Collector::collect
+    /// [`collect_many()`]: Collector::collect_many
     fn skip(self, n: usize) -> Skip<Self>
     where
         Self: Sized,
@@ -826,11 +890,12 @@ pub trait CollectorBase {
     ///
     /// # Notes
     ///
-    /// The closure should compose the stop signal of the underlying collector,
+    /// The closure should compose the stop signal of the underlying collector
+    /// (either from [`ControlFlow`]-returning methods or `max_afford(1) == 0`,
     /// even if the underlying collector does not collect anything at all,
     /// to signal a stop as soon as possible.
-    /// In fact, [`break_hint()`](CollectorBase::break_hint) implementation
-    /// of this collector returns whatever the underlying collector returns,
+    /// In fact, [`max_afford()`](Self::max_afford) implementation
+    /// of this collector returns `0` the underlying collector returns `0`,
     /// skipping the closure.
     ///
     /// # Examples
@@ -1153,7 +1218,7 @@ pub trait CollectorBase {
     ///
     /// Note that in the current implementation,
     /// if the underlying collector has stopped accumulating during skipping,
-    /// its [`collect()`], [`break_hint()`] and similar methods may return [`Break(())`],
+    /// its [`collect()`] and [`collect_many()`] may return [`Break(())`],
     /// regardless of whether the adapter has met an item that does not satisfy
     /// the predicate or not.
     ///
@@ -1171,8 +1236,8 @@ pub trait CollectorBase {
     /// ```
     ///
     /// [`Break(())`]: ControlFlow::Break
-    /// [`collect()`]: super::Collector::collect
-    /// [`break_hint()`]: CollectorBase::break_hint
+    /// [`collect()`]: Collector::collect
+    /// [`collect_many()`]: Collector::collect_many
     #[inline]
     fn skip_while<P, T>(self, pred: P) -> SkipWhile<Self, P>
     where

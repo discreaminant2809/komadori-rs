@@ -92,13 +92,12 @@ impl<T> CollectorBase for Max<T> {
 impl<T: Ord> Collector<T> for Max<T> {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        // This one IS ~x27 slower (proven by benchmark)
-        // self.max = self.max.take().max(Some(item));
-
-        match self.max {
-            None => self.max = Some(item),
-            Some(ref mut max) => max_assign(max, item),
-        }
+        // Somehow it yields a little bit codegen!
+        // For now max-vec benefits from it.
+        self.max = Some(match self.max.take() {
+            None => item,
+            Some(max) => max.max(item),
+        });
 
         ControlFlow::Continue(())
     }

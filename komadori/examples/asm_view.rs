@@ -7,13 +7,20 @@ use komadori::{
 fn main() {}
 
 #[unsafe(no_mangle)]
+fn komadori_max_double_nums(nums: &[i32]) -> (Option<i32>, Vec<i32>) {
+    nums.iter()
+        .copied()
+        .feed_into(Max::new().tee(vec![].into_collector().map(|num| num * 2)))
+}
+
+#[unsafe(no_mangle)]
 fn komadori_sum_vec(nums: &[i32]) -> (i32, Vec<i32>) {
     nums.iter().copied().feed_into(0_i32.into_sum().tee(vec![]))
 }
 
 // Does get vectorized!
 #[unsafe(no_mangle)]
-fn komadori_max_vec(nums: &[i32]) -> (Option<i32>, Vec<i32>) {
+fn komadori_max_vec_w_fold(nums: &[i32]) -> (Option<i32>, Vec<i32>) {
     nums.iter().copied().feed_into(
         Fold::new(None::<i32>, |max, num| match max {
             Some(max) => *max = (*max).max(num),
@@ -21,6 +28,11 @@ fn komadori_max_vec(nums: &[i32]) -> (Option<i32>, Vec<i32>) {
         })
         .tee(vec![]),
     )
+}
+
+#[unsafe(no_mangle)]
+fn komadori_max_vec(nums: &[i32]) -> (Option<i32>, Vec<i32>) {
+    nums.iter().copied().feed_into(Max::new().tee(vec![]))
 }
 
 // Does get vectorized!
