@@ -98,9 +98,8 @@
 //!
 //! # Unspecified behaviors
 //!
-//! Unless stated otherwise by the collector’s implementation, after any of
-//! [`Collector::collect()`], [`Collector::collect_many()`], or
-//! [`CollectorBase::break_hint()`] have returned [`Break(())`] once,
+//! Unless stated otherwise by the collector’s implementation, after
+//! [`collect()`] or [`collect_many()`] have returned [`Break(())`] once,
 //! behaviors of subsequent calls to any method other than
 //! [`finish()`](CollectorBase::finish) are unspecified.
 //! They may panic, overflow, or even resume accumulation
@@ -115,6 +114,22 @@
 //! Although the behavior is unspecified, none of the aforementioned methods are `unsafe`.
 //! Implementors must **not** cause memory corruption, undefined behavior,
 //! or any other safety violations, and callers must **not** rely on such outcomes.
+//!
+//! # Safety
+//!
+//! When you call [`reserve(additional)`](CollectorBase::reserve) on a collector,
+//! the amount of items that collector reserves for is set (**not** "gained" or "added")
+//! to `additional`. A call to [`collect()`] or [`assume_reserved_collect()`]
+//! reduced the reserved amount by `1`, and a call to [`collect_many()`] reset
+//! the reserved amount to `0`. This is tracked conceptually, so you may
+//! have to track outside. You can only call [`assume_reserved_collect()`]
+//! **if and only if** the reserved amount is `1` or greater.
+//! Calling that method without any reservation could lead to undefined behavior,
+//! memory corruption, or other kinds of unsafety.
+//!
+//! Furthermore, when you override [`assume_reserved_collect()`], you must ensure
+//! that [`reserve()`] is implemented correctly.
+//! If it is difficult to hold, consider not overriding the method.
 //!
 //! # Limitations and workarounds
 //!
@@ -209,6 +224,10 @@
 //! ```
 //!
 //! [`Break(())`]: std::ops::ControlFlow::Break
+//! [`reserve()`]: CollectorBase::reserve
+//! [`collect()`]: Collector::collect
+//! [`collect_many()`]: Collector::collect_many
+//! [`assume_reserved_collect()`]: Collector::assume_reserved_collect
 
 mod adapters;
 #[allow(clippy::module_inception)]
@@ -250,4 +269,43 @@ fn break_hint(collector: &impl CollectorBase) -> ControlFlow<()> {
     } else {
         ControlFlow::Break(())
     }
+}
+
+// This is different from `cf1?; cf2`.
+#[inline]
+fn and_break(cf1: ControlFlow<()>, cf2: ControlFlow<()>) -> ControlFlow<()> {
+    if cf1.is_break() && cf2.is_break() {
+        ControlFlow::Break(())
+    } else {
+        ControlFlow::Continue(())
+    }
+}
+
+#[inline]
+fn advanced_collect_many_default_impl<T>(
+    collector: &mut impl Collector<T>,
+    items: impl IntoIterator<Item = T>,
+) -> ControlFlow<()> {
+    break_hint(collector)?;
+
+    let mut items = items.into_iter();
+    let sh = crate::iter::SizeHint::from_iter(&items);
+
+    collector.reserve(sh.lower());
+
+    if let Some(size) = sh.exact_size() {
+        // We can get rid of `by_ref()`, potentially enabling better codegen.
+        return items
+            // The iterator may report the size hint wrong.
+            // That's safe, but `assume_reserved_collect()` isn't!
+            .take(size)
+            .try_for_each(|item| unsafe { collector.assume_reserved_collect(item) });
+    }
+
+    items
+        .by_ref()
+        .take(sh.lower())
+        .try_for_each(|item| unsafe { collector.assume_reserved_collect(item) })?;
+
+    items.try_for_each(|item| collector.collect(item))
 }

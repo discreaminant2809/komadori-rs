@@ -1,8 +1,7 @@
 use std::ops::ControlFlow;
 
-use crate::{
-    collector::{Collector, CollectorBase, Fuse, break_hint},
-    iter::SizeHint,
+use crate::collector::{
+    Collector, CollectorBase, Fuse, advanced_collect_many_default_impl, and_break,
 };
 
 #[derive(Debug, Clone)]
@@ -146,38 +145,11 @@ where
         }
     }
 
+    #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        break_hint(&self)?;
-
-        let mut items = items.into_iter();
-        let sh = SizeHint::from_iter(&items);
-
-        self.reserve(sh.lower());
-
-        if let Some(size) = sh.exact_size() {
-            return items
-                .take(size)
-                .try_for_each(|item| unsafe { self.assume_reserved_collect(item) });
-        }
-
-        items
-            .by_ref()
-            .take(sh.lower())
-            .try_for_each(|item| unsafe { self.assume_reserved_collect(item) })?;
-
-        items.try_for_each(|item| self.collect(item))
+        advanced_collect_many_default_impl(self, items)
     }
 
     // No meaningful override for this method.
     // fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {}
-}
-
-// This is different from `cf1?; cf2`.
-#[inline]
-fn and_break(cf1: ControlFlow<()>, cf2: ControlFlow<()>) -> ControlFlow<()> {
-    if cf1.is_break() && cf2.is_break() {
-        ControlFlow::Break(())
-    } else {
-        ControlFlow::Continue(())
-    }
 }

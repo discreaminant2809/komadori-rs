@@ -81,7 +81,7 @@ use crate::{
 ///     Some(())
 /// });
 ///
-/// assert!(collector.break_hint().is_break());
+/// assert_eq!(collector.max_afford(1), 0);
 ///
 /// assert_eq!(collector.finish(), None);
 /// ```

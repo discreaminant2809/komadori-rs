@@ -34,10 +34,13 @@ use alloc::collections::{BTreeMap, BTreeSet, BinaryHeap, LinkedList, VecDeque};
 #[cfg(feature = "alloc")]
 use std::cmp::Ord;
 
+// Note: All of the collections so far, even VecDeque, don't have APIs to
+// unchecked-ly push to the reserved area.
+
 macro_rules! collector_impl {
     (
         $feature:literal, $mod:ident::$coll_name:ident<$($generic:ident),*>, $item_ty:ty,
-        $item_pat:pat_param, $push_method_name:ident($($item_args:expr),*)
+        $item_pat:pat_param, $push_method_name:ident($($item_args:expr),*), $reserve_f: expr
         $(, $gen_bound:ident: $bound:path)* $(,)?
     ) => {
         #[cfg(feature = $feature)]
@@ -75,12 +78,20 @@ macro_rules! collector_impl {
         #[cfg(feature = $feature)]
         // So that doc.rs doesn't put both "std" and "alloc" in feature flag.
         #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-        impl<$($generic),*> CollectorBase for $mod::IntoCollector<$($generic),*> {
+        impl<$($generic),*> CollectorBase for $mod::IntoCollector<$($generic),*>
+        where
+            $($gen_bound: $bound,)*
+        {
             type Output = $coll_name<$($generic),*>;
 
             #[inline]
             fn finish(self) -> Self::Output {
                 self.0
+            }
+
+            #[inline]
+            fn reserve(&mut self, additional: usize) {
+                ($reserve_f)(&mut self.0, additional);
             }
         }
 
@@ -176,12 +187,20 @@ macro_rules! collector_impl {
         #[cfg(feature = $feature)]
         // So that doc.rs doesn't put both "std" and "alloc" in feature flag.
         #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
-        impl<'a, $($generic),*> CollectorBase for $mod::CollectorMut<'a, $($generic),*> {
+        impl<'a, $($generic),*> CollectorBase for $mod::CollectorMut<'a, $($generic),*>
+        where
+            $($gen_bound: $bound,)*
+        {
             type Output = &'a mut $coll_name<$($generic),*>;
 
             #[inline]
             fn finish(self) -> Self::Output {
                 self.0
+            }
+
+            #[inline]
+            fn reserve(&mut self, additional: usize) {
+                ($reserve_f)(&mut self.0, additional);
             }
         }
 
@@ -362,7 +381,7 @@ macro_rules! copy_collector_impl {
 
 collector_impl!(
     "std", hash_map::HashMap<K, V, S>, (K, V),
-    (key, value), insert(key, value),
+    (key, value), insert(key, value), HashMap::reserve,
     K: Hash, K: Eq, S: BuildHasher,
 );
 copy_collector_impl!(
@@ -380,7 +399,7 @@ copy_collector_impl!(
 
 collector_impl!(
     "std", hash_set::HashSet<T, S>, T,
-    item, insert(item),
+    item, insert(item), HashSet::reserve,
     T: Hash, T: Eq, S: BuildHasher,
 );
 copy_collector_impl!(
@@ -398,7 +417,7 @@ copy_collector_impl!(
 
 collector_impl!(
     "alloc", btree_map::BTreeMap<K, V>, (K, V),
-    (key, value), insert(key, value),
+    (key, value), insert(key, value), |_, _| {},
     K: Ord,
 );
 copy_collector_impl!(
@@ -416,7 +435,7 @@ copy_collector_impl!(
 
 collector_impl!(
     "alloc", btree_set::BTreeSet<T>, T,
-    item, insert(item),
+    item, insert(item), |_, _| {},
     T: Ord,
 );
 copy_collector_impl!(
@@ -434,7 +453,7 @@ copy_collector_impl!(
 
 collector_impl!(
     "alloc", binary_heap::BinaryHeap<T>, T,
-    item, push(item),
+    item, push(item), BinaryHeap::reserve,
     T: Ord,
 );
 copy_collector_impl!(
@@ -453,7 +472,7 @@ copy_collector_impl!(
 #[rustfmt::skip]
 collector_impl!(
     "alloc", linked_list::LinkedList<T>, T,
-    item, push_back(item),
+    item, push_back(item), |_, _| {},
 );
 copy_collector_impl!(
     "alloc", linked_list::LinkedList<'i; T>, &'i T,
@@ -471,7 +490,7 @@ copy_collector_impl!(
 #[rustfmt::skip]
 collector_impl!(
     "alloc", vec_deque::VecDeque<T>, T,
-    item, push_back(item),
+    item, push_back(item), VecDeque::reserve,
 );
 copy_collector_impl!(
     "alloc", vec_deque::VecDeque<'i; T>, &'i T,

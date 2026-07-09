@@ -33,14 +33,14 @@ pub trait Collector<T>: CollectorBase {
     /// and signals with [`None`] whenever it finishes.
     ///
     /// Implementors should inform the caller about it as early as possible.
-    /// This can usually be upheld, but not always.
-    /// Some collectors, such as [`take(0)`](CollectorBase::take) and [`take_while()`],
-    /// only know when they are done after collecting an item, which might be too late
-    /// if the item cannot be “afforded” and is lost forever.
-    /// In this case, call [`break_hint()`](CollectorBase::break_hint)
-    /// **once and only once** before collecting (see its documentation to use it correctly).
-    /// For "infinite" collectors (like most collections), this is not an issue
-    /// since they can simply return  [`Continue(())`] every time.
+    /// For callers who choose to manually repeatedly call
+    /// [`collect()`](Self::collect), to avoid consuming one item prematurely,
+    /// you should check whether the collector can even afford a single item
+    /// with `max_afford(request)`, with `request` being non-zero.
+    /// If this returns `0`, it means it is not willing to accept any further items,
+    /// and feeding it further is pointless.
+    /// You do not need to worry about that with [`collect_many()`](Self::collect_many)
+    /// and [`collect_then_finish()`](Self::collect_then_finish).
     ///
     /// If the collector is uncertain, like "maybe I won’t accumulate… uh, fine, I will,"
     /// it is recommended to just return [`Continue(())`].
@@ -96,12 +96,6 @@ pub trait Collector<T>: CollectorBase {
     /// Implementors may choose a more efficient way to consume an iterator than a simple `for` loop
     /// ([`Iterator`] offers many alternative consumption methods), depending on the collector’s needs.
     ///
-    /// Unlike [`collect()`](Self::collect), callers are **not** required to check for
-    /// [`break_hint()`](CollectorBase::break_hint)
-    /// and the implementors should guard against empty iterators.
-    /// As a result, `collector.collect_many(empty_iter)` is an alternative
-    /// way to check whether this collector has stopped accumulating.
-    ///
     /// # Notes
     ///
     /// When [`Break(())`] is returned, it implies that the iterator
@@ -148,10 +142,6 @@ pub trait Collector<T>: CollectorBase {
     /// For instance, [`take()`](CollectorBase::take) overrides this method to avoid tracking
     /// how many items have been collected.
     ///
-    /// Unlike [`collect()`](Self::collect), callers are **not** required to check for
-    /// [`break_hint()`](CollectorBase::break_hint)
-    /// and the implementors should guard against empty iterators.
-    ///
     /// # Examples
     ///
     /// ```rust
@@ -175,7 +165,40 @@ pub trait Collector<T>: CollectorBase {
         this.finish()
     }
 
+    /// Same as [`collect()`](Self::collect), but this does not check whether
+    /// the reserved amount is enough or not.
     ///
+    /// # Safety
+    ///
+    /// You must ensure that you have reserved for **at least one** item.
+    /// Calling this method without any reservation could lead to undefined behavior,
+    /// memory corruption, or other kinds of unsafety.
+    ///
+    /// See the ["Safety" section of the module-level documentation][safety-section] for more.
+    ///
+    /// [safety-section]: super#safety
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![].into_collector();
+    /// collector.reserve(3);
+    ///
+    /// unsafe {
+    ///     // SAFETY: We reserved for 3 items.
+    ///     assert!(collector.assume_reserved_collect(1).is_continue());
+    ///     assert!(collector.assume_reserved_collect(2).is_continue());
+    ///     assert!(collector.assume_reserved_collect(3).is_continue());
+    ///
+    ///     // DO NOT do this. We didn't reserved for the 4th item.
+    ///     // Potential UB. ⚠️
+    ///     // collector.assume_reserved_collect(4);
+    /// }
+    ///
+    /// assert_eq!(collector.finish(), [1, 2, 3]);
+    /// ```
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
         self.collect(item)

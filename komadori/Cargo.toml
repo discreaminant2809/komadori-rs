@@ -68,5 +68,5 @@ required-features = ["unstable"]
 harness = false
 
 [[bench]]
-name = "max_vec"
+name = "max_doubles"
 harness = false

@@ -75,7 +75,7 @@ use crate::{
 ///     |data: &[u8]| writer.write_all(data),
 /// );
 ///
-/// assert!(collector.break_hint().is_break());
+/// assert_eq!(collector.max_afford(1), 0);
 ///
 /// assert!(collector.finish().is_err());
 /// ```

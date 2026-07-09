@@ -39,12 +39,18 @@ where
     }
 
     fn max_afford(&self, request: usize) -> usize {
-        if self.collector.max_afford(1) == 0 {
+        // We make sure that `self.collector.max_afford()` is only called once.
+        if request > self.remaining {
+            let max_afford = self.collector.max_afford(request - self.remaining);
+            if max_afford == 0 {
+                0
+            } else {
+                self.remaining + max_afford
+            }
+        } else if self.collector.max_afford(1) == 0 {
             0
-        } else if request <= self.remaining {
-            request
         } else {
-            request + self.collector.max_afford(request - self.remaining)
+            request
         }
     }
 }

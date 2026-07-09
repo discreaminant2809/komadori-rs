@@ -63,13 +63,14 @@ where
 {
     fn collect(&mut self, item: T) -> ControlFlow<()> {
         self.outer.collect_many(iter::from_fn(|| {
-            let max_afford = self.inner.max_afford(self.reserved);
+            let max_afford = self.inner.max_afford(1);
 
             if max_afford == 0 {
                 let inner = mem::replace(&mut self.inner, self.strategy.next_collector());
                 Some(inner.finish())
             } else {
                 self.inner.reserve(self.reserved);
+                let max_afford = self.inner.max_afford(self.reserved);
                 assert!(
                     self.reserved >= max_afford,
                     "`max_afford()` of the inner collector is implemented incorrectly"
@@ -89,13 +90,14 @@ where
 
     unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
         self.outer.collect_many(iter::from_fn(|| {
-            let max_afford = self.inner.max_afford(self.reserved);
+            let max_afford = self.inner.max_afford(1);
 
             if max_afford == 0 {
                 let inner = mem::replace(&mut self.inner, self.strategy.next_collector());
                 Some(inner.finish())
             } else {
                 self.inner.reserve(self.reserved);
+                let max_afford = self.inner.max_afford(self.reserved);
                 assert!(
                     self.reserved >= max_afford,
                     "`max_afford()` of the inner collector is implemented incorrectly"
