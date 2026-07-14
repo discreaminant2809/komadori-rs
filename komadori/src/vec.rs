@@ -335,124 +335,147 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
+    use std::{fmt::Debug, ops::ControlFlow};
+
     use proptest::collection::vec as propvec;
     use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
 
-    use crate::prelude::*;
-    use crate::test_utils::{
-        BasicCollectorTester, CollectorTestParts, CollectorTester, CollectorTesterExt, PredError,
-        none_iter_for_fuse_test,
+    use crate::{
+        prelude::*,
+        test_utils::{
+            BasicCollectorModel, CollectorFactoryBase, DefineCollector, TwoIterData,
+            TwoIterFactory, TwoIterMutData, TwoIterMutFactory, TwoIterRefFactory, collector_test,
+        },
     };
 
-    proptest! {
-        #[test]
-        fn all_collect_methods_into(
-            starting_nums in propvec(any::<i32>(), ..5),
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_into_impl(starting_nums, nums)?;
-        }
-    }
+    use super::*;
 
-    fn all_collect_methods_into_impl(starting_nums: Vec<i32>, nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().cloned(),
-            collector_factory: || starting_nums.clone().into_collector(),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                let mut starting_nums = starting_nums.clone();
+    collector_test!(into_collector {
+        iter_data: TwoIterData::strategy(),
+        collector_data: propvec(any::<i32>(), ..5),
+        iter_f: TwoIterFactory,
+        collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
+        model_f: |starting_nums| BasicCollectorModel {
+            state: starting_nums.clone(),
+            advance_f: |buf: &mut Vec<_>, item| buf.push(item),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == actual),
+        },
+    });
 
-                // Quite redundant, but we also wanna check for the equivalence to `Iterator::collect()`.
-                if starting_nums.is_empty() {
-                    starting_nums = iter.collect();
-                } else {
-                    starting_nums.extend(iter);
-                }
+    collector_test!(into_collector_ref {
+        iter_data: TwoIterData::strategy(),
+        collector_data: propvec(any::<i32>(), ..5),
+        iter_f: TwoIterRefFactory,
+        collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
+        model_f: |starting_nums| BasicCollectorModel {
+            state: starting_nums.clone(),
+            advance_f: |buf: &mut Vec<_>, &item: &_| buf.push(item),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == actual),
+        },
+    });
 
-                if output != starting_nums {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.count() != 0 {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(into_collector_mut {
+        iter_data: TwoIterMutData::strategy(),
+        collector_data: propvec(any::<i32>(), ..5),
+        iter_f: TwoIterMutFactory,
+        collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
+        model_f: |starting_nums| BasicCollectorModel {
+            state: starting_nums.clone(),
+            advance_f: |buf: &mut Vec<_>, &mut item: &mut _| buf.push(item),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == actual),
+        },
+    });
 
-    proptest! {
-        #[test]
-        fn all_collect_methods_mut(
-            starting_nums in propvec(any::<i32>(), ..5),
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_mut_impl(starting_nums, nums)?;
-        }
-    }
+    collector_test!(collector_mut {
+        iter_data: TwoIterData::strategy(),
+        collector_data: CollectorMutData::strategy(),
+        iter_f: TwoIterFactory,
+        collector_f: CollectorMutFactory,
+        model_f: |data| BasicCollectorModel {
+            state: data.starting_nums.clone(),
+            advance_f: |buf: &mut Vec<_>, item| buf.push(item),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == *actual),
+        },
+    });
 
-    fn all_collect_methods_mut_impl(starting_nums: Vec<i32>, nums: Vec<i32>) -> TestCaseResult {
-        CollectorMutTester::new(starting_nums, nums).test_collector()
-    }
+    collector_test!(collector_mut_ref {
+        iter_data: TwoIterData::strategy(),
+        collector_data: CollectorMutData::strategy(),
+        iter_f: TwoIterRefFactory,
+        collector_f: CollectorMutFactory,
+        model_f: |data| BasicCollectorModel {
+            state: data.starting_nums.clone(),
+            advance_f: |buf: &mut Vec<_>, &item: &_| buf.push(item),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == *actual),
+        },
+    });
 
-    struct CollectorMutTester {
+    collector_test!(collector_mut_mut {
+        iter_data: TwoIterMutData::strategy(),
+        collector_data: CollectorMutData::strategy(),
+        iter_f: TwoIterMutFactory,
+        collector_f: CollectorMutFactory,
+        model_f: |data| BasicCollectorModel {
+            state: data.starting_nums.clone(),
+            advance_f: |buf: &mut Vec<_>, &mut item: &mut _| buf.push(item),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == *actual),
+        },
+    });
+
+    #[derive(Clone)]
+    struct CollectorMutData {
         starting_nums: Vec<i32>,
-        collector_base: Vec<i32>,
-        nums: Vec<i32>,
-        expected_output: Vec<i32>,
+        base: Vec<i32>,
     }
 
-    impl CollectorMutTester {
-        fn new(starting_nums: Vec<i32>, nums: Vec<i32>) -> Self {
-            let mut expected_output = starting_nums.clone();
-            expected_output.extend_from_slice(&nums);
-
-            CollectorMutTester {
-                starting_nums,
-                collector_base: vec![],
-                nums,
-                expected_output,
-            }
+    impl Debug for CollectorMutData {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_fmt(format_args!("{:?}", self.starting_nums))
         }
     }
 
-    impl CollectorTester for CollectorMutTester {
-        type Item<'a> = i32;
-        type Output<'a> = &'a mut Vec<i32>;
-
-        fn collector_test_parts<'a>(
-            &'a mut self,
-        ) -> CollectorTestParts<
-            impl Iterator<Item = Self::Item<'a>>,
-            impl Collector<Self::Item<'a>, Output = Self::Output<'a>>,
-            impl FnMut(
-                Self::Output<'a>,
-                &mut dyn Iterator<Item = Self::Item<'a>>,
-            ) -> Result<(), PredError>,
-            impl Iterator<Item = Self::Item<'a>>,
-        > {
-            // Don't forget to reset the collector.
-            self.collector_base.clone_from(&self.starting_nums);
-
-            // It has to be here because of "lifetime may not live long enough."
-            let output_pred = |output: Self::Output<'_>, iter: &mut dyn Iterator<Item = _>| {
-                if *output != self.expected_output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.count() > 0 {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            };
-
-            CollectorTestParts {
-                iter: self.nums.iter().cloned(),
-                collector: self.collector_base.collector_mut(),
-                should_break: false,
-                pred: output_pred,
-                iter_for_fuse_test: none_iter_for_fuse_test(),
+    impl CollectorMutData {
+        fn new(starting_nums: Vec<i32>) -> Self {
+            Self {
+                starting_nums,
+                base: vec![],
             }
+        }
+
+        fn strategy() -> impl Strategy<Value = Self> {
+            propvec(any::<i32>(), ..=2).prop_map(Self::new)
+        }
+    }
+
+    #[derive(Clone)]
+    struct CollectorMutFactory;
+
+    impl<'d> DefineCollector<'d, CollectorMutData> for CollectorMutFactory {
+        type Collector = CollectorMut<'d, i32>;
+        type Output = &'d mut Vec<i32>;
+    }
+
+    impl CollectorFactoryBase<CollectorMutData> for CollectorMutFactory {
+        fn collector<'d>(
+            &self,
+            data: &'d mut CollectorMutData,
+        ) -> <Self as DefineCollector<'d, CollectorMutData>>::Collector {
+            // We deliberately clear the old buffer so that the collector's capacity
+            // always starts new also!
+            data.base = data.starting_nums.clone();
+            data.base.collector_mut()
         }
     }
 }
