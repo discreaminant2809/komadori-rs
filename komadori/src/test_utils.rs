@@ -45,3 +45,23 @@ macro_rules! collector_test {
 }
 
 pub(super) use collector_test;
+
+#[allow(unused_imports)]
+pub mod prelude {
+    pub use std::{
+        // `Debug` for manual implementation of `TwoIterMutFactory` and `CollectorFactoryBase`.
+        fmt::Debug,
+        ops::ControlFlow,
+    };
+
+    pub use proptest::collection::vec as propvec;
+    pub use proptest::prelude::*;
+
+    pub use crate::prelude::*;
+
+    pub(crate) use super::collector_test;
+    pub use super::{
+        BasicCollectorModel, CollectorFactoryBase, DefineCollector, TwoIterData, TwoIterFactory,
+        TwoIterMutData, TwoIterMutFactory, TwoIterRefFactory,
+    };
+}
