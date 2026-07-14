@@ -39,6 +39,17 @@ pub struct IntoCollector(String);
 #[derive(Debug)]
 pub struct CollectorMut<'a>(&'a mut String);
 
+// Unforturnately `String` can't use the Reserve API well like `Vec`,
+// because a character can occupy from 1 byte to 4 bytes,
+// so we only have two options:
+//
+// - Over-reserve for 4 * `additional` bytes to enable "efficient"
+//   `assume_reserved_collect()` (which won't be as efficient as `Vec` anyway
+//   since the `len` isn't updated uniformly)
+// - Reserve for only `additional` bytes and still `push()` normally.
+//
+// The standard library chooses the latter.
+
 impl crate::collector::IntoCollectorBase for String {
     type Output = Self;
 
@@ -67,6 +78,11 @@ impl CollectorBase for IntoCollector {
     #[inline]
     fn finish(self) -> Self::Output {
         self.0
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
     }
 }
 
@@ -139,6 +155,11 @@ impl<'a> CollectorBase for CollectorMut<'a> {
     #[inline]
     fn finish(self) -> Self::Output {
         self.0
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
     }
 }
 

@@ -335,18 +335,7 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use std::{fmt::Debug, ops::ControlFlow};
-
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-
-    use crate::{
-        prelude::*,
-        test_utils::{
-            BasicCollectorModel, CollectorFactoryBase, DefineCollector, TwoIterData,
-            TwoIterFactory, TwoIterMutData, TwoIterMutFactory, TwoIterRefFactory, collector_test,
-        },
-    };
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
