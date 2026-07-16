@@ -110,39 +110,28 @@ impl<F> Debug for Any<F> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        /// [`Any`](super::Any)
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=5),
-        ) {
-            all_collect_methods_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || Any::new(|num| num > 0),
-            should_break_pred: |mut iter| iter.any(|num| num > 0),
-            pred: |mut iter, output, remaining| {
-                if iter.any(|num| num > 0) != output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
+    collector_test!(collector {
+        iter_data: TriIterI32Data::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterI32Factory,
+        collector_f: |_: &_| Any::new(|num| num >= 0),
+        output_f: |mut iter, _| (&mut iter).any(|num| num >= 0),
+        model_f: |_| BasicCollectorModel {
+            state: false,
+            advance_f: |any: &mut _, num| if num >= 0 {
+                *any = true;
             },
-        }
-        .test_collector()
-    }
+            max_afford_f: |&any, request| if any { 0 } else { request },
+            cf_f: |&any| if any {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            },
+            output_and_pred_f: |any| (any, bool::eq)
+        },
+    });
 }

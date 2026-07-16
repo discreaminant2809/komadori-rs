@@ -233,86 +233,56 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::result::maybe_ok as propresult;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-
     use std::convert::identity;
+
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        /// [`TryFold::new()`]
-        #[test]
-        fn all_collect_methods_new(
-            nums in propvec(u8_result(), ..=5),
-        ) {
-            all_collect_methods_impl(
-                nums,
-                Ok(()),
-                || TryForEach::new(identity),
-            )?;
-        }
-    }
-
-    proptest! {
-        /// [`TryFold::init()`]
-        #[test]
-        fn all_collect_methods_init(
-            nums in propvec(u8_result(), ..=5),
-            init in u8_result(),
-        ) {
-            all_collect_methods_impl(
-                nums,
-                init,
-                || TryForEach::init(init, identity),
-            )?;
-        }
-    }
-
-    fn all_collect_methods_impl<C>(
-        nums: Vec<I32Result>,
-        init: I32Result,
-        collector_factory: impl FnMut() -> C,
-    ) -> TestCaseResult
-    where
-        C: Collector<I32Result, Output = I32Result>,
-    {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory,
-            should_break_pred: |iter| init.is_err() || iter_output(iter).is_err(),
-            pred: |mut iter, output, remaining| {
-                let expected = if init.is_err() {
-                    init
-                } else {
-                    iter_output(&mut iter)
-                };
-
-                if expected != output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
+    collector_test!(via_new {
+        iter_data: propvec(prop_opt5050(any::<()>()), ..=5),
+        collector_data: any::<()>(),
+        iter_f: Vec::clone,
+        collector_f: |_: &_| TryForEach::new(identity),
+        output_f: |mut iter, _| (&mut iter).try_for_each(identity),
+        model_f: |_| BasicCollectorModel {
+            state: Some(()),
+            advance_f: |state: &mut _, item: Option<_>| if item.is_none() {
+                *state = None
             },
-        }
-        .test_collector()
-    }
+            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
+            cf_f: |state| if state.is_some() {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            },
+            output_and_pred_f: |state| (state, PartialEq::eq)
+        },
+    });
 
-    type I32Result = Result<(), i32>;
-
-    fn u8_result() -> impl Strategy<Value = I32Result> {
-        propresult(Just(()), any::<i32>())
-    }
-
-    fn iter_output(iter: impl IntoIterator<Item = I32Result>) -> I32Result {
-        iter.into_iter().try_for_each(identity)
-    }
+    collector_test!(via_init {
+        iter_data: propvec(prop_opt5050(any::<()>()), ..=5),
+        collector_data: prop_opt5050(any::<()>()),
+        iter_f: Vec::clone,
+        collector_f: |&init: &_| TryForEach::init(init, identity),
+        output_f: |mut iter, &opt| {
+            opt?;
+            (&mut iter).try_for_each(identity)
+        },
+        model_f: |&init| BasicCollectorModel {
+            state: init,
+            advance_f: |state: &mut _, item: Option<_>| if item.is_none() {
+                *state = None
+            },
+            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
+            cf_f: |state| if state.is_some() {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            },
+            output_and_pred_f: |state| (state, PartialEq::eq)
+        },
+    });
 }
 
 // There seems to be no problem, unlike TryFold.

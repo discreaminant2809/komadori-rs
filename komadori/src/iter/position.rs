@@ -114,54 +114,46 @@ impl<P> Debug for Position<P> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=5),
-            // We mustn't make the collector stops accumulating
-            starting_nums in propvec(..=0, ..=2),
-        ) {
-            all_collect_methods_impl(nums, starting_nums)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>, starting_nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                let mut collector = Position::new(|num| num > 0);
-                assert!(
-                    collector
-                        .collect_many(starting_nums.iter().copied())
-                        .is_continue()
-                );
-                collector
-            },
-            should_break_pred: |mut iter| iter.any(|num| num > 0),
-            pred: |mut iter, output, remaining| {
-                if starting_nums
-                    .iter()
-                    .copied()
-                    .chain(&mut iter)
-                    .position(|num| num > 0)
-                    != output
-                {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
+    collector_test!(collector {
+        iter_data: TriIterI32Data::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterI32Factory,
+        collector_f: |_: &_| Position::new(find_pred),
+        output_f: |mut iter, _| (&mut iter).position(find_pred),
+        model_f: |_| BasicCollectorModel {
+            state: ModelState::default(),
+            advance_f: |state: &mut ModelState, num| {
+                if state.found {
+                } else if find_pred(num) {
+                    state.found = true;
                 } else {
-                    Ok(())
+                    state.idx += 1;
                 }
             },
-        }
-        .test_collector()
+            max_afford_f: |state, request| if state.found { 0 } else { request },
+            cf_f: |state| if state.found {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            },
+            output_and_pred_f: |state: ModelState| (
+                state.found.then_some(state.idx),
+                PartialEq::eq
+            )
+        },
+    });
+
+    fn find_pred(num: i32) -> bool {
+        num >= 0
+    }
+
+    #[derive(Default)]
+    struct ModelState {
+        idx: usize,
+        found: bool,
     }
 }

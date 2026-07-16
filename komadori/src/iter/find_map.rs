@@ -156,57 +156,33 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        /// Precondition:
-        // - `Vec::IntoCollector`
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=4),
-            starting_nums in propvec(1.., ..=2),
-        ) {
-            all_collect_methods_impl(nums, starting_nums)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>, starting_nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                let mut collector = Find::map(find_map_pred);
-                assert!(
-                    collector
-                        .collect_many(starting_nums.iter().copied())
-                        .is_continue()
-                );
-                collector
-            },
-            should_break_pred: |mut iter| iter.any(|num| find_map_pred(num).is_some()),
-            pred: |mut iter, output, remaining| {
-                if starting_nums
-                    .iter()
-                    .copied()
-                    .chain(&mut iter)
-                    .find_map(find_map_pred)
-                    != output
-                {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
+    collector_test!(collector {
+        iter_data: TriIterI32Data::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterI32Factory,
+        collector_f: |_: &_| Find::map(find_map_pred),
+        output_f: |mut iter, _| (&mut iter).find_map(find_map_pred),
+        model_f: |_| BasicCollectorModel {
+            state: None::<i32>,
+            advance_f: |found: &mut _, num| {
+                let num = find_map_pred(num);
+                if num.is_some() {
+                    *found = num;
                 }
             },
-        }
-        .test_collector()
-    }
+            max_afford_f: |found, request| if found.is_some() { 0 } else { request },
+            cf_f: |found| if found.is_some() {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            },
+            output_and_pred_f: |found| (found, PartialEq::eq)
+        },
+    });
 
     fn find_map_pred(num: i32) -> Option<i32> {
         num.checked_add(i32::MAX)

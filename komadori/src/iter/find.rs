@@ -145,38 +145,34 @@ impl<T: Debug, F> Debug for Find<T, F> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=5),
-        ) {
-            all_collect_methods_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || Find::new(|&num| num > 0),
-            should_break_pred: |mut iter| iter.any(|num| num > 0),
-            pred: |mut iter, output, remaining| {
-                if iter.find(|&num| num > 0) != output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
+    collector_test!(collector {
+        iter_data: TriIterI32Data::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterI32Factory,
+        collector_f: |_: &_| Find::new(find_pred),
+        output_f: |mut iter, _| (&mut iter).find(find_pred),
+        model_f: |_| BasicCollectorModel {
+            state: None::<i32>,
+            advance_f: |found: &mut _, num| {
+                if find_pred(&num) {
+                    *found = Some(num);
                 }
             },
-        }
-        .test_collector()
+            max_afford_f: |found, request| if found.is_some() { 0 } else { request },
+            cf_f: |found| if found.is_some() {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            },
+            output_and_pred_f: |found| (found, PartialEq::eq)
+        },
+    });
+
+    fn find_pred(&num: &i32) -> bool {
+        num >= 0
     }
 }

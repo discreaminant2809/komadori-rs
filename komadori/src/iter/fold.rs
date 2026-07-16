@@ -85,52 +85,31 @@ impl<A: Debug, F> Debug for Fold<A, F> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        /// Here, we will use the Kadane's Algorithm to test fold.
-        /// [`Fold`](super::Fold)
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=9),
-        ) {
-            all_collect_methods_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                Fold::new(KADANE_INIT, |(sum, max_sum), num| {
-                    kadane_fold(sum, max_sum, num)
-                })
+    collector_test!(collector {
+        iter_data: TriIterI32Data::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterI32Factory,
+        collector_f: |_: &_| Fold::new(KADANE_INIT, |(sum, max_sum), num| {
+            kadane_fold(sum, max_sum, num)
+        }),
+        output_f: |iter, _| iter.fold(KADANE_INIT, |(mut sum, mut max_sum), num| {
+            kadane_fold(&mut sum, &mut max_sum, num);
+            (sum, max_sum)
+        }),
+        model_f: |_| BasicCollectorModel {
+            state: KADANE_INIT,
+            advance_f: |(sum, max_sum): &mut _, num| {
+                kadane_fold(sum, max_sum, num);
             },
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                let expected = iter.fold(KADANE_INIT, |(mut sum, mut max_sum), num| {
-                    kadane_fold(&mut sum, &mut max_sum, num);
-                    (sum, max_sum)
-                });
-
-                // We also check the `sum`
-                if expected != output {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |state| (state, PartialEq::eq)
+        },
+    });
 
     fn kadane_fold(sum: &mut i32, max_sum: &mut Option<i32>, num: i32) {
         *sum = num;

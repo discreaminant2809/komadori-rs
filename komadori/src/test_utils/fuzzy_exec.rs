@@ -38,16 +38,19 @@ pub enum FuzzyExecError<T, EO, AO> {
     Overreached,
 }
 
-pub(super) fn fuzzy_execute<I, IM, C, P, EO: Debug>(
+pub(super) fn fuzzy_execute<I, IM, ER, C, P, EO: Debug + PartialEq>(
     iter: I,
     mut iter_for_model: IM,
     mut collector: C,
+    expected_remaining: ER,
+    expected_output: EO,
     seq: &FuzzyExecSeq,
     mut model: P,
 ) -> Result<(), FuzzyExecError<I::Item, EO, C::Output>>
 where
-    I: Iterator<Item: PartialEq>,
+    I: Iterator<Item: Debug + PartialEq>,
     IM: Iterator<Item = I::Item>,
+    ER: Iterator<Item = I::Item>,
     C: Collector<I::Item>,
     P: CollectorModel<I::Item, EO, C::Output>,
 {
@@ -55,100 +58,137 @@ where
     // This is tracked according to the contract of the Reserve API
     // to guard against malformed test cases regarding `assume_reserved_collect()`.
     let mut reserved_amount = 0;
+    let mut collector_stopped = false;
 
-    for &node in &seq.middles {
-        const MISSING_ITEM_MSG: &str = "there should be an element";
+    // We check for the "stop before even collecting,"
+    // or else `expected_remaining` will complain for over-collecting.
+    if model.expected_cf().is_break() {
+        assert_eq!(
+            model.expected_max_afford(1),
+            0,
+            "malformed model: `model.expected_cf().is_break()` being `true` \
+            must mean `model.expected_max_afford(1)` is 0"
+        );
 
-        match node {
-            MiddleSeqNode::Reserve { additional } => {
-                collector.reserve(additional);
-                reserved_amount = additional;
-            }
-            MiddleSeqNode::MaxAfford { request } => {
-                let actual = collector.max_afford(request);
-                let expected = model.expected_max_afford(request);
+        let actual = collector.max_afford(1);
+        if actual > 0 {
+            return Err(FuzzyExecError::MaxAfford {
+                expected: 0,
+                actual,
+            });
+        }
+    } else {
+        // The `middles` iterator is fused anyway.
+        for &node in &seq.middles {
+            const MISSING_ITEM_MSG: &str = "there should be an element";
 
-                if actual != expected {
-                    return Err(FuzzyExecError::MaxAfford { expected, actual });
+            match node {
+                MiddleSeqNode::Reserve { additional } => {
+                    collector.reserve(additional);
+                    reserved_amount = additional;
                 }
-            }
-            MiddleSeqNode::Collect => {
-                reserved_amount = reserved_amount.saturating_sub(1);
+                MiddleSeqNode::MaxAfford { request } => {
+                    let actual = collector.max_afford(request);
+                    let expected = model.expected_max_afford(request);
 
-                let item = iter.next().expect(MISSING_ITEM_MSG);
-                let actual = collector.collect(item);
-
-                let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
-                model.advance(item);
-                let expected = model.expected_cf();
-
-                if actual != expected {
-                    return Err(FuzzyExecError::Collect { expected, actual });
+                    if actual != expected {
+                        return Err(FuzzyExecError::MaxAfford { expected, actual });
+                    }
                 }
+                MiddleSeqNode::Collect => {
+                    reserved_amount = reserved_amount.saturating_sub(1);
 
-                if actual.is_break() {
-                    break;
-                }
-            }
-            MiddleSeqNode::AssumeReservedCollect => {
-                if reserved_amount == 0 {
-                    panic!("malformed test case");
-                }
-                reserved_amount -= 1;
+                    let item = iter.next().expect(MISSING_ITEM_MSG);
+                    let actual = collector.collect(item);
 
-                let item = iter.next().expect(MISSING_ITEM_MSG);
-                // SAFETY: We've guarded against non-reservation.
-                let actual = unsafe { collector.assume_reserved_collect(item) };
-
-                let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
-                model.advance(item);
-                let expected = model.expected_cf();
-
-                if actual != expected {
-                    return Err(FuzzyExecError::Collect { expected, actual });
-                }
-
-                if actual.is_break() {
-                    break;
-                }
-            }
-            MiddleSeqNode::CollectMany { n } => {
-                reserved_amount = 0;
-
-                let actual = collector.collect_many(iter.by_ref().take(n));
-
-                for item in iter_for_model.by_ref().take(n) {
+                    let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
                     model.advance(item);
-                }
-                let expected = model.expected_cf();
+                    let expected = model.expected_cf();
 
-                if actual != expected {
-                    return Err(FuzzyExecError::Collect { expected, actual });
-                }
+                    if actual != expected {
+                        return Err(FuzzyExecError::Collect { expected, actual });
+                    }
 
-                if actual.is_break() {
-                    break;
+                    if actual.is_break() {
+                        collector_stopped = true;
+                        break;
+                    }
+                }
+                MiddleSeqNode::AssumeReservedCollect => {
+                    if reserved_amount == 0 {
+                        panic!("malformed test case");
+                    }
+                    reserved_amount -= 1;
+
+                    let item = iter.next().expect(MISSING_ITEM_MSG);
+                    // SAFETY: We've guarded against non-reservation.
+                    let actual = unsafe { collector.assume_reserved_collect(item) };
+
+                    let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
+                    model.advance(item);
+                    let expected = model.expected_cf();
+
+                    if actual != expected {
+                        return Err(FuzzyExecError::AssumeReservedCollect { expected, actual });
+                    }
+
+                    if actual.is_break() {
+                        collector_stopped = true;
+                        break;
+                    }
+                }
+                MiddleSeqNode::CollectMany { n } => {
+                    reserved_amount = 0;
+
+                    let actual = collector.collect_many(iter.by_ref().take(n));
+
+                    let expected = (|| {
+                        model.expected_cf()?;
+                        iter_for_model.by_ref().take(n).try_for_each(|item| {
+                            model.advance(item);
+                            model.expected_cf()
+                        })
+                    })();
+
+                    if actual != expected {
+                        return Err(FuzzyExecError::CollectMany { expected, actual });
+                    }
+
+                    if actual.is_break() {
+                        collector_stopped = true;
+                        break;
+                    }
                 }
             }
         }
     }
 
-    let actual = match seq.end {
-        EndSeqNode::Finish => collector.finish(),
-        EndSeqNode::CollectThenFinish => {
-            for item in iter_for_model.by_ref() {
-                model.advance(item);
+    let actual = match (collector_stopped, seq.end) {
+        (false, EndSeqNode::CollectThenFinish) => {
+            if model.expected_cf().is_continue() {
+                let _ = iter_for_model.try_for_each(|item| {
+                    model.advance(item);
+                    model.expected_cf()
+                });
             }
+
             // Keep the iterator for the overreaching check.
             collector.collect_then_finish(&mut iter)
         }
+        _ => collector.finish(),
     };
     if iter.overreached() {
         return Err(FuzzyExecError::Overreached);
     }
 
-    let items = iter.collect::<Vec<_>>();
+    let expected_items = expected_remaining.collect::<Vec<_>>();
     let items_for_model = iter_for_model.collect::<Vec<_>>();
+    assert_eq!(
+        items_for_model, expected_items,
+        "the remaining iterators of the model (left) and the iterator output closure (right) mismatched"
+    );
+
+    let items = iter.collect::<Vec<_>>();
     if items != items_for_model {
         return Err(FuzzyExecError::IncorrectIterRemaining {
             expected: items_for_model,
@@ -157,6 +197,10 @@ where
     }
 
     let (expected, pred) = model.into_expected_output_and_pred();
+    assert_eq!(
+        expected, expected_output,
+        "the outputs of the model (left) and the iterator output closure (right) mismatched",
+    );
     if !pred(&expected, &actual) {
         return Err(FuzzyExecError::IncorrectOutput { expected, actual });
     }

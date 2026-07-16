@@ -425,64 +425,35 @@ unsigned_saturating_add_impl!(u8 u16 u32 u64 u128 usize);
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    collector_test!(sum_int {
+        iter_data: propvec(any::<i8>().prop_map_into::<i64>(), ..=5),
+        collector_data: any::<i8>().prop_map_into::<i64>(),
+        iter_f: |nums: &Vec<_>| nums.clone(),
+        collector_f: |&starting_num: &i64| starting_num.into_sum(),
+        output_f: |iter, &starting_num| starting_num + iter.sum::<i64>(),
+        model_f: |&starting_num| BasicCollectorModel {
+            state: starting_num,
+            advance_f: |sum: &mut _, num| *sum += num,
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |sum| (sum, i64::eq)
+        },
+    });
 
-    proptest! {
-        #[test]
-        fn all_collect_methods_adding_int(
-            nums in propvec(any::<i16>().prop_map_into::<i32>(), ..5),
-        ) {
-            all_collect_methods_adding_int_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_adding_int_impl(nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || 0.into_sum(),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if iter.sum::<i32>() != output {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
-
-    proptest! {
-        #[test]
-        fn all_collect_methods_muling_int(
-            nums in propvec(any::<i8>().prop_map_into::<i64>(), ..5),
-        ) {
-            all_collect_methods_muling_int_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_muling_int_impl(nums: Vec<i64>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || 1_i64.into_product(),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if iter.product::<i64>() != output {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(product_int {
+        iter_data: propvec(any::<i8>().prop_map_into::<i64>(), ..=5),
+        collector_data: any::<i8>().prop_map_into::<i64>(),
+        iter_f: |nums: &Vec<_>| nums.clone(),
+        collector_f: |&starting_num: &i64| starting_num.into_product(),
+        output_f: |iter, &starting_num| starting_num * iter.product::<i64>(),
+        model_f: |&starting_num| BasicCollectorModel {
+            state: starting_num,
+            advance_f: |sum: &mut _, num| *sum *= num,
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |sum| (sum, i64::eq),
+        },
+    });
 }

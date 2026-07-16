@@ -289,81 +289,65 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        /// [`TryFold::new()`]
-        #[test]
-        fn all_collect_methods_new(
-            nums in propvec(any::<u8>(), ..=5),
-            starting_num in proptest::option::of(Just(0_u8))
-        ) {
-            all_collect_methods_impl(
-                nums,
-                starting_num.is_none(),
-                || TryFold::new(starting_num, collector_closure),
-            )?;
-        }
-    }
-
-    proptest! {
-        /// [`TryFold::with_output()`]
-        #[test]
-        fn all_collect_methods_with_output(
-            nums in propvec(any::<u8>(), ..=5),
-        ) {
-            all_collect_methods_impl(
-                nums,
-                false,
-                || TryFold::with_output(0_u8, collector_closure),
-            )?;
-        }
-    }
-
-    fn all_collect_methods_impl<C>(
-        nums: Vec<u8>,
-        break_from_start: bool,
-        collector_factory: impl FnMut() -> C,
-    ) -> TestCaseResult
-    where
-        C: Collector<u8, Output = Option<u8>>,
-    {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory,
-            should_break_pred: |iter| break_from_start || iter_output(iter).is_none(),
-            pred: |mut iter, output, remaining| {
-                let expected = if break_from_start {
-                    None
-                } else {
-                    iter_output(&mut iter)
-                };
-
-                if expected != output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
+    collector_test!(via_new {
+        iter_data: propvec(any::<u8>(), ..=5),
+        collector_data: prop_opt5050(any::<u8>()),
+        iter_f: Vec::clone,
+        collector_f: |&init: &_| TryFold::new(init, try_fold_f),
+        output_f: |mut iter, &init| (&mut iter).try_fold(init?, |mut sum, num| {
+            try_fold_f(&mut sum, num)?;
+            Some(sum)
+        }),
+        model_f: |&init| BasicCollectorModel {
+            state: init,
+            advance_f: |state: &mut _, num| if let Some(sum) = state
+                && try_fold_f(sum, num).is_none()
+            {
+                *state = None;
             },
-        }
-        .test_collector()
-    }
+            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
+            cf_f: |state| if state.is_some() {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            },
+            output_and_pred_f: |state| (state, PartialEq::eq)
+        },
+    });
 
-    fn collector_closure(sum: &mut u8, num: u8) -> Option<()> {
+    collector_test!(via_with_output {
+        iter_data: propvec(any::<u8>(), ..=5),
+        collector_data: any::<u8>(),
+        iter_f: Vec::clone,
+        collector_f: |&init: &_| TryFold::<Option<u8>, _>::with_output(init, try_fold_f),
+        output_f: |mut iter, &init| (&mut iter).try_fold(init, |mut sum, num| {
+            try_fold_f(&mut sum, num)?;
+            Some(sum)
+        }),
+        model_f: |&init| BasicCollectorModel {
+            state: Some(init),
+            advance_f: |state: &mut _, num| if let Some(sum) = state
+                && try_fold_f(sum, num).is_none()
+            {
+                *state = None;
+            },
+            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
+            cf_f: |state| if state.is_some() {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            },
+            output_and_pred_f: |state| (state, PartialEq::eq)
+        },
+    });
+
+    fn try_fold_f(sum: &mut u8, num: u8) -> Option<()> {
         *sum = sum.checked_add(num)?;
         Some(())
-    }
-
-    fn iter_output(iter: impl IntoIterator<Item = u8>) -> Option<u8> {
-        iter.into_iter().try_fold(0_u8, u8::checked_add)
     }
 }
 

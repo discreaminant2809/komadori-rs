@@ -77,42 +77,22 @@ impl<T> Collector<T> for Count {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            count in ..=9_usize,
-            starting_count in ..=9_usize,
-        ) {
-            all_collect_methods_impl(count, starting_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(count: usize, starting_count: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || std::iter::repeat_n((), count),
-            collector_factory: || {
-                let mut collector = Count::new();
-                collector.count = starting_count;
-                collector
-            },
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if starting_count + iter.count() != output {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(collector {
+        iter_data: ..=10_usize,
+        collector_data: any::<()>(),
+        iter_f: |&n: &_| std::iter::repeat_n((), n),
+        collector_f: |_: &_| Count::new(),
+        output_f: |iter, _| iter.count(),
+        model_f: |_| BasicCollectorModel {
+            state: 0_usize,
+            advance_f: |count: &mut _, _| *count += 1,
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |count| (count, usize::eq)
+        },
+    });
 }
