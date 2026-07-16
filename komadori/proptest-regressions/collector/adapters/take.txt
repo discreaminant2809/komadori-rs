@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc 5ea2ee3b754622da3f46c035a422b2a07d96d1d8ca149dd4437a484d14d98f82 # shrinks to vec1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], vec2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 38510, 1511835024, 1936648531, 1650022925, 208373871, 1022954602, 259666431, 2036776278, 1083687100, 1108188258, 1637099155, 190716242], take_count = 41

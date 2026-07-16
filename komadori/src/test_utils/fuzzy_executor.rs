@@ -13,7 +13,7 @@ pub struct FuzzyExecutor<ID, CD, IF, CF>
 where
     ID: Clone + Debug,
     CD: Clone + Debug,
-    IF: TwoIteratorFactory<ID>,
+    IF: TriIteratorFactory<ID>,
     CF: for<'a> CollectorFactory<CD, <IF as DefineItem<'a, ID>>::Item>,
 {
     iter_data: ID,
@@ -30,19 +30,20 @@ pub trait DefineItem<'d, D: ?Sized, Binder = &'d mut D> {
 }
 
 // One iterator is for collector, and another is for the execution predicate.
-pub trait TwoIteratorFactory<D: ?Sized>: for<'d> DefineItem<'d, D> + Clone {
-    fn two_iters<'d>(
-        // `&self` because `prop_*` adapter only accept `Fn`.
+pub trait TriIteratorFactory<D: ?Sized>: for<'d> DefineItem<'d, D> + Clone {
+    // `&self` because `prop_*` adapter only accept `Fn`.
+    // We don't want to `use` the lifetime of `self`.
+    fn three_iters<'d>(
         &self,
         data: &'d mut D,
-        // We don't want to `use` the lifetime of `self`.
-    ) -> [impl Iterator<Item = <Self as DefineItem<'d, D>>::Item> + use<'d, D, Self>; 2];
+    ) -> [impl Iterator<Item = <Self as DefineItem<'d, D>>::Item> + use<'d, D, Self>; 3];
 
+    /// This is used to create a [`FuzzyExecSeq`].
+    // `&self` because `prop_*` adapter only accept `Fn`.
+    // We don't want to `use` the lifetime of `self`.
     fn one_iter<'d>(
-        // `&self` because `prop_*` adapter only accept `Fn`.
         &self,
         data: &'d mut D,
-        // We don't want to `use` the lifetime of `self`.
     ) -> impl Iterator<Item = <Self as DefineItem<'d, D>>::Item> + use<'d, D, Self>;
 }
 
@@ -57,7 +58,7 @@ where
     type Item = I::Item;
 }
 
-impl<F, D, I> TwoIteratorFactory<D> for F
+impl<F, D, I> TriIteratorFactory<D> for F
 where
     D: ?Sized,
     // Deliberately `&D` to avoid mutation.
@@ -65,14 +66,14 @@ where
     F: Fn(&D) -> I + Clone,
     I: IntoIterator<Item: PartialEq + Debug, IntoIter: Clone>,
 {
-    fn two_iters<'d>(
+    fn three_iters<'d>(
         // `&self` because `prop_*` adapter only accept `Fn`.
         &self,
         data: &'d mut D,
         // We don't want to `use` the lifetime of `self`.
-    ) -> [impl Iterator<Item = <Self as DefineItem<'d, D>>::Item> + use<'d, F, D, I>; 2] {
+    ) -> [impl Iterator<Item = <Self as DefineItem<'d, D>>::Item> + use<'d, F, D, I>; 3] {
         let iter = self(data).into_iter();
-        [iter.clone(), iter]
+        [iter.clone(), iter.clone(), iter]
     }
 
     fn one_iter<'d>(
@@ -132,7 +133,7 @@ impl<ID, CD, IF, CF> FuzzyExecutor<ID, CD, IF, CF>
 where
     ID: Clone + Debug,
     CD: Clone + Debug,
-    IF: TwoIteratorFactory<ID>,
+    IF: TriIteratorFactory<ID>,
     CF: for<'a> CollectorFactory<CD, <IF as DefineItem<'a, ID>>::Item>,
 {
     /// Used when we need to isolate a test case.
@@ -182,22 +183,40 @@ where
 
     pub fn execute<
         'd,
-        EO: Debug,
-        P: for<'a> CollectorModel<
-                <IF as DefineItem<'a, ID>>::Item,
+        EO: Debug + PartialEq,
+        P: CollectorModel<
+                <IF as DefineItem<'d, ID>>::Item,
                 EO,
                 <CF as DefineCollector<'d, CD>>::Output,
             >,
     >(
         &'d mut self,
+        expected_output_f: impl FnOnce(
+            &mut dyn Iterator<Item = <IF as DefineItem<'d, ID>>::Item>,
+            &CD,
+        ) -> EO,
         // Intentionally shared reference to avoid accidental mutation.
         // We can't return anything that borrow the lifetime of it anyway.
         model_f: impl FnOnce(&CD) -> P,
     ) -> TestCaseResult {
-        let [iter, iter_for_model] = self.iter_f.two_iters(&mut self.iter_data);
+        let [iter, mut expected_remaining, iter_for_model] = self
+            .iter_f
+            .three_iters(&mut self.iter_data)
+            .map(Iterator::fuse);
+
         let pred = model_f(&self.collector_data);
+        let expected_output = expected_output_f(&mut expected_remaining, &self.collector_data);
         let collector = self.collector_f.collector(&mut self.collector_data);
-        super::fuzzy_execute(iter, iter_for_model, collector, &self.seq, pred)?;
+
+        super::fuzzy_execute(
+            iter,
+            iter_for_model,
+            collector,
+            expected_remaining,
+            expected_output,
+            &self.seq,
+            pred,
+        )?;
         Ok(())
     }
 }
@@ -206,7 +225,7 @@ impl<ID, CD, IF, CF> Debug for FuzzyExecutor<ID, CD, IF, CF>
 where
     ID: Clone + Debug,
     CD: Clone + Debug,
-    IF: TwoIteratorFactory<ID>,
+    IF: TriIteratorFactory<ID>,
     CF: for<'a> CollectorFactory<CD, <IF as DefineItem<'a, ID>>::Item>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

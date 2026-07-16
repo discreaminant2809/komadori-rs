@@ -340,10 +340,15 @@ mod proptests {
     use super::*;
 
     collector_test!(into_collector {
-        iter_data: TwoIterData::strategy(),
+        iter_data: TriIterI32Data::strategy(),
         collector_data: propvec(any::<i32>(), ..5),
-        iter_f: TwoIterFactory,
+        iter_f: TriIterI32Factory,
         collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
+        output_f: |iter, starting_nums| {
+            let mut output = starting_nums.clone();
+            output.extend(iter);
+            output
+        },
         model_f: |starting_nums| BasicCollectorModel {
             state: starting_nums.clone(),
             advance_f: |buf: &mut Vec<_>, item| buf.push(item),
@@ -354,10 +359,15 @@ mod proptests {
     });
 
     collector_test!(into_collector_ref {
-        iter_data: TwoIterData::strategy(),
+        iter_data: TriIterI32Data::strategy(),
         collector_data: propvec(any::<i32>(), ..5),
-        iter_f: TwoIterRefFactory,
+        iter_f: TriIterRefI32Factory,
         collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
+        output_f: |iter, starting_nums| {
+            let mut output = starting_nums.clone();
+            output.extend(iter);
+            output
+        },
         model_f: |starting_nums| BasicCollectorModel {
             state: starting_nums.clone(),
             advance_f: |buf: &mut Vec<_>, &item: &_| buf.push(item),
@@ -372,6 +382,11 @@ mod proptests {
         collector_data: propvec(any::<i32>(), ..5),
         iter_f: TwoIterMutFactory,
         collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
+        output_f: |iter, starting_nums| {
+            let mut output = starting_nums.clone();
+            output.extend(iter.map(|&mut num| num));
+            output
+        },
         model_f: |starting_nums| BasicCollectorModel {
             state: starting_nums.clone(),
             advance_f: |buf: &mut Vec<_>, &mut item: &mut _| buf.push(item),
@@ -382,10 +397,15 @@ mod proptests {
     });
 
     collector_test!(collector_mut {
-        iter_data: TwoIterData::strategy(),
+        iter_data: TriIterI32Data::strategy(),
         collector_data: CollectorMutData::strategy(),
-        iter_f: TwoIterFactory,
+        iter_f: TriIterI32Factory,
         collector_f: CollectorMutFactory,
+        output_f: |iter, starting_nums| {
+            let mut output = starting_nums.starting_nums.clone();
+            output.extend(iter);
+            output
+        },
         model_f: |data| BasicCollectorModel {
             state: data.starting_nums.clone(),
             advance_f: |buf: &mut Vec<_>, item| buf.push(item),
@@ -396,10 +416,15 @@ mod proptests {
     });
 
     collector_test!(collector_mut_ref {
-        iter_data: TwoIterData::strategy(),
+        iter_data: TriIterI32Data::strategy(),
         collector_data: CollectorMutData::strategy(),
-        iter_f: TwoIterRefFactory,
+        iter_f: TriIterRefI32Factory,
         collector_f: CollectorMutFactory,
+        output_f: |iter, starting_nums| {
+            let mut output = starting_nums.starting_nums.clone();
+            output.extend(iter);
+            output
+        },
         model_f: |data| BasicCollectorModel {
             state: data.starting_nums.clone(),
             advance_f: |buf: &mut Vec<_>, &item: &_| buf.push(item),
@@ -414,6 +439,11 @@ mod proptests {
         collector_data: CollectorMutData::strategy(),
         iter_f: TwoIterMutFactory,
         collector_f: CollectorMutFactory,
+        output_f: |iter, starting_nums| {
+            let mut output = starting_nums.starting_nums.clone();
+            output.extend(iter.map(|&mut num| num));
+            output
+        },
         model_f: |data| BasicCollectorModel {
             state: data.starting_nums.clone(),
             advance_f: |buf: &mut Vec<_>, &mut item: &mut _| buf.push(item),

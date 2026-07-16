@@ -86,44 +86,22 @@ impl<T> Default for Last<T> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::option::of as prop_opt;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=9),
-            starting_num in prop_opt(any::<i32>()),
-        ) {
-            all_collect_methods_impl(nums, starting_num)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>, starting_num: Option<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                let mut collector = Last::new();
-                collector.value = starting_num;
-                collector
-            },
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if starting_num.into_iter().chain(iter).last() != output {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.ne([]) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(collector {
+        iter_data: TriIterI32Data::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterI32Factory,
+        collector_f: |_: &_| Last::new(),
+        output_f: |iter, _| iter.last(),
+        model_f: |_| BasicCollectorModel {
+            state: None,
+            advance_f: |last: &mut _, num| *last = Some(num),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |last| (last, PartialEq::eq)
+        },
+    });
 }
