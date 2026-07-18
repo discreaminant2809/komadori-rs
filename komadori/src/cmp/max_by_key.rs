@@ -109,3 +109,35 @@ impl<T: Debug, K: Debug, F> Debug for MaxByKey<T, K, F> {
             .finish()
     }
 }
+
+#[cfg(all(test, feature = "std"))]
+mod proptests {
+    use crate::test_utils::prelude::*;
+
+    use super::super::{
+        Max,
+        test_utils::{Id, TriIterIdData, TriIterIdFactory},
+    };
+
+    collector_test!(collector {
+        iter_data: TriIterIdData::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterIdFactory,
+        collector_f: |_: &_| Max::by_key(key_extractor),
+        output_f: |iter, _| iter.max_by_key(key_extractor),
+        model_f: |_| BasicCollectorModel {
+            state: None,
+            advance_f: |max: &mut Option<Id>, id| *max = Some(match max.take() {
+                Some(max) => std::cmp::max_by_key(max, id, key_extractor),
+                None => id,
+            }),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |max| (max, Id::full_eq_opt_ref)
+        },
+    });
+
+    fn key_extractor(Id { num, .. }: &Id) -> i32 {
+        num.wrapping_add(i32::MAX)
+    }
+}

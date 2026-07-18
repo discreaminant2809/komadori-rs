@@ -131,104 +131,26 @@ impl<T: Ord> Collector<T> for Max<T> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use std::cmp::Ordering;
+    use super::*;
+    use crate::test_utils::prelude::*;
 
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use super::super::test_utils::{Id, TriIterIdData, TriIterIdFactory};
 
-    use crate::cmp::Max;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-
-    use super::super::test_utils::Id;
-
-    proptest! {
-        #[test]
-        fn all_collect_methods_max(
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_max_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_max_impl(nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
-            collector_factory: || Max::new(),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if !Id::full_eq_opt(iter.max(), output) {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
-
-    proptest! {
-        #[test]
-        fn all_collect_methods_max_by(
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_max_by_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_max_by_impl(nums: Vec<i32>) -> TestCaseResult {
-        fn comparator(Id { num: a, .. }: &Id, Id { num: b, .. }: &Id) -> Ordering {
-            let (a, b) = (a.wrapping_add(i32::MAX), b.wrapping_add(i32::MAX));
-            a.cmp(&b)
-        }
-
-        BasicCollectorTester {
-            iter_factory: || nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
-            collector_factory: || Max::by(comparator),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if !Id::full_eq_opt(iter.max_by(comparator), output) {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
-
-    proptest! {
-        #[test]
-        fn all_collect_methods_max_by_key(
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_max_by_key_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_max_by_key_impl(nums: Vec<i32>) -> TestCaseResult {
-        fn key_extractor(Id { num, .. }: &Id) -> i32 {
-            num.wrapping_add(i32::MAX)
-        }
-
-        BasicCollectorTester {
-            iter_factory: || nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
-            collector_factory: || Max::by_key(key_extractor),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if !Id::full_eq_opt(iter.max_by_key(key_extractor), output) {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(collector {
+        iter_data: TriIterIdData::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterIdFactory,
+        collector_f: |_: &_| Max::new(),
+        output_f: |iter, _| iter.max(),
+        model_f: |_| BasicCollectorModel {
+            state: None,
+            advance_f: |max: &mut Option<Id>, id| *max = Some(match max.take() {
+                Some(max) => std::cmp::max(max, id),
+                None => id,
+            }),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |max| (max, Id::full_eq_opt_ref)
+        },
+    });
 }

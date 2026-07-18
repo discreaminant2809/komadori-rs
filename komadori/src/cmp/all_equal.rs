@@ -125,49 +125,41 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::option::of as prop_option;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
     use itertools::Itertools;
 
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(prop_oneof![Just(1), Just(2)], ..=3),
-            first_num in prop_option(prop_oneof![Just(1), Just(2)]),
-        ) {
-            all_collect_methods_impl(nums, first_num)?;
-        }
-    }
+    collector_test!(collector {
+        iter_data: propvec(prop_oneof![Just(1), Just(2)], ..=3),
+        collector_data: any::<()>(),
+        iter_f: Vec::clone,
+        collector_f: |_: &_| AllEqual::new(),
+        output_f: |mut iter, _| (&mut iter).all_equal(),
+        model_f: |_| BasicCollectorModel {
+            state: ModelState {
+                prev: None,
+                all_equal: true,
+            },
+            advance_f: |state: &mut ModelState, num| {
+                match state.prev {
+                    Some(prev) if prev != num => state.all_equal = false,
+                    _ => state.prev = Some(num),
+                }
+            },
+            max_afford_f: |state, request| if state.all_equal { request } else { 0 },
+            cf_f: |state| if state.all_equal {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            },
+            output_and_pred_f: |ModelState { all_equal, .. }| (all_equal, PartialEq::eq)
+        },
+    });
 
-    fn all_collect_methods_impl(nums: Vec<i32>, first_num: Option<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: move || {
-                // We test the `new` method also.
-                let mut collector = AllEqual::new();
-                if let Some(num) = first_num {
-                    let _ = collector.collect(num);
-                }
-                collector
-            },
-            should_break_pred: |iter| !iter.chain(first_num).all_equal(),
-            pred: |mut iter, output, remaining| {
-                if first_num.into_iter().chain(&mut iter).all_equal() != output {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.ne(iter) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
+    struct ModelState {
+        prev: Option<i32>,
+        all_equal: bool,
     }
 }

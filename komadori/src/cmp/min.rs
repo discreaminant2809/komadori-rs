@@ -131,104 +131,26 @@ impl<T: Ord> Collector<T> for Min<T> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use std::cmp::Ordering;
+    use super::*;
+    use crate::test_utils::prelude::*;
 
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use super::super::test_utils::{Id, TriIterIdData, TriIterIdFactory};
 
-    use crate::cmp::Min;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-
-    use super::super::test_utils::Id;
-
-    proptest! {
-        #[test]
-        fn all_collect_methods_min(
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_min_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_min_impl(nums: Vec<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
-            collector_factory: || Min::new(),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if !Id::full_eq_opt(iter.min(), output) {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
-
-    proptest! {
-        #[test]
-        fn all_collect_methods_min_by(
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_min_by_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_min_by_impl(nums: Vec<i32>) -> TestCaseResult {
-        fn comparator(Id { num: a, .. }: &Id, Id { num: b, .. }: &Id) -> Ordering {
-            let (a, b) = (a.wrapping_add(i32::MAX), b.wrapping_add(i32::MAX));
-            a.cmp(&b)
-        }
-
-        BasicCollectorTester {
-            iter_factory: || nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
-            collector_factory: || Min::by(comparator),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if !Id::full_eq_opt(iter.min_by(comparator), output) {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
-
-    proptest! {
-        #[test]
-        fn all_collect_methods_min_by_key(
-            nums in propvec(any::<i32>(), ..5),
-        ) {
-            all_collect_methods_min_by_key_impl(nums)?;
-        }
-    }
-
-    fn all_collect_methods_min_by_key_impl(nums: Vec<i32>) -> TestCaseResult {
-        fn key_extractor(Id { num, .. }: &Id) -> i32 {
-            num.wrapping_add(i32::MAX)
-        }
-
-        BasicCollectorTester {
-            iter_factory: || nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
-            collector_factory: || Min::by_key(key_extractor),
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                if !Id::full_eq_opt(iter.min_by_key(key_extractor), output) {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(collector {
+        iter_data: TriIterIdData::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterIdFactory,
+        collector_f: |_: &_| Min::new(),
+        output_f: |iter, _| iter.min(),
+        model_f: |_| BasicCollectorModel {
+            state: None,
+            advance_f: |min: &mut Option<Id>, id| *min = Some(match min.take() {
+                Some(min) => std::cmp::min(min, id),
+                None => id,
+            }),
+            max_afford_f: |_, request| request,
+            cf_f: |_| ControlFlow::Continue(()),
+            output_and_pred_f: |min| (min, Id::full_eq_opt_ref)
+        },
+    });
 }
