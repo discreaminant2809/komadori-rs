@@ -137,48 +137,39 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::*;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=3),
-            starting_num in any::<Option<i32>>(),
-        ) {
-            all_collect_methods_impl(nums, starting_num)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>, starting_num: Option<i32>) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                let mut collector = IsSorted::new();
-                assert!(collector.collect_many(starting_num).is_continue());
-                collector
+    collector_test!(collector {
+        iter_data: TriIterI32Data::strategy(),
+        collector_data: any::<()>(),
+        iter_f: TriIterI32Factory,
+        collector_f: |_: &_| IsSorted::new(),
+        output_f: |mut iter, _| (&mut iter).is_sorted(),
+        model_f: |_| BasicCollectorModel {
+            state: ModelState {
+                prev: None,
+                sorted: true,
             },
-            should_break_pred: |_| {
-                !starting_num
-                    .into_iter()
-                    .chain(nums.iter().copied())
-                    .is_sorted()
-            },
-            pred: |mut iter, output, remaining| {
-                if starting_num.into_iter().chain(&mut iter).is_sorted() != output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
+            advance_f: |state: &mut ModelState, num| {
+                match state.prev {
+                    Some(prev) if prev > num => state.sorted = false,
+                    _ => state.prev = Some(num),
                 }
             },
-        }
-        .test_collector()
+            max_afford_f: |state, request| if state.sorted { request } else { 0 },
+            cf_f: |state| if state.sorted {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            },
+            output_and_pred_f: |ModelState { sorted, .. }| (sorted, PartialEq::eq)
+        },
+    });
+
+    struct ModelState {
+        prev: Option<i32>,
+        sorted: bool,
     }
 }

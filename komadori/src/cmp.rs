@@ -84,6 +84,8 @@ mod test_utils {
     #[cfg(feature = "itertools")]
     use itertools::MinMaxResult;
 
+    use crate::test_utils::{DefineItem, TriIteratorFactory, prelude::*};
+
     /// A struct that never compares the ID.
     /// This is crucial to test that the correct item is pertained
     /// if there are multiple equal maximal/minimal items.
@@ -104,6 +106,10 @@ mod test_utils {
                 (None, None) => true,
                 _ => false,
             }
+        }
+
+        pub fn full_eq_opt_ref(&x: &Option<Self>, &y: &Option<Self>) -> bool {
+            Self::full_eq_opt(x, y)
         }
 
         #[cfg(feature = "itertools")]
@@ -127,6 +133,46 @@ mod test_utils {
     impl Ord for Id {
         fn cmp(&self, other: &Self) -> Ordering {
             self.num.cmp(&other.num)
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct TriIterIdData {
+        base: TriIterI32Data,
+    }
+
+    #[derive(Clone)]
+    pub struct TriIterIdFactory;
+
+    impl TriIterIdData {
+        pub fn strategy() -> impl Strategy<Value = Self> {
+            TriIterI32Data::strategy().prop_map(|base| Self { base })
+        }
+    }
+
+    impl<'d> DefineItem<'d, TriIterIdData> for TriIterIdFactory {
+        type Item = Id;
+    }
+
+    impl TriIteratorFactory<TriIterIdData> for TriIterIdFactory {
+        fn three_iters<'d>(
+            &self,
+            data: &'d mut TriIterIdData,
+        ) -> [impl Iterator<Item = <Self as DefineItem<'d, TriIterIdData>>::Item> + use<'d>; 3]
+        {
+            TriIterI32Factory
+                .three_iters(&mut data.base)
+                .map(|iter| iter.enumerate().map(|(id, num)| Id { id, num }))
+        }
+
+        fn one_iter<'d>(
+            &self,
+            data: &'d mut TriIterIdData,
+        ) -> impl Iterator<Item = <Self as DefineItem<'d, TriIterIdData>>::Item> + use<'d> {
+            TriIterI32Factory
+                .one_iter(&mut data.base)
+                .enumerate()
+                .map(|(id, num)| Id { id, num })
         }
     }
 }
