@@ -81,7 +81,13 @@ impl FuzzyExecSeqStrategy {
                     }
                 }
                 (1, _) => MiddleSeqNode::MaxAfford {
-                    request: remaining.saturating_add(2),
+                    request: if rng.random_bool(0.8) {
+                        remaining.saturating_add(2)
+                    } else {
+                        // In a small chance, we request an arbitrarily large (hopefully)
+                        // number to see if an infinite collector still return correctly.
+                        rng.random::<u64>() as usize
+                    },
                 },
                 (2, _) | (3, 0) => {
                     remaining -= 1;

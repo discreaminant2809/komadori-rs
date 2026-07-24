@@ -82,53 +82,51 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use std::ops::Range;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
-    proptest! {
-        /// Precondition:
-        /// - [`crate::collector::Collector::take()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=10),
-            row in ..=3_usize,
-            column in 1..=3_usize,
-        ) {
-            all_collect_methods_impl(nums, row, column)?;
-        }
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=10);
+        },
+        other_data: {
+            let row = ..=3_usize;
+            // FIXME: For 0 columns, for now the collector will consume one item prematurely.
+            // This will get fixed in the future, but for now we don't know
+            // if the API surface is even good enough.
+            let column = 1..=3_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![]
+            .into_collector()
+            .take(row)
+            .nest(vec![].into_collector().take(column)),
+        expected_f: |iter| {
+            let res: Vec<_> = std::iter::from_fn(move || {
+                let column = iter.by_ref().take(column).collect::<Vec<_>>();
+                (!column.is_empty()).then_some(column)
+            })
+            .take(row)
+            .collect();
 
-    fn all_collect_methods_impl(nums: Vec<i32>, row: usize, column: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                vec![]
-                    .into_collector()
-                    .take(row)
-                    .nest(vec![].into_collector().take(column))
-            },
-            should_break_pred: |iter| iter.count() >= row * column,
-            pred: |_, output, remaining| {
-                if output
-                    != nums
-                        .chunks(column)
-                        .take(row)
-                        .map(Vec::from)
-                        .collect::<Vec<_>>()
-                {
-                    Err(PredError::IncorrectOutput)
-                } else if nums.iter().copied().skip(row * column).ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
+            let should_break = res.len() == row && res.last().is_none_or(|row| row.len() == column);
+
+            (res, should_break)
+        },
+        output_pred: PartialEq::eq,
+        model: CollectorModel {
+            state: (0..row, 0_usize),
+            advance_f: |(rows, j): &mut (Range<usize>, _), _| {
+                while *j >= column && rows.next().is_some() {
+                    *j = 0;
                 }
+
+                *j += 1
             },
-        }
-        .test_collector()
-    }
+            max_afford_f: |(rows, _): &(Range<usize>, _), request| {
+                if rows.is_empty() { 0 } else { request }
+            }
+        },
+    });
 }

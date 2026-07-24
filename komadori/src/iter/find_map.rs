@@ -161,30 +161,21 @@ mod proptests {
     use super::*;
 
     collector_test!(collector {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: any::<()>(),
-        iter_f: TriIterI32Factory,
-        collector_f: |_: &_| Find::map(find_map_pred),
-        output_f: |mut iter, _| (&mut iter).find_map(find_map_pred),
-        model_f: |_| BasicCollectorModel {
-            state: None::<i32>,
-            advance_f: |found: &mut _, num| {
-                let num = find_map_pred(num);
-                if num.is_some() {
-                    *found = num;
-                }
-            },
-            max_afford_f: |found, request| if found.is_some() { 0 } else { request },
-            cf_f: |found| if found.is_some() {
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            },
-            output_and_pred_f: |found| (found, PartialEq::eq)
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().copied(),
+        collector: Find::map(map_pred),
+        expected_f: |iter| {
+            let res = iter.find_map(map_pred);
+            (res, res.is_some())
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
-    fn find_map_pred(num: i32) -> Option<i32> {
+    fn map_pred(num: i32) -> Option<i32> {
         num.checked_add(i32::MAX)
     }
 }

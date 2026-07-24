@@ -427,33 +427,31 @@ unsigned_saturating_add_impl!(u8 u16 u32 u64 u128 usize);
 mod proptests {
     use crate::test_utils::prelude::*;
 
-    collector_test!(sum_int {
-        iter_data: propvec(any::<i8>().prop_map_into::<i64>(), ..=5),
-        collector_data: any::<i8>().prop_map_into::<i64>(),
-        iter_f: |nums: &Vec<_>| nums.clone(),
-        collector_f: |&starting_num: &i64| starting_num.into_sum(),
-        output_f: |iter, &starting_num| starting_num + iter.sum::<i64>(),
-        model_f: |&starting_num| BasicCollectorModel {
-            state: starting_num,
-            advance_f: |sum: &mut _, num| *sum += num,
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |sum| (sum, i64::eq)
+    collector_test!(into_sum_int {
+        iter_data: {
+            let mut nums = propvec(any::<i8>().prop_map_into::<i64>(), ..=5);
         },
+        other_data: {
+            let starting_num = any::<i8>().prop_map_into::<i64>();
+        },
+        iter: nums.iter().copied(),
+        collector: starting_num.into_sum(),
+        expected_f: |iter| (starting_num + iter.sum::<i64>(), false),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
-    collector_test!(product_int {
-        iter_data: propvec(any::<i8>().prop_map_into::<i64>(), ..=5),
-        collector_data: any::<i8>().prop_map_into::<i64>(),
-        iter_f: |nums: &Vec<_>| nums.clone(),
-        collector_f: |&starting_num: &i64| starting_num.into_product(),
-        output_f: |iter, &starting_num| starting_num * iter.product::<i64>(),
-        model_f: |&starting_num| BasicCollectorModel {
-            state: starting_num,
-            advance_f: |sum: &mut _, num| *sum *= num,
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |sum| (sum, i64::eq),
+    collector_test!(into_product_int {
+        iter_data: {
+            let mut nums = propvec(any::<i8>().prop_map_into::<i64>(), ..=5);
         },
+        other_data: {
+            let starting_num = any::<i8>().prop_map_into::<i64>();
+        },
+        iter: nums.iter().copied(),
+        collector: starting_num.into_product(),
+        expected_f: |iter| (starting_num * iter.product::<i64>(), false),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 }

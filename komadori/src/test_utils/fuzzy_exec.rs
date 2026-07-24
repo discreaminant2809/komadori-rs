@@ -3,267 +3,243 @@ use std::{
     ops::ControlFlow,
 };
 
-use proptest::test_runner::{Reason, TestCaseError};
+use proptest::{
+    prop_assert, prop_assert_eq,
+    test_runner::{Reason, TestCaseError},
+};
 
 use crate::collector::Collector;
 
-use super::{CollectorModel, EndSeqNode, FuzzyExecSeq, MiddleSeqNode};
+use super::{EndSeqNode, FuzzyExecSeq, MiddleSeqNode};
 
-#[derive(Debug)]
-pub enum FuzzyExecError<T, EO, AO> {
-    MaxAfford {
-        expected: usize,
-        actual: usize,
-    },
-    Collect {
-        expected: ControlFlow<()>,
-        actual: ControlFlow<()>,
-    },
-    AssumeReservedCollect {
-        expected: ControlFlow<()>,
-        actual: ControlFlow<()>,
-    },
-    CollectMany {
-        expected: ControlFlow<()>,
-        actual: ControlFlow<()>,
-    },
-    IncorrectOutput {
-        expected: EO,
-        actual: AO,
-    },
-    IncorrectIterRemaining {
-        expected: Vec<T>,
-        actual: Vec<T>,
-    },
-    Overreached,
+pub struct CollectorModel<S, AF, MAF> {
+    pub state: S,
+    pub advance_f: AF,
+    pub max_afford_f: MAF,
 }
 
-pub(super) fn fuzzy_execute<I, IM, ER, C, P, EO: Debug + PartialEq>(
-    iter: I,
-    mut iter_for_model: IM,
-    mut collector: C,
-    expected_remaining: ER,
+/// Model for theoretically infinite collectors.
+///
+/// It's applied for:
+///
+/// - (True) infinite collectors.
+/// - Collectors that are infinite when you do not feed items that
+///   makes them stop (e.g. `Any`, `Find`, `TryFold::with_output()` etc.)
+pub fn theo_inf_collector_model<T>()
+-> CollectorModel<(), impl FnMut(&mut (), T), impl FnMut(&(), usize) -> usize> {
+    CollectorModel {
+        state: (),
+        advance_f: |_: &mut _, _| {},
+        max_afford_f: |_: &_, request| request,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn fuzzy_execute<T, C, EO, S>(
+    iter_for_collector: impl Iterator<Item = T>,
+    iter_for_model: impl Iterator<Item = T>,
+
+    mut expected_remaining_count: usize,
+
     expected_output: EO,
+    output_pred: impl FnOnce(&EO, &C::Output) -> bool,
+
+    break_after: Option<usize>,
+
+    mut collector: C,
     seq: &FuzzyExecSeq,
-    mut model: P,
-) -> Result<(), FuzzyExecError<I::Item, EO, C::Output>>
+
+    mut model: CollectorModel<S, impl FnMut(&mut S, T), impl FnMut(&S, usize) -> usize>,
+) -> Result<(), TestCaseError>
 where
-    I: Iterator<Item: Debug + PartialEq>,
-    IM: Iterator<Item = I::Item>,
-    ER: Iterator<Item = I::Item>,
-    C: Collector<I::Item>,
-    P: CollectorModel<I::Item, EO, C::Output>,
+    T: Debug,
+    EO: Debug,
+    C: Collector<T, Output: Debug>,
 {
-    let mut iter = iter.overreach_detector();
+    let mut iter_for_collector = iter_for_collector.overreach_detector();
+    let mut iter_for_model = iter_for_model.fuse();
     // This is tracked according to the contract of the Reserve API
     // to guard against malformed test cases regarding `assume_reserved_collect()`.
     let mut reserved_amount = 0;
-    let mut collector_stopped = false;
+    let mut actual_final_cf = None;
+    let mut last_i = None;
+    let mut collected_count = 0_usize;
 
-    // We check for the "stop before even collecting,"
-    // or else `expected_remaining` will complain for over-collecting.
-    if model.expected_cf().is_break() {
-        assert_eq!(
-            model.expected_max_afford(1),
-            0,
-            "malformed model: `model.expected_cf().is_break()` being `true` \
-            must mean `model.expected_max_afford(1)` is 0"
-        );
+    // The `middles` iterator is fused anyway.
+    for (i, &node) in seq.middles.iter().enumerate() {
+        const MISSING_ITEM_MSG: &str = "there should be an element";
 
-        let actual = collector.max_afford(1);
-        if actual > 0 {
-            return Err(FuzzyExecError::MaxAfford {
-                expected: 0,
-                actual,
-            });
-        }
-    } else {
-        // The `middles` iterator is fused anyway.
-        for &node in &seq.middles {
-            const MISSING_ITEM_MSG: &str = "there should be an element";
+        last_i = Some(i);
 
-            match node {
-                MiddleSeqNode::Reserve { additional } => {
-                    collector.reserve(additional);
-                    reserved_amount = additional;
+        match node {
+            MiddleSeqNode::Reserve { additional } => {
+                collector.reserve(additional);
+                reserved_amount = additional;
+            }
+            MiddleSeqNode::MaxAfford { request } => {
+                let actual = collector.max_afford(request);
+                let expected = (model.max_afford_f)(&model.state, request);
+
+                if actual != expected {
+                    return Err(mismatch_after_step_error(i + 1, expected, actual));
                 }
-                MiddleSeqNode::MaxAfford { request } => {
-                    let actual = collector.max_afford(request);
-                    let expected = model.expected_max_afford(request);
+            }
+            MiddleSeqNode::Collect => {
+                collected_count += 1;
+                reserved_amount = reserved_amount.saturating_sub(1);
 
-                    if actual != expected {
-                        return Err(FuzzyExecError::MaxAfford { expected, actual });
-                    }
+                let item = iter_for_collector.next().expect(MISSING_ITEM_MSG);
+                let actual_cf = collector.collect(item);
+                // We've collected one item prematurely!
+                if break_after == Some(0) {
+                    expected_remaining_count = expected_remaining_count
+                        .checked_sub(1)
+                        .expect("the provided iterator and the remaining count are not equivalent");
                 }
-                MiddleSeqNode::Collect => {
-                    reserved_amount = reserved_amount.saturating_sub(1);
 
-                    let item = iter.next().expect(MISSING_ITEM_MSG);
-                    let actual = collector.collect(item);
+                let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
+                (model.advance_f)(&mut model.state, item);
 
-                    let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
-                    model.advance(item);
-                    let expected = model.expected_cf();
-
-                    if actual != expected {
-                        return Err(FuzzyExecError::Collect { expected, actual });
-                    }
-
-                    if actual.is_break() {
-                        collector_stopped = true;
-                        break;
-                    }
+                if let Some(break_after) = break_after
+                    && break_after <= collected_count
+                    && actual_cf.is_continue()
+                {
+                    return Err(mismatch_after_step_error(
+                        i + 1,
+                        format_args!("{:?}", ControlFlow::<()>::Break(())),
+                        format_args!("{actual_cf:?}"),
+                    ));
                 }
-                MiddleSeqNode::AssumeReservedCollect => {
-                    if reserved_amount == 0 {
-                        panic!("malformed test case");
-                    }
-                    reserved_amount -= 1;
 
-                    let item = iter.next().expect(MISSING_ITEM_MSG);
-                    // SAFETY: We've guarded against non-reservation.
-                    let actual = unsafe { collector.assume_reserved_collect(item) };
-
-                    let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
-                    model.advance(item);
-                    let expected = model.expected_cf();
-
-                    if actual != expected {
-                        return Err(FuzzyExecError::AssumeReservedCollect { expected, actual });
-                    }
-
-                    if actual.is_break() {
-                        collector_stopped = true;
-                        break;
-                    }
+                if actual_cf.is_break() {
+                    actual_final_cf = Some(actual_cf);
+                    break;
                 }
-                MiddleSeqNode::CollectMany { n } => {
-                    reserved_amount = 0;
+            }
+            MiddleSeqNode::AssumeReservedCollect => {
+                collected_count += 1;
+                assert!(reserved_amount > 0, "malformed test case");
+                reserved_amount -= 1;
 
-                    let actual = collector.collect_many(iter.by_ref().take(n));
+                let item = iter_for_collector.next().expect(MISSING_ITEM_MSG);
+                // SAFETY: We've guarded against non-reservation.
+                let actual_cf = unsafe { collector.assume_reserved_collect(item) };
+                // We've collected one item prematurely!
+                if break_after == Some(0) {
+                    expected_remaining_count = expected_remaining_count
+                        .checked_sub(1)
+                        .expect("the provided iterator and the remaining count are not equivalent");
+                }
 
-                    let expected = (|| {
-                        model.expected_cf()?;
-                        iter_for_model.by_ref().take(n).try_for_each(|item| {
-                            model.advance(item);
-                            model.expected_cf()
-                        })
-                    })();
+                let item = iter_for_model.next().expect(MISSING_ITEM_MSG);
+                (model.advance_f)(&mut model.state, item);
 
-                    if actual != expected {
-                        return Err(FuzzyExecError::CollectMany { expected, actual });
-                    }
+                if let Some(break_after) = break_after
+                    && break_after <= collected_count
+                    && actual_cf.is_continue()
+                {
+                    return Err(mismatch_after_step_error(
+                        i + 1,
+                        format_args!("{:?}", ControlFlow::<()>::Break(())),
+                        format_args!("{actual_cf:?}"),
+                    ));
+                }
 
-                    if actual.is_break() {
-                        collector_stopped = true;
-                        break;
-                    }
+                if actual_cf.is_break() {
+                    actual_final_cf = Some(actual_cf);
+                    break;
+                }
+            }
+            MiddleSeqNode::CollectMany { n } => {
+                collected_count += n;
+                reserved_amount = 0;
+
+                let actual_cf = collector.collect_many(iter_for_collector.by_ref().take(n));
+                iter_for_model.by_ref().take(n).for_each(|item| {
+                    (model.advance_f)(&mut model.state, item);
+                });
+
+                if let Some(break_after) = break_after
+                    && break_after <= collected_count
+                    && actual_cf.is_continue()
+                {
+                    return Err(mismatch_after_step_error(
+                        i + 1,
+                        format_args!("{:?}", ControlFlow::<()>::Break(())),
+                        format_args!("{actual_cf:?}"),
+                    ));
+                }
+
+                if actual_cf.is_break() {
+                    actual_final_cf = Some(actual_cf);
+                    break;
                 }
             }
         }
     }
 
-    let actual = match (collector_stopped, seq.end) {
-        (false, EndSeqNode::CollectThenFinish) => {
-            if model.expected_cf().is_continue() {
-                let _ = iter_for_model.try_for_each(|item| {
-                    model.advance(item);
-                    model.expected_cf()
-                });
-            }
+    match (break_after, collected_count, actual_final_cf) {
+        (None, _, Some(ControlFlow::Break(()))) => {
+            return Err(mismatch_after_step_error(
+                last_i.unwrap_or(0),
+                format_args!("{:?}", ControlFlow::<()>::Continue(())),
+                format_args!("{:?}", ControlFlow::<()>::Break(())),
+            ));
+        }
+        (Some(break_after), collected_count, Some(ControlFlow::Continue(())))
+            if break_after >= collected_count =>
+        {
+            return Err(mismatch_after_step_error(
+                last_i.unwrap_or(0),
+                format_args!("{:?}", ControlFlow::<()>::Break(())),
+                format_args!("{:?}", ControlFlow::<()>::Continue(())),
+            ));
+        }
+        _ => {}
+    }
+
+    let actual_output = match (actual_final_cf, seq.end) {
+        (Some(ControlFlow::Continue(())) | None, EndSeqNode::CollectThenFinish) => {
+            iter_for_model.for_each(|item| {
+                (model.advance_f)(&mut model.state, item);
+            });
 
             // Keep the iterator for the overreaching check.
-            collector.collect_then_finish(&mut iter)
+            collector.collect_then_finish(&mut iter_for_collector)
         }
         _ => collector.finish(),
     };
-    if iter.overreached() {
-        return Err(FuzzyExecError::Overreached);
+    if iter_for_collector.overreached() {
+        return Err(TestCaseError::Fail(Reason::from(
+            "the iterator was pulled after returning `None`",
+        )));
     }
 
-    let expected_items = expected_remaining.collect::<Vec<_>>();
-    let items_for_model = iter_for_model.collect::<Vec<_>>();
-    assert_eq!(
-        items_for_model, expected_items,
-        "the remaining iterators of the model (left) and the iterator output closure (right) mismatched"
+    let actual_remaining_count = iter_for_collector.count();
+    prop_assert_eq!(
+        expected_remaining_count,
+        actual_remaining_count,
+        "the iterator was consumed incorrectly: expected {} remaining, got {} remaining",
+        expected_remaining_count,
+        actual_remaining_count,
     );
 
-    let items = iter.collect::<Vec<_>>();
-    if items != items_for_model {
-        return Err(FuzzyExecError::IncorrectIterRemaining {
-            expected: items_for_model,
-            actual: items,
-        });
-    }
-
-    let (expected, pred) = model.into_expected_output_and_pred();
-    assert_eq!(
-        expected, expected_output,
-        "the outputs of the model (left) and the iterator output closure (right) mismatched",
+    prop_assert!(
+        output_pred(&expected_output, &actual_output),
+        "mismatched output: expected {expected_output:?}, got {actual_output:?}"
     );
-    if !pred(&expected, &actual) {
-        return Err(FuzzyExecError::IncorrectOutput { expected, actual });
-    }
 
     Ok(())
 }
 
-impl<T, EO, AO> Display for FuzzyExecError<T, EO, AO>
-where
-    T: Debug,
-    EO: Debug,
-    AO: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn expected_actual(
-            f: &mut std::fmt::Formatter<'_>,
-            expected: impl Debug,
-            actual: impl Debug,
-        ) -> std::fmt::Result {
-            f.write_fmt(format_args!("expected {expected:?}, got {actual:?}"))
-        }
-
-        match self {
-            Self::MaxAfford { expected, actual } => {
-                f.write_str("`max_afford()` returned incorrectly: ")?;
-                expected_actual(f, expected, actual)
-            }
-            Self::Collect { expected, actual } => {
-                f.write_str("`collect()` returned incorrectly: ")?;
-                expected_actual(f, expected, actual)
-            }
-            Self::AssumeReservedCollect { expected, actual } => {
-                f.write_str("`assume_reserved_collect()` returned incorrectly: ")?;
-                expected_actual(f, expected, actual)
-            }
-            Self::CollectMany { expected, actual } => {
-                f.write_str("`collect_many()` returned incorrectly: ")?;
-                expected_actual(f, expected, actual)
-            }
-            Self::IncorrectOutput { expected, actual } => {
-                f.write_str("incorrect output: ")?;
-                expected_actual(f, expected, actual)
-            }
-            Self::IncorrectIterRemaining { expected, actual } => {
-                f.write_str("incorrect iterator remaining: ")?;
-                expected_actual(f, expected, actual)
-            }
-            Self::Overreached => {
-                f.write_str("the iterator was pulled after it had returned `None`")
-            }
-        }
-    }
-}
-
-impl<T, EO, AO> From<FuzzyExecError<T, EO, AO>> for TestCaseError
-where
-    T: Debug,
-    EO: Debug,
-    AO: Debug,
-{
-    fn from(e: FuzzyExecError<T, EO, AO>) -> Self {
-        Self::Fail(Reason::from(format!("{e}")))
-    }
+fn mismatch_after_step_error(
+    step: usize,
+    expected: impl Display,
+    actual: impl Display,
+) -> TestCaseError {
+    TestCaseError::Fail(Reason::from(format!(
+        "after step {step}, expected {expected}, got {actual}"
+    )))
 }
 
 trait IteratorExt: Iterator {

@@ -70,6 +70,15 @@ where
             self.reserved = additional;
         }
     }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        if self.outer.max_afford(1) == 0 {
+            0
+        } else {
+            request
+        }
+    }
 }
 
 impl<CO, S, T> Collector<T> for WithStrategy<CO, S>

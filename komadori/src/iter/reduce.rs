@@ -123,25 +123,22 @@ mod proptests {
 
     use super::*;
 
-    collector_test!(collector {
-        iter_data: propvec(any::<i8>().prop_map_into::<i64>(), ..=5),
-        collector_data: any::<()>(),
-        iter_f: |nums: &Vec<_>| nums.clone(),
-        collector_f: |_: &_| Reduce::new(reduce_f),
-        output_f: |iter, _| iter.reduce(|mut sum, num| {
-            reduce_f(&mut sum, num);
-            sum
-        }),
-        model_f: |_| BasicCollectorModel {
-            state: None,
-            advance_f: |sum: &mut _, num| match sum {
-                Some(sum) => reduce_f(sum, num),
-                None => *sum = Some(num),
-            },
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |sum| (sum, PartialEq::eq)
+    collector_test!(into_sum_int {
+        iter_data: {
+            let mut nums = propvec(any::<i8>().prop_map_into::<i64>(), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().copied(),
+        collector: Reduce::new(reduce_f),
+        expected_f: |iter| (
+            iter.reduce(|mut sum, num| {
+                reduce_f(&mut sum, num);
+                sum
+            }),
+            false,
+        ),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     fn reduce_f(sum: &mut i64, num: i64) {
