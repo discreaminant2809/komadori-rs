@@ -145,36 +145,19 @@ mod proptests {
     use super::*;
 
     collector_test!(collector {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: any::<()>(),
-        iter_f: TriIterI32Factory,
-        collector_f: |_: &_| IsSorted::by(is_strictly_sorted),
-        output_f: |mut iter, _| (&mut iter).is_sorted_by(is_strictly_sorted),
-        model_f: |_| BasicCollectorModel {
-            state: ModelState {
-                prev: None,
-                sorted: true,
-            },
-            advance_f: |state: &mut ModelState, num| {
-                match state.prev {
-                    Some(prev) if !is_strictly_sorted(&prev, &num) => state.sorted = false,
-                    _ => state.prev = Some(num),
-                }
-            },
-            max_afford_f: |state, request| if state.sorted { request } else { 0 },
-            cf_f: |state| if state.sorted {
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            },
-            output_and_pred_f: |ModelState { sorted, .. }| (sorted, PartialEq::eq)
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().copied(),
+        collector: IsSorted::by(is_strictly_sorted),
+        expected_f: |iter| {
+            let res = iter.is_sorted_by(is_strictly_sorted);
+            (res, !res)
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
-
-    struct ModelState {
-        prev: Option<i32>,
-        sorted: bool,
-    }
 
     fn is_strictly_sorted(a: &i32, b: &i32) -> bool {
         a < b

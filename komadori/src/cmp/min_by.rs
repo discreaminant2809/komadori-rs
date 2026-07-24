@@ -136,27 +136,18 @@ mod proptests {
 
     use crate::test_utils::prelude::*;
 
-    use super::super::{
-        Min,
-        test_utils::{Id, TriIterIdData, TriIterIdFactory},
-    };
+    use super::super::{Min, test_utils::Id};
 
     collector_test!(collector {
-        iter_data: TriIterIdData::strategy(),
-        collector_data: any::<()>(),
-        iter_f: TriIterIdFactory,
-        collector_f: |_: &_| Min::by(comparator),
-        output_f: |iter, _| iter.min_by(comparator),
-        model_f: |_| BasicCollectorModel {
-            state: None,
-            advance_f: |min: &mut Option<Id>, id| *min = Some(match min.take() {
-                Some(min) => std::cmp::min_by(min, id, comparator),
-                None => id,
-            }),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |min| (min, Id::full_eq_opt_ref)
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
+        collector: Min::by(comparator),
+        expected_f: |iter| (iter.min_by(comparator), false),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     fn comparator(Id { num: a, .. }: &Id, Id { num: b, .. }: &Id) -> Ordering {

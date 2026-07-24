@@ -134,23 +134,17 @@ mod proptests {
     use super::*;
     use crate::test_utils::prelude::*;
 
-    use super::super::test_utils::{Id, TriIterIdData, TriIterIdFactory};
+    use super::super::test_utils::Id;
 
     collector_test!(collector {
-        iter_data: TriIterIdData::strategy(),
-        collector_data: any::<()>(),
-        iter_f: TriIterIdFactory,
-        collector_f: |_: &_| Min::new(),
-        output_f: |iter, _| iter.min(),
-        model_f: |_| BasicCollectorModel {
-            state: None,
-            advance_f: |min: &mut Option<Id>, id| *min = Some(match min.take() {
-                Some(min) => std::cmp::min(min, id),
-                None => id,
-            }),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |min| (min, Id::full_eq_opt_ref)
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
+        collector: Min::new(),
+        expected_f: |iter| (iter.min(), false),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 }

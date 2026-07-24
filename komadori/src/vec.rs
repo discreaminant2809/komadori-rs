@@ -335,166 +335,120 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
+
     use crate::test_utils::prelude::*;
 
-    use super::*;
-
     collector_test!(into_collector {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: propvec(any::<i32>(), ..5),
-        iter_f: TriIterI32Factory,
-        collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
-        output_f: |iter, starting_nums| {
-            let mut output = starting_nums.clone();
-            output.extend(iter);
-            output
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
-        model_f: |starting_nums| BasicCollectorModel {
-            state: starting_nums.clone(),
-            advance_f: |buf: &mut Vec<_>, item| buf.push(item),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == actual),
+        other_data: {
+            let starting_nums = propvec(any::<i32>(), ..=2);
         },
+        iter: nums.iter().copied(),
+        collector: starting_nums.into_collector(),
+        expected_f: |iter| {
+            let mut res = starting_nums.clone();
+            res.extend(iter);
+            (res, false)
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     collector_test!(into_collector_ref {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: propvec(any::<i32>(), ..5),
-        iter_f: TriIterRefI32Factory,
-        collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
-        output_f: |iter, starting_nums| {
-            let mut output = starting_nums.clone();
-            output.extend(iter);
-            output
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
-        model_f: |starting_nums| BasicCollectorModel {
-            state: starting_nums.clone(),
-            advance_f: |buf: &mut Vec<_>, &item: &_| buf.push(item),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == actual),
+        other_data: {
+            let starting_nums = propvec(any::<i32>(), ..=2);
         },
+        iter: nums.iter(),
+        collector: starting_nums.into_collector(),
+        expected_f: |iter| {
+            let mut res = starting_nums.clone();
+            res.extend(iter.copied());
+            (res, false)
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     collector_test!(into_collector_mut {
-        iter_data: TwoIterMutData::strategy(),
-        collector_data: propvec(any::<i32>(), ..5),
-        iter_f: TwoIterMutFactory,
-        collector_f: |starting_nums: &Vec<_>| starting_nums.clone(),
-        output_f: |iter, starting_nums| {
-            let mut output = starting_nums.clone();
-            output.extend(iter.map(|&mut num| num));
-            output
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
-        model_f: |starting_nums| BasicCollectorModel {
-            state: starting_nums.clone(),
-            advance_f: |buf: &mut Vec<_>, &mut item: &mut _| buf.push(item),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == actual),
+        other_data: {
+            let starting_nums = propvec(any::<i32>(), ..=2);
         },
+        iters: {
+            let (mut for_output, mut for_model) = (nums.clone(), nums.clone());
+            (nums.iter_mut(), for_output.iter_mut(), for_model.iter_mut())
+        },
+        collector: starting_nums.into_collector(),
+        expected_f: |iter| {
+            let mut res = starting_nums.clone();
+            res.extend(iter.map(|&mut num| num));
+            (res, false)
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     collector_test!(collector_mut {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: CollectorMutData::strategy(),
-        iter_f: TriIterI32Factory,
-        collector_f: CollectorMutFactory,
-        output_f: |iter, starting_nums| {
-            let mut output = starting_nums.starting_nums.clone();
-            output.extend(iter);
-            output
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
-        model_f: |data| BasicCollectorModel {
-            state: data.starting_nums.clone(),
-            advance_f: |buf: &mut Vec<_>, item| buf.push(item),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == *actual),
+        other_data: {
+            let mut starting_nums = propvec(any::<i32>(), ..=2);
         },
+        iter: nums.iter().copied(),
+        collector: starting_nums.collector_mut(),
+        expected_f: |iter| {
+            let mut res = starting_nums.clone();
+            res.extend(iter);
+            (res, false)
+        },
+        output_pred: |expected, actual| expected == *actual,
+        model: theo_inf_collector_model(),
     });
 
     collector_test!(collector_mut_ref {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: CollectorMutData::strategy(),
-        iter_f: TriIterRefI32Factory,
-        collector_f: CollectorMutFactory,
-        output_f: |iter, starting_nums| {
-            let mut output = starting_nums.starting_nums.clone();
-            output.extend(iter);
-            output
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
-        model_f: |data| BasicCollectorModel {
-            state: data.starting_nums.clone(),
-            advance_f: |buf: &mut Vec<_>, &item: &_| buf.push(item),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == *actual),
+        other_data: {
+            let mut starting_nums = propvec(any::<i32>(), ..=2);
         },
+        iter: nums.iter(),
+        collector: starting_nums.collector_mut(),
+        expected_f: |iter| {
+            let mut res = starting_nums.clone();
+            res.extend(iter.copied());
+            (res, false)
+        },
+        output_pred: |expected, actual| expected == *actual,
+        model: theo_inf_collector_model(),
     });
 
     collector_test!(collector_mut_mut {
-        iter_data: TwoIterMutData::strategy(),
-        collector_data: CollectorMutData::strategy(),
-        iter_f: TwoIterMutFactory,
-        collector_f: CollectorMutFactory,
-        output_f: |iter, starting_nums| {
-            let mut output = starting_nums.starting_nums.clone();
-            output.extend(iter.map(|&mut num| num));
-            output
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
-        model_f: |data| BasicCollectorModel {
-            state: data.starting_nums.clone(),
-            advance_f: |buf: &mut Vec<_>, &mut item: &mut _| buf.push(item),
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |buf| (buf, |expected: &_, actual: &_| expected == *actual),
+        other_data: {
+            let mut starting_nums = propvec(any::<i32>(), ..=2);
         },
+        iters: {
+            let (mut for_output, mut for_model) = (nums.clone(), nums.clone());
+            (nums.iter_mut(), for_output.iter_mut(), for_model.iter_mut())
+        },
+        collector: starting_nums.collector_mut(),
+        expected_f: |iter| {
+            let mut res = starting_nums.clone();
+            res.extend(iter.map(|&mut num| num));
+            (res, false)
+        },
+        output_pred: |expected, actual| expected == *actual,
+        model: theo_inf_collector_model(),
     });
-
-    #[derive(Clone)]
-    struct CollectorMutData {
-        starting_nums: Vec<i32>,
-        base: Vec<i32>,
-    }
-
-    impl Debug for CollectorMutData {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_fmt(format_args!("{:?}", self.starting_nums))
-        }
-    }
-
-    impl CollectorMutData {
-        fn new(starting_nums: Vec<i32>) -> Self {
-            Self {
-                starting_nums,
-                base: vec![],
-            }
-        }
-
-        fn strategy() -> impl Strategy<Value = Self> {
-            propvec(any::<i32>(), ..=2).prop_map(Self::new)
-        }
-    }
-
-    #[derive(Clone)]
-    struct CollectorMutFactory;
-
-    impl<'d> DefineCollector<'d, CollectorMutData> for CollectorMutFactory {
-        type Collector = CollectorMut<'d, i32>;
-        type Output = &'d mut Vec<i32>;
-    }
-
-    impl CollectorFactoryBase<CollectorMutData> for CollectorMutFactory {
-        fn collector<'d>(
-            &self,
-            data: &'d mut CollectorMutData,
-        ) -> <Self as DefineCollector<'d, CollectorMutData>>::Collector {
-            // We deliberately clear the old buffer so that the collector's capacity
-            // always starts new also!
-            data.base = data.starting_nums.clone();
-            data.base.collector_mut()
-        }
-    }
 }

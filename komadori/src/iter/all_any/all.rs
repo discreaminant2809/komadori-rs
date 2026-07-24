@@ -109,23 +109,21 @@ mod proptests {
     use super::*;
 
     collector_test!(collector {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: any::<()>(),
-        iter_f: TriIterI32Factory,
-        collector_f: |_: &_| All::new(|num| num >= 0),
-        output_f: |mut iter, _| (&mut iter).all(|num| num >= 0),
-        model_f: |_| BasicCollectorModel {
-            state: true,
-            advance_f: |all: &mut _, num| if num < 0 {
-                *all = false;
-            },
-            max_afford_f: |&all, request| if all { request } else { 0 },
-            cf_f: |&all| if all {
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            },
-            output_and_pred_f: |all| (all, bool::eq)
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().copied(),
+        collector: All::new(pred),
+        expected_f: |iter| {
+            let res = iter.all(pred);
+            (res, !res)
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
+
+    fn pred(num: i32) -> bool {
+        num >= 0
+    }
 }

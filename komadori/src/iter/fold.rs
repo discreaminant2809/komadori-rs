@@ -90,25 +90,23 @@ mod proptests {
     use super::*;
 
     collector_test!(collector {
-        iter_data: TriIterI32Data::strategy(),
-        collector_data: any::<()>(),
-        iter_f: TriIterI32Factory,
-        collector_f: |_: &_| Fold::new(KADANE_INIT, |(sum, max_sum), num| {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {},
+        iter: nums.iter().copied(),
+        collector: Fold::new(KADANE_INIT, |(sum, max_sum), num| {
             kadane_fold(sum, max_sum, num)
         }),
-        output_f: |iter, _| iter.fold(KADANE_INIT, |(mut sum, mut max_sum), num| {
-            kadane_fold(&mut sum, &mut max_sum, num);
-            (sum, max_sum)
-        }),
-        model_f: |_| BasicCollectorModel {
-            state: KADANE_INIT,
-            advance_f: |(sum, max_sum): &mut _, num| {
-                kadane_fold(sum, max_sum, num);
-            },
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |state| (state, PartialEq::eq)
-        },
+        expected_f: |iter| (
+            iter.fold(KADANE_INIT, |(mut sum, mut max_sum), num| {
+                kadane_fold(&mut sum, &mut max_sum, num);
+                (sum, max_sum)
+            }),
+            false
+        ),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     fn kadane_fold(sum: &mut i32, max_sum: &mut Option<i32>, num: i32) {

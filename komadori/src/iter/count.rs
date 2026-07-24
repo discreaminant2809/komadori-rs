@@ -82,17 +82,14 @@ mod proptests {
     use super::*;
 
     collector_test!(collector {
-        iter_data: ..=10_usize,
-        collector_data: any::<()>(),
-        iter_f: |&n: &_| std::iter::repeat_n((), n),
-        collector_f: |_: &_| Count::new(),
-        output_f: |iter, _| iter.count(),
-        model_f: |_| BasicCollectorModel {
-            state: 0_usize,
-            advance_f: |count: &mut _, _| *count += 1,
-            max_afford_f: |_, request| request,
-            cf_f: |_| ControlFlow::Continue(()),
-            output_and_pred_f: |count| (count, usize::eq)
+        iter_data: {
+            let mut n = ..=10_usize;
         },
+        other_data: {},
+        iter: std::iter::repeat_n((), n),
+        collector: Count::new(),
+        expected_f: |iter| (iter.count(), false),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 }

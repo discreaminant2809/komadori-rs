@@ -240,47 +240,42 @@ mod proptests {
     use super::*;
 
     collector_test!(via_new {
-        iter_data: propvec(prop_opt5050(any::<()>()), ..=5),
-        collector_data: any::<()>(),
-        iter_f: Vec::clone,
-        collector_f: |_: &_| TryForEach::new(identity),
-        output_f: |mut iter, _| (&mut iter).try_for_each(identity),
-        model_f: |_| BasicCollectorModel {
-            state: Some(()),
-            advance_f: |state: &mut _, item: Option<_>| if item.is_none() {
-                *state = None
-            },
-            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
-            cf_f: |state| if state.is_some() {
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            },
-            output_and_pred_f: |state| (state, PartialEq::eq)
+        iter_data: {
+            let mut nums = propvec(prop_opt5050(any::<()>()), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().copied(),
+        collector: TryForEach::new(identity),
+        expected_f: |iter| {
+            let res: Option<_> = iter.try_for_each(identity);
+            (res, res.is_none())
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     collector_test!(via_init {
-        iter_data: propvec(prop_opt5050(any::<()>()), ..=5),
-        collector_data: prop_opt5050(any::<()>()),
-        iter_f: Vec::clone,
-        collector_f: |&init: &_| TryForEach::init(init, identity),
-        output_f: |mut iter, &opt| {
-            opt?;
-            (&mut iter).try_for_each(identity)
+        iter_data: {
+            let mut nums = propvec(prop_opt5050(any::<()>()), ..=5);
         },
-        model_f: |&init| BasicCollectorModel {
+        other_data: {
+            let init = prop_opt5050(any::<()>());
+        },
+        iter: nums.iter().copied(),
+        collector: TryForEach::init(init, identity),
+        expected_f: |iter| {
+            if init.is_none() {
+                return (None, true);
+            }
+
+            let res = iter.try_for_each(identity);
+            (res, res.is_none())
+        },
+        output_pred: PartialEq::eq,
+        model: CollectorModel {
             state: init,
-            advance_f: |state: &mut _, item: Option<_>| if item.is_none() {
-                *state = None
-            },
-            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
-            cf_f: |state| if state.is_some() {
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            },
-            output_and_pred_f: |state| (state, PartialEq::eq)
+            advance_f: |_: &mut _, _| {},
+            max_afford_f: |state: &Option<_>, request| if state.is_none() { 0 } else { request },
         },
     });
 }

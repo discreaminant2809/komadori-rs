@@ -132,34 +132,17 @@ mod proptests {
     use super::*;
 
     collector_test!(collector {
-        iter_data: propvec(prop_oneof![Just(1), Just(2)], ..=3),
-        collector_data: any::<()>(),
-        iter_f: Vec::clone,
-        collector_f: |_: &_| AllEqual::new(),
-        output_f: |mut iter, _| (&mut iter).all_equal(),
-        model_f: |_| BasicCollectorModel {
-            state: ModelState {
-                prev: None,
-                all_equal: true,
-            },
-            advance_f: |state: &mut ModelState, num| {
-                match state.prev {
-                    Some(prev) if prev != num => state.all_equal = false,
-                    _ => state.prev = Some(num),
-                }
-            },
-            max_afford_f: |state, request| if state.all_equal { request } else { 0 },
-            cf_f: |state| if state.all_equal {
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            },
-            output_and_pred_f: |ModelState { all_equal, .. }| (all_equal, PartialEq::eq)
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
         },
+        other_data: {},
+        iter: nums.iter().copied(),
+        collector: AllEqual::new(),
+        expected_f: |iter| {
+            let res = iter.all_equal();
+            (res, !res)
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
-
-    struct ModelState {
-        prev: Option<i32>,
-        all_equal: bool,
-    }
 }

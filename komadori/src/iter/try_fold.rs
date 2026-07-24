@@ -294,55 +294,53 @@ mod proptests {
     use super::*;
 
     collector_test!(via_new {
-        iter_data: propvec(any::<u8>(), ..=5),
-        collector_data: prop_opt5050(any::<u8>()),
-        iter_f: Vec::clone,
-        collector_f: |&init: &_| TryFold::new(init, try_fold_f),
-        output_f: |mut iter, &init| (&mut iter).try_fold(init?, |mut sum, num| {
-            try_fold_f(&mut sum, num)?;
-            Some(sum)
-        }),
-        model_f: |&init| BasicCollectorModel {
+        iter_data: {
+            let mut nums = propvec(any::<u8>(), ..=5);
+        },
+        other_data: {
+            let init = prop_opt5050(any::<u8>());
+        },
+        iter: nums.iter().copied(),
+        collector: TryFold::new(init, try_fold_f),
+        expected_f: |iter| {
+            let Some(init) = init else {
+                return (None, true);
+            };
+
+            let res = iter.try_fold(init, |mut sum, num| {
+                try_fold_f(&mut sum, num)?;
+                Some(sum)
+            });
+
+            (res, res.is_none())
+        },
+        output_pred: PartialEq::eq,
+        model: CollectorModel {
             state: init,
-            advance_f: |state: &mut _, num| if let Some(sum) = state
-                && try_fold_f(sum, num).is_none()
-            {
-                *state = None;
-            },
-            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
-            cf_f: |state| if state.is_some() {
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            },
-            output_and_pred_f: |state| (state, PartialEq::eq)
+            advance_f: |_: &mut _, _| {},
+            max_afford_f: |state: &Option<_>, request| if state.is_none() { 0 } else { request },
         },
     });
 
     collector_test!(via_with_output {
-        iter_data: propvec(any::<u8>(), ..=5),
-        collector_data: any::<u8>(),
-        iter_f: Vec::clone,
-        collector_f: |&init: &_| TryFold::<Option<u8>, _>::with_output(init, try_fold_f),
-        output_f: |mut iter, &init| (&mut iter).try_fold(init, |mut sum, num| {
-            try_fold_f(&mut sum, num)?;
-            Some(sum)
-        }),
-        model_f: |&init| BasicCollectorModel {
-            state: Some(init),
-            advance_f: |state: &mut _, num| if let Some(sum) = state
-                && try_fold_f(sum, num).is_none()
-            {
-                *state = None;
-            },
-            max_afford_f: |state, request| if state.is_some() { request } else { 0 },
-            cf_f: |state| if state.is_some() {
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            },
-            output_and_pred_f: |state| (state, PartialEq::eq)
+        iter_data: {
+            let mut nums = propvec(any::<u8>(), ..=5);
         },
+        other_data: {
+            let init = any::<u8>();
+        },
+        iter: nums.iter().copied(),
+        collector: TryFold::with_output(init, try_fold_f),
+        expected_f: |iter| {
+            let res = iter.try_fold(init, |mut sum, num| {
+                try_fold_f(&mut sum, num)?;
+                Some(sum)
+            });
+
+            (res, res.is_none())
+        },
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
     });
 
     fn try_fold_f(sum: &mut u8, num: u8) -> Option<()> {
