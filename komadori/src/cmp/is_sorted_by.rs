@@ -146,7 +146,8 @@ mod proptests {
 
     collector_test!(collector {
         iter_data: {
-            let mut nums = propvec(any::<i32>(), ..=5);
+            // Limit the range so that we get more equality.
+            let mut nums = propvec(-2..=2, ..=5);
         },
         other_data: {},
         iter: nums.iter().copied(),

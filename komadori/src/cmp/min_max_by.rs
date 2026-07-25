@@ -107,60 +107,26 @@ where
 mod proptests {
     use itertools::Itertools;
 
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
-
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use crate::test_utils::prelude::*;
 
     use super::super::test_utils::Id;
+
     use super::*;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=3),
-            starting_nums in propvec(any::<i32>(), ..=3),
-        ) {
-            all_collect_methods_impl(nums, starting_nums)?;
-        }
-    }
+    collector_test!(collector {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {},
+        iter: nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
+        collector: MinMax::by(comparator),
+        expected_f: |iter| (iter.minmax_by(comparator), false),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
+    });
 
-    fn all_collect_methods_impl(nums: Vec<i32>, starting_nums: Vec<i32>) -> TestCaseResult {
-        fn comparator(Id { num: a, .. }: &Id, Id { num: b, .. }: &Id) -> Ordering {
-            let (a, b) = (a.wrapping_add(i32::MAX), b.wrapping_add(i32::MAX));
-            a.cmp(&b)
-        }
-
-        BasicCollectorTester {
-            iter_factory: || nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
-            collector_factory: || {
-                let mut collector = MinMax::by(comparator);
-                let _ = collector.collect_many(
-                    starting_nums
-                        .iter()
-                        .zip(nums.len()..)
-                        .map(|(&num, id)| Id { id, num }),
-                );
-                collector
-            },
-            should_break_pred: |_| false,
-            pred: |iter, output, remaining| {
-                let iter = starting_nums
-                    .iter()
-                    .zip(nums.len()..)
-                    .map(|(&num, id)| Id { id, num })
-                    .chain(iter);
-
-                if !Id::full_eq_minmax_res(iter.minmax_by(comparator), output) {
-                    Err(PredError::IncorrectOutput)
-                } else if remaining.next().is_some() {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
+    fn comparator(Id { num: a, .. }: &Id, Id { num: b, .. }: &Id) -> Ordering {
+        let (a, b) = (a.wrapping_add(i32::MAX), b.wrapping_add(i32::MAX));
+        a.cmp(&b)
     }
 }
