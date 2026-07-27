@@ -3,7 +3,7 @@ members = [
     "komadori",
     "komadori-rayon",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 authors = ["Ayabin"]

@@ -69,4 +69,9 @@ harness = false
 
 [[bench]]
 name = "max_doubles"
+required-features = ["alloc"]
 harness = false
+
+[[example]]
+name = "asm_view"
+required-features = ["std"]

@@ -164,12 +164,17 @@ mod proptests {
     });
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "alloc"))]
 mod miri_tests {
     #[test]
     fn lying_first_collector() {
         use crate::prelude::*;
-        use std::{cell::Cell, ops::ControlFlow, rc::Rc};
+        use std::{cell::Cell, ops::ControlFlow};
+
+        #[cfg(all(feature = "alloc", not(feature = "std")))]
+        use alloc::{rc::Rc, vec, vec::Vec};
+        #[cfg(feature = "std")]
+        use std::rc::Rc;
 
         struct Malicious(Rc<Cell<usize>>);
 
