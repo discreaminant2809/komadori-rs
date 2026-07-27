@@ -120,107 +120,45 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{
-        CollectorTestParts, CollectorTester, CollectorTesterExt, PredError, none_iter_for_fuse_test,
-    };
+    use super::super::take_collector_model;
 
-    proptest! {
-        /// Precondition:
-        /// - [`crate::collector::CollectorBase::take()`]
-        /// - [`crate::collector::CollectorBase::copying()`]
-        /// - [`crate::collector::CollectorBase::funnel()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=4),
-            first_count in ..=4_usize,
-            second_count in ..=4_usize,
-        ) {
-            all_collect_methods_impl(nums, first_count, second_count)?;
-        }
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let first_n = ..=5_usize;
+            let second_n = ..=5_usize;
+        },
+        iters: {
+            let mut other_nums = nums.repeat(2);
+            let (for_output, for_model) = other_nums.split_at_mut(nums.len());
+            (nums.iter_mut(), for_output.iter_mut(), for_model.iter_mut())
+        },
+        collector: vec![]
+            .into_collector()
+            .take(first_n)
+            .tee_mut(vec![].into_collector().take(second_n)),
+        expected_f: |iter, count| {
+            let mut iter = iter.map(|&mut num| num);
 
-    fn all_collect_methods_impl(
-        nums: Vec<i32>,
-        first_count: usize,
-        second_count: usize,
-    ) -> TestCaseResult {
-        Tester::new(nums, first_count, second_count).test_collector()
-    }
+            let max_n = first_n.max(second_n);
+            let min_n = first_n.min(second_n);
 
-    struct Tester {
-        nums: Vec<i32>,
-        nums_for_iter: Vec<i32>,
-        first_count: usize,
-        second_count: usize,
-    }
+            let (mut first, mut second): (Vec<_>, Vec<_>) =
+                iter.by_ref().take(min_n).map(|num| (num, num)).collect();
 
-    impl Tester {
-        fn new(nums: Vec<i32>, first_count: usize, second_count: usize) -> Self {
-            Self {
-                nums_for_iter: nums.clone(),
-                nums,
-                first_count,
-                second_count,
-            }
-        }
-    }
+            if first_n < second_n {
+                second.extend(iter.take(max_n - min_n));
+            } else {
+                first.extend(iter.take(max_n - min_n));
+            };
 
-    impl CollectorTester for Tester {
-        type Item<'a> = &'a mut i32;
-        type Output<'a> = (Vec<i32>, Vec<i32>);
-
-        fn collector_test_parts<'a>(
-            &'a mut self,
-        ) -> CollectorTestParts<
-            impl Iterator<Item = Self::Item<'a>>,
-            impl Collector<Self::Item<'a>, Output = Self::Output<'a>>,
-            impl FnMut(
-                Self::Output<'a>,
-                &mut dyn Iterator<Item = Self::Item<'a>>,
-            ) -> Result<(), PredError>,
-            impl Iterator<Item = Self::Item<'a>>,
-        > {
-            let Self {
-                first_count,
-                second_count,
-                ref mut nums,
-                ref mut nums_for_iter,
-                ..
-            } = *self;
-
-            CollectorTestParts {
-                iter: nums_for_iter.iter_mut(),
-                collector: vec![]
-                    .into_collector()
-                    .copying()
-                    .take(first_count)
-                    .tee_mut(vec![].into_collector().copying().take(second_count)),
-                should_break: first_count.max(second_count) <= nums.len(),
-                pred: move |(first_output, second_output), remaining| {
-                    let max_len = first_count.max(second_count);
-
-                    if first_output != nums[..first_count.min(nums.len())]
-                        || second_output != nums[..second_count.min(nums.len())]
-                    {
-                        Err(PredError::IncorrectOutput)
-                    } else if nums[max_len.min(nums.len())..]
-                        .iter()
-                        .copied()
-                        .ne(remaining.map(|&mut item| item))
-                    {
-                        Err(PredError::IncorrectIterConsumption)
-                    } else {
-                        Ok(())
-                    }
-                },
-                iter_for_fuse_test: none_iter_for_fuse_test(),
-            }
-        }
-    }
+            ((first, second), count >= first_n.max(second_n))
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(first_n.max(second_n)),
+    });
 }

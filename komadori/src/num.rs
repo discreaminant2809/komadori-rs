@@ -436,7 +436,7 @@ mod proptests {
         },
         iter: nums.iter().copied(),
         collector: starting_num.into_sum(),
-        expected_f: |iter| (starting_num + iter.sum::<i64>(), false),
+        expected_f: |iter, _| (starting_num + iter.sum::<i64>(), false),
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });
@@ -450,7 +450,7 @@ mod proptests {
         },
         iter: nums.iter().copied(),
         collector: starting_num.into_product(),
-        expected_f: |iter| (starting_num * iter.product::<i64>(), false),
+        expected_f: |iter, _| (starting_num * iter.product::<i64>(), false),
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });

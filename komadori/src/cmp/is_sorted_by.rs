@@ -152,7 +152,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: IsSorted::by(is_strictly_sorted),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let res = iter.is_sorted_by(is_strictly_sorted);
             (res, !res)
         },

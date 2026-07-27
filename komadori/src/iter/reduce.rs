@@ -130,7 +130,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: Reduce::new(reduce_f),
-        expected_f: |iter| (
+        expected_f: |iter, _| (
             iter.reduce(|mut sum, num| {
                 reduce_f(&mut sum, num);
                 sum

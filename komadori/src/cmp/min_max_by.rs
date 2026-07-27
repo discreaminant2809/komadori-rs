@@ -120,7 +120,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
         collector: MinMax::by(comparator),
-        expected_f: |iter| (iter.minmax_by(comparator), false),
+        expected_f: |iter, _| (iter.minmax_by(comparator), false),
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });

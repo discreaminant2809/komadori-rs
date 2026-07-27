@@ -74,53 +74,28 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use super::super::take_collector_model_filtered;
 
-    proptest! {
-        /// Precondition:
-        /// - [`crate::collector::Collector::take()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=5),
-            take_count in ..=5_usize,
-        ) {
-            all_collect_methods_impl(nums, take_count)?;
-        }
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![].into_collector().take(n).filter_map(f),
+        expected_f: |iter, _| {
+            let res: Vec<_> = iter.filter_map(f).take(n).collect();
+            (res, nums.iter().copied().filter_map(f).count() >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model_filtered(n, |num| f(num).is_some()),
+    });
 
-    fn all_collect_methods_impl(nums: Vec<i32>, take_count: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                vec![]
-                    .into_collector()
-                    .take(take_count)
-                    .filter_map(|num: i32| num.checked_add(i32::MAX))
-            },
-            should_break_pred: |iter| {
-                iter.filter_map(|num| num.checked_add(i32::MAX)).count() >= take_count
-            },
-            pred: |mut iter, output, remaining| {
-                let expected = iter
-                    .by_ref()
-                    .filter_map(|num| num.checked_add(i32::MAX))
-                    .take(take_count);
-
-                if expected.ne(output) {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
+    fn f(n: i32) -> Option<i32> {
+        n.checked_add(i32::MAX)
     }
 }

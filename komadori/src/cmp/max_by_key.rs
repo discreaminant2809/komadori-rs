@@ -123,7 +123,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
         collector: Max::by_key(key_extractor),
-        expected_f: |iter| (iter.max_by_key(key_extractor), false),
+        expected_f: |iter, _| (iter.max_by_key(key_extractor), false),
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });

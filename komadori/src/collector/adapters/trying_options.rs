@@ -50,13 +50,18 @@ where
     C: Collector<T>,
 {
     fn collect(&mut self, item: Option<T>) -> ControlFlow<()> {
-        match (item, &mut self.collector) {
-            (None, collector) => {
+        match (&mut self.collector, item) {
+            // If the underlying collector has stopped to begin with,
+            // we must effectively ignore every item at all,
+            // even if it's an `Err` or `None`.
+            // It's to be consistent with `collect_many` and `collect_then_finish`
+            (Some(collector), _) if collector.max_afford(1) == 0 => ControlFlow::Break(()),
+            (Some(collector), Some(item)) => collector.collect(item),
+            (None, _) => ControlFlow::Break(()),
+            (collector, None) => {
                 *collector = None;
                 ControlFlow::Break(())
             }
-            (Some(_), None) => ControlFlow::Break(()),
-            (Some(item), Some(collector)) => collector.collect(item),
         }
     }
 
@@ -99,41 +104,24 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::option::of as prop_opt;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use super::super::take_collector_model;
 
-    // Precondition:
-    // - `Vec::IntoCollector`
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(prop_opt(any::<i32>()), ..=5),
-            take_count in ..=5_usize,
-        ) {
-            all_collect_methods_impl(nums, take_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<Option<i32>>, take_count: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || vec![].into_collector().take(take_count).trying_options(),
-            should_break_pred: |mut iter| iter.len() >= take_count || iter.any(|num| num.is_none()),
-            pred: |mut iter, output, remaining| {
-                if iter.by_ref().take(take_count).collect::<Option<Vec<_>>>() != output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(prop_opt5050(any::<i32>()), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![].into_collector().take(n).trying_options(),
+        expected_f: |iter, count| {
+            let res: Option<Vec<_>> = iter.take(n).collect();
+            (res, count >= n || nums.iter().any(|num| num.is_none()))
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
 }

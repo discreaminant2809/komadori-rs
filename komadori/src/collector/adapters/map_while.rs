@@ -85,59 +85,31 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use super::super::take_collector_model;
 
-    // Precondition:
-    // - `Vec::IntoCollector`
-    // - `Collector::take()`
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=5),
-            take_count in ..=5_usize,
-        ) {
-            all_collect_methods_impl(nums, take_count)?;
-        }
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![].into_collector().take(n).map_while(f),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.map_while(f).take(n).collect();
+            (res, count >= n || nums.iter().any(|&num| f(num).is_none()))
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
 
-    fn all_collect_methods_impl(nums: Vec<i32>, take_count: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                vec![]
-                    .into_collector()
-                    .take(take_count)
-                    .map_while(map_while_pred)
-            },
-            should_break_pred: |iter| {
-                iter.clone().count() >= take_count
-                    || iter.clone().any(|num| map_while_pred(num).is_none())
-            },
-            pred: |mut iter, output, remaining| {
-                if output
-                    != iter
-                        .by_ref()
-                        .map_while(map_while_pred)
-                        .take(take_count)
-                        .collect::<Vec<_>>()
-                {
-                    Err(PredError::IncorrectOutput)
-                } else if !iter.eq(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
-
-    fn map_while_pred(num: i32) -> Option<i32> {
+    fn f(num: i32) -> Option<i32> {
         num.checked_add(i32::MAX)
     }
+
+    // iter.clone().count() >= take_count
+    // || iter.clone().any(|num| map_pred(num).is_none())
 }

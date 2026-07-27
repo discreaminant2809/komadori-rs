@@ -167,7 +167,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: Find::map(map_pred),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res = iter.find_map(map_pred);
             (res, res.is_some())
         },

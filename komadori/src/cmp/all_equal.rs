@@ -138,7 +138,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: AllEqual::new(),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res = iter.all_equal();
             (res, !res)
         },

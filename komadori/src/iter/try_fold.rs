@@ -302,7 +302,7 @@ mod proptests {
         },
         iter: nums.iter().copied(),
         collector: TryFold::new(init, try_fold_f),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let Some(init) = init else {
                 return (None, true);
             };
@@ -331,7 +331,7 @@ mod proptests {
         },
         iter: nums.iter().copied(),
         collector: TryFold::with_output(init, try_fold_f),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res = iter.try_fold(init, |mut sum, num| {
                 try_fold_f(&mut sum, num)?;
                 Some(sum)

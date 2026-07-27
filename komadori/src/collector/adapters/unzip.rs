@@ -89,58 +89,38 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use super::super::take_collector_model;
 
-    proptest! {
-        /// Since `unzip()` is essentially just `combine()` (but used for destructuring),
-        /// we can just copy the test from there to here.
-        ///
-        /// Precondition:
-        /// - [`crate::collector::Collector::take()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=4),
-            first_count in ..=4_usize,
-            second_count in ..=4_usize,
-        ) {
-            all_collect_methods_impl(nums, first_count, second_count)?;
-        }
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let first_n = ..=5_usize;
+            let second_n = ..=5_usize;
+        },
+        iter: nums.iter().map(|&num| (num, num)),
+        collector: vec![]
+            .into_collector()
+            .take(first_n)
+            .unzip(vec![].into_collector().take(second_n)),
+        expected_f: |mut iter, count| {
+            let max_n = first_n.max(second_n);
+            let min_n = first_n.min(second_n);
 
-    fn all_collect_methods_impl(
-        nums: Vec<i32>,
-        first_count: usize,
-        second_count: usize,
-    ) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().map(|&num| (num, num)),
-            collector_factory: || {
-                vec![]
-                    .into_collector()
-                    .take(first_count)
-                    .unzip(vec![].into_collector().take(second_count))
-            },
-            should_break_pred: |iter| iter.count() >= first_count.max(second_count),
-            pred: |iter, output, remaining| {
-                let first = nums.iter().copied().take(first_count).collect::<Vec<_>>();
-                let second = nums.iter().copied().take(second_count).collect::<Vec<_>>();
-                let max_len = first_count.max(second_count);
+            let (mut first, mut second): (Vec<_>, Vec<_>) = iter.by_ref().take(min_n).collect();
 
-                if output != (first, second) {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.skip(max_len).ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+            if first_n < second_n {
+                second.extend(iter.map(|(_, num)| num).take(max_n - min_n));
+            } else {
+                first.extend(iter.map(|(num, _)| num).take(max_n - min_n));
+            };
+
+            ((first, second), count >= first_n.max(second_n))
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(first_n.max(second_n)),
+    });
 }

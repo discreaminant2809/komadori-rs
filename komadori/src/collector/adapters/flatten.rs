@@ -63,41 +63,26 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-
-    proptest! {
-        /// Precondition:
-        /// - [`crate::collector::Collector::take()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            matrix in propvec(propvec(any::<i32>(), ..=3), ..=3),
-            take_count in 0..=10_usize,
-        ) {
-            all_collect_methods_impl(matrix, take_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(matrix: Vec<Vec<i32>>, take_count: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || matrix.iter(),
-            collector_factory: || vec![].into_collector().take(take_count).flatten(),
-            should_break_pred: |iter| iter.flatten().count() >= take_count,
-            pred: |mut iter, output: Vec<i32>, remaining| {
-                if iter.by_ref().flatten().take(take_count).ne(&output) {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(propvec(any::<i32>(), ..=2), ..=3);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter(),
+        collector: vec![].into_collector().take(n).copying().flatten(),
+        expected_f: |iter, _| {
+            let res: Vec<_> = iter.flatten().copied().take(n).collect();
+            (res, nums.iter().flatten().count() >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: CollectorModel {
+            state: n,
+            advance_f: |n: &mut usize, item: &Vec<_>| *n = n.saturating_sub(item.len()),
+            max_afford_f: |&n: &_, request| if n == 0 { n } else { request },
+        },
+    });
 }

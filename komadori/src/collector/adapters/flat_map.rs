@@ -75,46 +75,31 @@ impl<C: Debug, F> Debug for FlatMap<C, F> {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-
-    proptest! {
-        /// Precondition:
-        /// - [`crate::collector::Collector::take()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            matrix in propvec(propvec(any::<i32>(), ..=3), ..=3),
-            take_count in 0..=10_usize,
-        ) {
-            all_collect_methods_impl(matrix, take_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(matrix: Vec<Vec<i32>>, take_count: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || matrix.iter(),
-            collector_factory: || vec![].into_collector().take(take_count).flat_map(flat_fn),
-            should_break_pred: |iter| iter.flat_map(flat_fn).count() >= take_count,
-            pred: |mut iter, output: Vec<i32>, remaining| {
-                if iter.by_ref().flat_map(flat_fn).take(take_count).ne(&output) {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(propvec(any::<i32>(), ..=2), ..=3);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter(),
+        collector: vec![].into_collector().take(n).flat_map(f),
+        expected_f: |iter, _| {
+            let res: Vec<_> = iter.flat_map(f).take(n).collect();
+            (res, nums.iter().flatten().count() >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: CollectorModel {
+            state: n,
+            advance_f: |n: &mut usize, item: &Vec<_>| *n = n.saturating_sub(item.len()),
+            max_afford_f: |&n: &_, request| if n == 0 { n } else { request },
+        },
+    });
 
     #[allow(clippy::ptr_arg)]
-    fn flat_fn(row: &Vec<i32>) -> impl Iterator<Item = &i32> {
-        row.iter()
+    fn f(nums: &Vec<i32>) -> impl Iterator<Item = i32> {
+        nums.iter().copied()
     }
 }

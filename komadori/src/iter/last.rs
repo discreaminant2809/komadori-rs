@@ -97,7 +97,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: Last::new(),
-        expected_f: |iter| (iter.last(), false),
+        expected_f: |iter, _| (iter.last(), false),
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });

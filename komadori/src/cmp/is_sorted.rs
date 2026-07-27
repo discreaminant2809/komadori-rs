@@ -148,7 +148,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: IsSorted::new(),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let res = iter.is_sorted();
             (res, !res)
         },

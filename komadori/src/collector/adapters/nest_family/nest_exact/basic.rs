@@ -101,7 +101,7 @@ mod proptests {
             .into_collector()
             .take(row)
             .nest_exact(vec![].into_collector().take(column)),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res: Vec<_> = std::iter::from_fn(move || {
                 let count = column;
                 let column = iter.by_ref().take(count).collect::<Vec<_>>();

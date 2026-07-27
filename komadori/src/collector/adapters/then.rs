@@ -194,51 +194,52 @@ fn invalid_state() -> ! {
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-
-    proptest! {
-        /// Precondition:
-        /// - [`crate::collector::Collector::take()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=7),
-            first_count in 0..=3_usize,
-            second_count in 0..=3_usize,
-        ) {
-            all_collect_methods_impl(nums, first_count, second_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(
-        nums: Vec<i32>,
-        first_count: usize,
-        second_count: usize,
-    ) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                vec![]
-                    .into_collector()
-                    .take(first_count)
-                    .then(|v| v.into_collector().take(second_count))
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=6);
+        },
+        other_data: {
+            let first_n = ..=3_usize;
+            let second_n = ..=3_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![]
+            .into_collector()
+            .take(first_n)
+            .then(|v| v.into_collector().take(second_n)),
+        expected_f: |iter, count| {
+            (
+                iter.take(first_n + second_n).collect::<Vec<_>>(),
+                count >= first_n + second_n,
+            )
+        },
+        output_pred: PartialEq::eq,
+        model: CollectorModel {
+            state: Counts {
+                first: first_n,
+                second: second_n
             },
-            should_break_pred: |iter| iter.count() >= first_count + second_count,
-            pred: |mut iter, output, remaining| {
-                if iter.by_ref().take(first_count + second_count).ne(output) {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
+            advance_f: |counts: &mut Counts, _| {
+                if counts.first > 0 {
+                    counts.first -= 1;
                 } else {
-                    Ok(())
+                    counts.second = counts.second.saturating_sub(1);
                 }
             },
-        }
-        .test_collector()
+            max_afford_f: |counts: &Counts, request| {
+                if counts.first > 0 {
+                    request
+                } else {
+                    counts.second.min(request)
+                }
+            },
+        },
+    });
+
+    struct Counts {
+        first: usize,
+        second: usize,
     }
 }

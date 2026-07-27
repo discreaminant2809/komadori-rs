@@ -145,7 +145,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
         collector: Min::by(comparator),
-        expected_f: |iter| (iter.min_by(comparator), false),
+        expected_f: |iter, _| (iter.min_by(comparator), false),
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });

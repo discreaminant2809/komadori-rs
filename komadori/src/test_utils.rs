@@ -1,8 +1,6 @@
-mod collector_tester;
 mod fuzzy_exec;
 mod fuzzy_exec_seq;
 
-pub use collector_tester::*;
 pub use fuzzy_exec::*;
 pub use fuzzy_exec_seq::*;
 
@@ -16,7 +14,7 @@ macro_rules! collector_test {
 
             iter: $iter:expr,
             collector: $collector:expr,
-            expected_f: |$iter_ident:ident| $expected:expr,
+            expected_f: |$iter_pat:pat_param, $count_pat:pat_param $(,)?| $expected:expr,
             output_pred: $output_pred:expr,
 
             model: $model:expr $(,)?
@@ -30,7 +28,7 @@ macro_rules! collector_test {
                 ($iter, $iter, $iter,)
             },
             collector: $collector,
-            expected_f: |$iter_ident| $expected,
+            expected_f: |$iter_pat, $count_pat| $expected,
             output_pred: $output_pred,
 
             model: $model,
@@ -51,7 +49,7 @@ macro_rules! collector_test {
                 )
             },
             collector: $collector:expr,
-            expected_f: |$iter_ident:ident| $expected:expr,
+            expected_f: |$iter_pat:pat_param, $count_pat:pat_param $(,)?| $expected:expr,
             output_pred: $output_pred:expr,
 
             model: $model:expr $(,)?
@@ -60,12 +58,13 @@ macro_rules! collector_test {
         ::proptest::proptest! {
             #[test]
             fn $name(
-                ($($iter_data_ident,)* seq) in ($($iter_data_strat),*)
+                ($($iter_data_ident,)* count, seq) in ($($iter_data_strat),*)
                     .prop_flat_map(|#[allow(unused_parens, unused_mut)] ($(mut $iter_data_ident),*)| {
-                        let n = ::core::iter::Iterator::count($iter_base);
+                        let count = ::core::iter::Iterator::count($iter_base);
                         (
                             $(::proptest::strategy::Just($iter_data_ident),)*
-                            $crate::test_utils::FuzzyExecSeqStrategy::new(n)
+                            ::proptest::strategy::Just(count),
+                            $crate::test_utils::FuzzyExecSeqStrategy::new(count)
                         )
                     }),
                 $($other_data_pat in $other_data_strat,)*
@@ -76,11 +75,15 @@ macro_rules! collector_test {
                 let mut collected_amount = 0_usize;
                 let mut expected_remaining = ::core::iter::Iterator::fuse($iter_for_output);
                 let (expected_output, is_break) = (
-                    |$iter_ident: &mut ::core::iter::Inspect<_, _>| $expected
+                    // Explicit types to help the type inference
+                    // (that's why we force the callers to write a closure),
+                    // and `&mut` so that the callers don't need to put `mut`.
+                    |$iter_pat: ::core::iter::Inspect<_, _>, $count_pat| $expected
                 )(
-                    &mut expected_remaining
+                    expected_remaining
                         .by_ref()
-                        .inspect(|_| collected_amount += 1)
+                        .inspect(|_| collected_amount += 1),
+                    count,
                 );
 
                 $crate::test_utils::fuzzy_execute(
@@ -108,12 +111,6 @@ pub(super) use collector_test;
 
 #[allow(unused_imports)]
 pub mod prelude {
-    pub use std::{
-        // `Debug` for manual implementation of `TwoIterMutFactory` and `CollectorFactoryBase`.
-        fmt::Debug,
-        ops::ControlFlow,
-    };
-
     pub use proptest::collection::vec as propvec;
     pub use proptest::option::of as prop_opt5050;
     pub use proptest::prelude::*;

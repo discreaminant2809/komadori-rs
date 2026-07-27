@@ -105,83 +105,24 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{CollectorTestParts, CollectorTester, CollectorTesterExt, PredError};
+    use super::super::take_collector_model;
 
-    proptest! {
-        /// We use
-        ///
-        /// Precondition:
-        /// - [`crate::collector::Collector::take_while()`]
-        /// - [`crate::vec::IntoCollector`]
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=5),
-            // We only simulate whether the collector has stopped on construction,
-            // or stops later (rely on `take_while()` to stop).
-            take_count in prop_oneof![
-                1 => Just(0),
-                9 => Just(999),
-            ],
-        ) {
-            all_collect_methods_impl(nums, take_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(nums: Vec<i32>, take_count: usize) -> TestCaseResult {
-        Tester { nums, take_count }.test_collector()
-    }
-
-    struct Tester {
-        nums: Vec<i32>,
-        take_count: usize,
-    }
-
-    impl CollectorTester for Tester {
-        type Item<'a> = i32;
-
-        type Output<'a> = Vec<i32>;
-
-        fn collector_test_parts<'a>(
-            &'a mut self,
-        ) -> crate::test_utils::CollectorTestParts<
-            impl Iterator<Item = Self::Item<'a>>,
-            impl Collector<Self::Item<'a>, Output = Self::Output<'a>>,
-            impl FnMut(
-                Self::Output<'a>,
-                &mut dyn Iterator<Item = Self::Item<'a>>,
-            ) -> Result<(), PredError>,
-            impl Iterator<Item = Self::Item<'a>>,
-        > {
-            CollectorTestParts {
-                iter: self.nums.iter().copied(),
-                collector: vec![]
-                    .into_collector()
-                    .take(self.take_count)
-                    .take_while(|&num| num > 0)
-                    .fuse(),
-                should_break: self.take_count == 0 || !self.nums.iter().all(|&num| num > 0),
-                pred: |output, remaining| {
-                    let mut iter = self.nums.iter().copied();
-                    let expected = iter
-                        .by_ref()
-                        .take_while(|&num| num > 0)
-                        .take(self.take_count);
-
-                    if expected.ne(output) {
-                        Err(PredError::IncorrectOutput)
-                    } else if iter.ne(remaining) {
-                        Err(PredError::IncorrectIterConsumption)
-                    } else {
-                        Ok(())
-                    }
-                },
-                iter_for_fuse_test: Some([1, 2].into_iter()),
-            }
-        }
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![].into_collector().take(n).fuse(),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.take(n).collect();
+            (res, count >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
 }

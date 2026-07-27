@@ -6,6 +6,12 @@
 
 - Reserve API.
 
+### Fixed
+
+- `CollectorBase::trying_results()` and `CollectorBase::trying_options()`
+  still collecting `Err`/`None` items in the `collect()` method after
+  the underlying collector has stopped.
+
 ### Removed
 
 - `CollectorBase::break_hint()`.

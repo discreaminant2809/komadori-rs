@@ -88,7 +88,7 @@ mod proptests {
         other_data: {},
         iter: std::iter::repeat_n((), n),
         collector: Count::new(),
-        expected_f: |iter| (iter.count(), false),
+        expected_f: |iter, _| (iter.count(), false),
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });
