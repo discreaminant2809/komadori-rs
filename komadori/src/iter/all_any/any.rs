@@ -121,7 +121,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: Any::new(pred),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res = iter.any(pred);
             (res, res)
         },

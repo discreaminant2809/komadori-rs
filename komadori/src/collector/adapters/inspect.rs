@@ -80,51 +80,28 @@ impl<C: Debug, F> Debug for Inspect<C, F> {
 mod proptests {
     use std::cell::Cell;
 
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use super::super::take_collector_model;
 
-    // Precondition:
-    // - `Vec::IntoCollector`
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=5),
-            take_count in ..=5_usize,
-        ) {
-            all_collect_methods_impl(nums, take_count)?;
-        }
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().map(|&num| Cell::new(num)),
+        collector: vec![].into_collector().take(n).inspect(f),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.inspect(f).take(n).collect();
+            (res, count >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
 
-    fn all_collect_methods_impl(nums: Vec<i32>, take_count: usize) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().map(|&num| Cell::new(num)),
-            collector_factory: || {
-                vec![]
-                    .into_collector()
-                    .take(take_count)
-                    // Be careful of overflowing!
-                    .inspect(|num: &Cell<_>| num.update(|x: i32| x.wrapping_add(1)))
-            },
-            should_break_pred: |_| nums.len() >= take_count,
-            pred: |mut iter, output, remaining| {
-                if iter
-                    .by_ref()
-                    .inspect(|num| num.update(|x| x + 1))
-                    .take(take_count)
-                    .ne(output)
-                {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
+    fn f(num: &Cell<i32>) {
+        num.update(|num| num.wrapping_add(i32::MAX));
     }
 }

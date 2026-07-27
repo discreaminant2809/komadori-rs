@@ -246,7 +246,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: TryForEach::new(identity),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res: Option<_> = iter.try_for_each(identity);
             (res, res.is_none())
         },
@@ -263,7 +263,7 @@ mod proptests {
         },
         iter: nums.iter().copied(),
         collector: TryForEach::init(init, identity),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             if init.is_none() {
                 return (None, true);
             }

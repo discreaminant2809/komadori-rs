@@ -102,7 +102,7 @@ mod proptests {
             .into_collector()
             .take(row)
             .nest(vec![].into_collector().take(column)),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res: Vec<_> = std::iter::from_fn(move || {
                 let column = iter.by_ref().take(column).collect::<Vec<_>>();
                 (!column.is_empty()).then_some(column)

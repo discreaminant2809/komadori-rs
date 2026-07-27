@@ -78,3 +78,33 @@ pub use unzip::*;
 pub use update::*;
 
 use tee_base::*;
+
+#[cfg(all(test, feature = "std"))]
+use crate::test_utils::CollectorModel;
+
+#[cfg(all(test, feature = "std"))]
+fn take_collector_model<T>(
+    n: usize,
+) -> CollectorModel<usize, impl FnMut(&mut usize, T), impl FnMut(&usize, usize) -> usize> {
+    CollectorModel {
+        state: n,
+        advance_f: |n: &mut usize, _| *n = n.saturating_sub(1),
+        max_afford_f: |&n: &usize, request| n.min(request),
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+fn take_collector_model_filtered<T>(
+    n: usize,
+    mut pred: impl FnMut(T) -> bool,
+) -> CollectorModel<usize, impl FnMut(&mut usize, T), impl FnMut(&usize, usize) -> usize> {
+    CollectorModel {
+        state: n,
+        advance_f: move |n: &mut usize, item| {
+            if pred(item) {
+                *n = n.saturating_sub(1);
+            }
+        },
+        max_afford_f: |&n: &_, request| if n == 0 { 0 } else { request },
+    }
+}

@@ -347,7 +347,7 @@ mod proptests {
         },
         iter: nums.iter().copied(),
         collector: starting_nums.into_collector(),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let mut res = starting_nums.clone();
             res.extend(iter);
             (res, false)
@@ -365,7 +365,7 @@ mod proptests {
         },
         iter: nums.iter(),
         collector: starting_nums.into_collector(),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let mut res = starting_nums.clone();
             res.extend(iter.copied());
             (res, false)
@@ -382,11 +382,12 @@ mod proptests {
             let starting_nums = propvec(any::<i32>(), ..=2);
         },
         iters: {
-            let (mut for_output, mut for_model) = (nums.clone(), nums.clone());
+            let mut other_nums = nums.repeat(2);
+            let (for_output, for_model) = other_nums.split_at_mut(nums.len());
             (nums.iter_mut(), for_output.iter_mut(), for_model.iter_mut())
         },
         collector: starting_nums.into_collector(),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let mut res = starting_nums.clone();
             res.extend(iter.map(|&mut num| num));
             (res, false)
@@ -404,7 +405,7 @@ mod proptests {
         },
         iter: nums.iter().copied(),
         collector: starting_nums.collector_mut(),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let mut res = starting_nums.clone();
             res.extend(iter);
             (res, false)
@@ -422,7 +423,7 @@ mod proptests {
         },
         iter: nums.iter(),
         collector: starting_nums.collector_mut(),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let mut res = starting_nums.clone();
             res.extend(iter.copied());
             (res, false)
@@ -439,11 +440,12 @@ mod proptests {
             let mut starting_nums = propvec(any::<i32>(), ..=2);
         },
         iters: {
-            let (mut for_output, mut for_model) = (nums.clone(), nums.clone());
+            let mut other_nums = nums.repeat(2);
+            let (for_output, for_model) = other_nums.split_at_mut(nums.len());
             (nums.iter_mut(), for_output.iter_mut(), for_model.iter_mut())
         },
         collector: starting_nums.collector_mut(),
-        expected_f: |iter| {
+        expected_f: |iter, _| {
             let mut res = starting_nums.clone();
             res.extend(iter.map(|&mut num| num));
             (res, false)

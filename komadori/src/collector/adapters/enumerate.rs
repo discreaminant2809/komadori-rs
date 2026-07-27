@@ -84,70 +84,24 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
+    use crate::test_utils::prelude::*;
 
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use super::super::take_collector_model;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-
-    // Precondition:
-    // - `Vec::IntoCollector`
-    // - `CollectorBase::take()`
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=4),
-            (take_count, starting_nums) in (0_usize..=5).prop_flat_map(|take_count| {
-                let starting_nums = if take_count == 0 {
-                    Just(vec![]).boxed()
-                } else {
-                    propvec(any::<i32>(), 0..take_count).boxed()
-                };
-
-                (Just(take_count), starting_nums)
-            }),
-        ) {
-            all_collect_methods_impl(nums, starting_nums, take_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(
-        nums: Vec<i32>,
-        starting_nums: Vec<i32>,
-        take_count: usize,
-    ) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                let mut collector = vec![].into_collector().take(take_count).enumerate();
-                // If the number of starting nums is 0, it may be that the `take_count` is 0.
-                // We shouldn't collect in this case.
-                if !starting_nums.is_empty() {
-                    let _ = collector.collect_many(starting_nums.iter().copied());
-                }
-                collector
-            },
-            should_break_pred: |_| nums.len() + starting_nums.len() >= take_count,
-            pred: |mut iter, output, remaining| {
-                let expected: Vec<_> = starting_nums
-                    .iter()
-                    .copied()
-                    .chain(&mut iter)
-                    .enumerate()
-                    .take(take_count)
-                    .collect();
-
-                if expected != output {
-                    Err(PredError::IncorrectOutput)
-                } else if iter.ne(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![].into_collector().take(n).enumerate(),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.enumerate().take(n).collect();
+            (res, count >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
 }

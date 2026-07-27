@@ -32,14 +32,23 @@ where
         self.collector.finish()
     }
 
-    // We don't know how many items left to reserve
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        if self.pred.is_none() {
+            self.collector.reserve(additional);
+        }
+    }
 
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
-        if self.collector.max_afford(request) == 0 {
+        let max_afford = self.collector.max_afford(request);
+
+        if max_afford == 0 {
             0
-        } else {
+        } else if self.pred.is_some() {
             request
+        } else {
+            max_afford
         }
     }
 }
@@ -140,89 +149,54 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::option::of as prop_opt;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::{mem::Dropping, test_utils::prelude::*};
 
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
-    use crate::{mem::Dropping, prelude::*};
-
-    // We need to use `take()` to simulate the break case when enough items are skipped.
-    // Precondition:
-    // - `Vec::IntoCollector`
-    // - `Collector::take()`
-    // - `Dropping`
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            nums in propvec(any::<i32>(), ..=3),
-            (take_count, starting_num) in (..=5_usize)
-                .prop_flat_map(|take_count| (
-                    Just(take_count),
-                    if take_count > 1 {
-                        prop_opt(Just(0)).boxed()
-                    } else {
-                        Just(None).boxed()
-                    }
-                )),
-        ) {
-            all_collect_methods_impl(nums, take_count, starting_num)?;
-        }
-    }
-
-    fn all_collect_methods_impl(
-        nums: Vec<i32>,
-        take_count: usize,
-        starting_num: Option<i32>,
-    ) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || nums.iter().copied(),
-            collector_factory: || {
-                let mut collector = vec![]
-                    .into_collector()
-                    .take(take_count)
-                    .skip_while(skip_while_pred);
-
-                if let Some(starting_num) = starting_num {
-                    assert!(collector.collect(starting_num).is_continue());
-                    assert!(collector.pred.is_none());
-                }
-
-                collector
-            },
-            should_break_pred: |iter| {
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![].into_collector().take(n).skip_while(pred),
+        expected_f: |iter, _| {
+            let res: Vec<_> = iter.skip_while(pred).take(n).collect();
+            (
+                res,
                 Dropping
-                    .take(take_count)
-                    .collect_many(
-                        starting_num
-                            .into_iter()
-                            .chain(iter)
-                            .skip_while(skip_while_pred),
-                    )
-                    .is_break()
-            },
-            pred: |mut iter, output, remaining| {
-                if output
-                    != starting_num
-                        .into_iter()
-                        .chain(&mut iter)
-                        .skip_while(skip_while_pred)
-                        .take(take_count)
-                        .collect::<Vec<_>>()
-                {
-                    Err(PredError::IncorrectOutput)
-                } else if !iter.eq(remaining) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
+                    .take(n)
+                    .collect_many(nums.iter().copied().skip_while(pred))
+                    .is_break(),
+            )
+        },
+        output_pred: PartialEq::eq,
+        model: CollectorModel {
+            state: State { n, skipping: true },
+            advance_f: |state: &mut State, item| {
+                if !state.skipping || !pred(&item) {
+                    state.skipping = false;
+                    state.n = state.n.saturating_sub(1);
                 }
             },
-        }
-        .test_collector()
+            max_afford_f: |state: &State, request| {
+                if state.n == 0 {
+                    0
+                } else if state.skipping {
+                    request
+                } else {
+                    state.n.min(request)
+                }
+            },
+        },
+    });
+
+    fn pred(&num: &i32) -> bool {
+        num < 0
     }
 
-    fn skip_while_pred(&num: &i32) -> bool {
-        num < 0
+    struct State {
+        n: usize,
+        skipping: bool,
     }
 }

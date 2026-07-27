@@ -156,7 +156,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: Find::new(pred),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res = iter.find(pred);
             (res, res.is_some())
         },

@@ -125,7 +125,7 @@ mod proptests {
         other_data: {},
         iter: nums.iter().copied(),
         collector: Position::new(pred),
-        expected_f: |iter| {
+        expected_f: |mut iter, _| {
             let res = iter.position(pred);
             (res, res.is_some())
         },

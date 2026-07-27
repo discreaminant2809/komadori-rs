@@ -134,52 +134,29 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use proptest::collection::vec as propvec;
-    use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    use crate::test_utils::prelude::*;
 
-    use crate::prelude::*;
-    use crate::test_utils::{BasicCollectorTester, CollectorTesterExt, PredError};
+    use super::super::take_collector_model;
 
-    proptest! {
-        #[test]
-        fn all_collect_methods(
-            // We keep just enough "space" for the take count to land on
-            // each size hint interval.
-            // The "diagram" is as below (E = when the take count is equal to either lower or upper bound)
-            // 0 1 2 E 4 5 6 E 8 9
-            nums1 in propvec(any::<i32>(), ..=3),
-            nums2 in propvec(any::<i32>(), ..=4),
-            take_count in ..=9_usize,
-        ) {
-            all_collect_methods_impl(nums1, nums2, take_count)?;
-        }
-    }
-
-    fn all_collect_methods_impl(
-        nums1: Vec<i32>,
-        nums2: Vec<i32>,
-        take_count: usize,
-    ) -> TestCaseResult {
-        BasicCollectorTester {
-            iter_factory: || {
-                nums1
-                    .iter()
-                    .copied()
-                    .chain(nums2.iter().copied().filter(|&num| num > 0))
-            },
-            collector_factory: || vec![].into_collector().take(take_count),
-            should_break_pred: |iter| iter.count() >= take_count,
-            pred: |mut iter, output, remaining| {
-                if output != iter.by_ref().take(take_count).collect::<Vec<_>>() {
-                    Err(PredError::IncorrectOutput)
-                } else if !remaining.eq(iter) {
-                    Err(PredError::IncorrectIterConsumption)
-                } else {
-                    Ok(())
-                }
-            },
-        }
-        .test_collector()
-    }
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums1 = propvec(any::<i32>(), ..=3);
+            let mut nums2 = propvec(any::<i32>(), ..=3);
+        },
+        other_data: {
+            let first_n = ..=3_usize;
+            let second_n = ..=3_usize;
+        },
+        iter: nums1
+            .iter()
+            .chain(nums2.iter().filter(|&&num| num >= 0))
+            .copied(),
+        collector: vec![].into_collector().take(first_n).take(second_n),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.take(first_n.min(second_n)).collect();
+            (res, count >= first_n.min(second_n))
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(first_n.min(second_n)),
+    });
 }

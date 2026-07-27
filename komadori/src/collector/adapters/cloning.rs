@@ -89,3 +89,48 @@ where
             .collect_then_finish(items.into_iter().map(|item| item.clone()))
     }
 }
+
+#[cfg(all(test, feature = "std"))]
+mod proptests {
+    use crate::test_utils::prelude::*;
+
+    use super::super::take_collector_model;
+
+    collector_test!(adapter_ref {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter(),
+        collector: vec![].into_collector().take(n).cloning(),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.cloned().take(n).collect();
+            (res, count >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
+
+    collector_test!(adapter_mut {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iters: {
+            let mut other_nums = nums.repeat(2);
+            let (for_output, for_model) = other_nums.split_at_mut(nums.len());
+            (nums.iter_mut(), for_output.iter_mut(), for_model.iter_mut())
+        },
+        collector: vec![].into_collector().take(n).cloning(),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.map(|&mut num| num).take(n).collect();
+            (res, count >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
+}

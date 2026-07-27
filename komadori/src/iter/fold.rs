@@ -98,7 +98,7 @@ mod proptests {
         collector: Fold::new(KADANE_INIT, |(sum, max_sum), num| {
             kadane_fold(sum, max_sum, num)
         }),
-        expected_f: |iter| (
+        expected_f: |iter, _| (
             iter.fold(KADANE_INIT, |(mut sum, mut max_sum), num| {
                 kadane_fold(&mut sum, &mut max_sum, num);
                 (sum, max_sum)
