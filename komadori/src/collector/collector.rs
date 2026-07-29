@@ -1,27 +1,10 @@
 use super::{CollectorBase, break_hint};
 
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::boxed::Box;
 use std::ops::ControlFlow;
 
 /// Defines what item types are accepted and how items are collected.
-///
-/// # Dyn Compatibility
-///
-/// This trait is *dyn-compatible*, meaning it can be used as a trait object.
-/// You do not need to specify the [`Output`](CollectorBase::Output) type;
-/// providing the item type `T` is enough.
-/// The compiler will even emit a warning if you add the
-/// [`Output`](CollectorBase::Output) type.
-///
-/// For example:
-///
-/// ```no_run
-/// # use komadori::prelude::*;
-/// # fn foo(_:
-/// &mut dyn Collector<i32>
-/// # ) {}
-/// ```
-///
-/// [`Break(())`]: std::ops::ControlFlow::Break
 pub trait Collector<T>: CollectorBase {
     /// Collects an item and returns a [`ControlFlow`] indicating whether
     /// the collector has stopped accumulating right after this operation.
@@ -252,6 +235,42 @@ where
     }
 
     #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: The caller has reserved for one item.
+            C::assume_reserved_collect(self, item)
+        }
+    }
+
+    #[inline]
+    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+        // FIXED: specialization for unsized type.
+        // We can't add `?Sized` to the bound of `C` because this method requires `Sized`.
+        C::collect_many(self, items)
+    }
+
+    // The default implementation for `collect_then_finish()` is sufficient.
+}
+
+#[cfg(feature = "alloc")]
+impl<C, T> Collector<T> for Box<C>
+where
+    C: Collector<T>,
+{
+    #[inline]
+    fn collect(&mut self, item: T) -> ControlFlow<()> {
+        C::collect(self, item)
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        unsafe {
+            // SAFETY: The caller has reserved for one item.
+            C::assume_reserved_collect(self, item)
+        }
+    }
+
+    #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
         // FIXED: specialization for unsized type.
         // We can't add `?Sized` to the bound of `C` because this method requires `Sized`.
@@ -263,13 +282,35 @@ where
 
 macro_rules! dyn_impl {
     ($($traits:ident)*) => {
-        impl<'a, T> Collector<T> for &mut (dyn Collector<T> $(+ $traits)* + 'a) {
+        impl<T, O> Collector<T> for &mut (dyn Collector<T, Output = O> $(+ $traits)* + '_) {
             #[inline]
             fn collect(&mut self, item: T) -> ControlFlow<()> {
-                <dyn Collector<T>>::collect(*self, item)
+                (**self).collect(item)
             }
 
-            // The default implementations are sufficient.
+            #[inline]
+            unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+                unsafe {
+                    // SAFETY: The caller has reserved for one item.
+                    (**self).assume_reserved_collect(item)
+                }
+            }
+        }
+
+        #[cfg(feature = "alloc")]
+        impl<T, O> Collector<T> for Box<dyn Collector<T, Output = O> $(+ $traits)* + '_> {
+            #[inline]
+            fn collect(&mut self, item: T) -> ControlFlow<()> {
+                (**self).collect(item)
+            }
+
+            #[inline]
+            unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+                unsafe {
+                    // SAFETY: The caller has reserved for one item.
+                    (**self).assume_reserved_collect(item)
+                }
+            }
         }
     };
 }
@@ -280,4 +321,4 @@ dyn_impl!(Sync);
 dyn_impl!(Send Sync);
 
 // `Output` shouldn't be required to be specified.
-fn _dyn_compatible<T>(_: &mut dyn Collector<T>) {}
+fn _dyn_compatible<T, O>(_: &mut dyn Collector<T, Output = O>) {}

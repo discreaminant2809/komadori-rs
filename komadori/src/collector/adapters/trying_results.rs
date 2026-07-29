@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that sets the [`Output`] to [`Err(e)`](Err) when
 /// an [`Err(e)`](Err) item is encountered for the first time,
@@ -34,6 +34,8 @@ where
     fn finish(self) -> Self::Output {
         self.collector.map(CollectorBase::finish)
     }
+
+    finish_boxed_impl!();
 
     // No reserve
 

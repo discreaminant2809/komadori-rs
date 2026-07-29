@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 /// A collector that stores the last item it collects.
 ///
@@ -50,6 +50,8 @@ impl<T> CollectorBase for Last<T> {
     fn finish(self) -> Self::Output {
         self.value
     }
+
+    finish_boxed_impl!();
 }
 
 impl<T> Collector<T> for Last<T> {

@@ -4,7 +4,7 @@
 
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{CollectorBase, IntoCollectorBase};
+use crate::collector::{CollectorBase, IntoCollectorBase, finish_boxed_impl};
 
 /// A collector that always stops accumulating.
 /// Its [`Output`](CollectorBase::Output) is `()`.
@@ -38,6 +38,8 @@ impl CollectorBase for Collector {
     type Output = ();
 
     fn finish(self) -> Self::Output {}
+
+    finish_boxed_impl!();
 
     #[inline]
     fn max_afford(&self, _request: usize) -> usize {

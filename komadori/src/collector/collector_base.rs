@@ -1,3 +1,5 @@
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::boxed::Box;
 use std::ops::ControlFlow;
 
 // #[cfg(feature = "itertools")]
@@ -27,39 +29,69 @@ use super::{Funnel, Nest, NestExact, Then};
 /// [`Collector`](super::Collector).
 ///
 /// See the [module-level documentation](super) for more information.
-///
-/// # Dyn Compatibility
-///
-/// This trait is *dyn-compatible*, meaning it can be used as a trait object.
-/// You do not need to specify the [`Output`](CollectorBase::Output) type.
-/// The compiler will even emit a warning if you add the
-/// [`Output`](CollectorBase::Output) type.
 pub trait CollectorBase {
     /// The result this collector yields, via the [`finish()`](CollectorBase::finish) method.
-    ///
-    /// This assosciated type does not appear in trait objects.
-    type Output
-    where
-        Self: Sized;
+    type Output;
 
     /// Consumes the collector and returns the accumulated result.
+    ///
+    /// This method cannot be implemented on unsized types.
     ///
     /// # Examples
     ///
     /// ```
     /// use komadori::prelude::*;
     ///
-    /// let v = vec![1, 2, 3]
+    /// let collector = vec![1, 2, 3]
     ///     .into_collector()
     ///     .take(999)
     ///     .fuse()
     ///     .filter(|&x: &i32| x > 0);
     ///
-    /// assert_eq!(v.finish(), [1, 2, 3]);
+    /// assert_eq!(collector.finish(), [1, 2, 3]);
     /// ```
     fn finish(self) -> Self::Output
     where
         Self: Sized;
+
+    /// Same as [`finish()`], except it can be implemented
+    /// on unsized types via [`Box`].
+    ///
+    /// This exists mainly for `Box<dyn _>` support.
+    /// You rarely need to call this method.
+    ///
+    /// This method does not have a default implementation due to
+    /// [`finish()`] requiring [`Sized`]. Therefore, you have to
+    /// implement it manually for sized types with this
+    /// (and should only be this):
+    ///
+    /// ```ignore
+    /// fn finish_boxed(self: Box<Self>) -> Self::Output {
+    ///     (*self).finish()
+    /// }
+    /// ```
+    ///
+    /// Hopefully this limitation may be lifted soon when
+    /// a proper support for unsized types comes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let collector = vec![1, 2, 3]
+    ///     .into_collector()
+    ///     .take(999)
+    ///     .fuse()
+    ///     .filter(|&x: &i32| x > 0);
+    /// let collector = Box::new(collector) as Box<dyn Collector<i32, Output = Vec<i32>>>;
+    ///
+    /// assert_eq!(collector.finish_boxed(), [1, 2, 3]);
+    /// ```
+    ///
+    /// [`finish()`]: Self::finish
+    #[cfg(feature = "alloc")]
+    fn finish_boxed(self: Box<Self>) -> Self::Output;
 
     /// Reserves for `additional` items before collecting.
     ///
@@ -1578,6 +1610,10 @@ where
     fn finish(self) -> Self::Output {}
 
     #[inline]
+    #[cfg(feature = "alloc")]
+    fn finish_boxed(self: Box<Self>) -> Self::Output {}
+
+    #[inline]
     fn reserve(&mut self, additional: usize) {
         C::reserve(self, additional);
     }
@@ -1588,39 +1624,126 @@ where
     }
 }
 
+#[cfg(feature = "alloc")]
+impl<C> CollectorBase for Box<C>
+where
+    C: CollectorBase,
+{
+    type Output = C::Output;
+
+    #[inline]
+    fn finish(self) -> Self::Output {
+        (*self).finish()
+    }
+
+    #[inline]
+    fn finish_boxed(self: Box<Self>) -> Self::Output {
+        (*self).finish_boxed()
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        (**self).reserve(additional);
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        (**self).max_afford(request)
+    }
+}
+
 macro_rules! dyn_impl {
     ($($traits:ident)*) => {
-        impl<'a> CollectorBase for &mut (dyn CollectorBase $(+ $traits)* + 'a) {
+        impl<O> CollectorBase for &mut (dyn CollectorBase<Output = O> $(+ $traits)* + '_) {
             type Output = ();
 
             #[inline]
             fn finish(self) -> Self::Output {}
 
+            #[cfg(feature = "alloc")]
+            #[inline]
+            fn finish_boxed(self: Box<Self>) -> Self::Output {}
+
             #[inline]
             fn reserve(&mut self, additional: usize) {
-                <dyn CollectorBase>::reserve(self, additional)
+                <dyn CollectorBase<Output = O>>::reserve(*self, additional)
             }
 
             #[inline]
             fn max_afford(&self, request: usize) -> usize {
-                <dyn CollectorBase>::max_afford(self, request)
+                <dyn CollectorBase<Output = O>>::max_afford(*self, request)
             }
         }
 
-        impl<'a, T> CollectorBase for &mut (dyn super::Collector<T> $(+ $traits)* + 'a) {
+        impl<T, O> CollectorBase for &mut (dyn super::Collector<T, Output = O> $(+ $traits)* + '_) {
             type Output = ();
 
             #[inline]
             fn finish(self) -> Self::Output {}
 
+            #[cfg(feature = "alloc")]
+            #[inline]
+            fn finish_boxed(self: Box<Self>) -> Self::Output {}
+
             #[inline]
             fn reserve(&mut self, additional: usize) {
-                <dyn Collector<T>>::reserve(self, additional)
+                <dyn Collector<T, Output = O>>::reserve(*self, additional)
             }
 
             #[inline]
             fn max_afford(&self, request: usize) -> usize {
-                <dyn Collector<T>>::max_afford(self, request)
+                <dyn Collector<T, Output = O>>::max_afford(*self, request)
+            }
+        }
+
+        #[cfg(feature = "alloc")]
+        impl<O> CollectorBase for Box<dyn CollectorBase<Output = O> $(+ $traits)* + '_> {
+            type Output = O;
+
+            // Yes. This is the entire purpose of `finish_boxed`!
+            #[inline]
+            fn finish(self) -> Self::Output {
+                self.finish_boxed()
+            }
+
+            #[inline]
+            fn finish_boxed(self: Box<Self>) -> Self::Output {
+                (*self).finish_boxed()
+            }
+
+            #[inline]
+            fn reserve(&mut self, additional: usize) {
+                (**self).reserve(additional)
+            }
+
+            #[inline]
+            fn max_afford(&self, request: usize) -> usize {
+                (**self).max_afford(request)
+            }
+        }
+
+        #[cfg(feature = "alloc")]
+        impl<T, O> CollectorBase for Box<dyn Collector<T, Output = O> $(+ $traits)* + '_> {
+            type Output = O;
+
+            #[inline]
+            fn finish(self) -> Self::Output {
+                self.finish_boxed()
+            }
+
+            #[inline]
+            fn finish_boxed(self: Box<Self>) -> Self::Output {
+                (*self).finish_boxed()
+            }
+
+            #[inline]
+            fn reserve(&mut self, additional: usize) {
+                (**self).reserve(additional)
+            }
+
+            #[inline]
+            fn max_afford(&self, request: usize) -> usize {
+                (**self).max_afford(request)
             }
         }
     };
@@ -1632,7 +1755,7 @@ dyn_impl!(Sync);
 dyn_impl!(Send Sync);
 
 // `Output` shouldn't be required to be specified.
-fn _dyn_compatible(_: &mut dyn CollectorBase) {}
+fn _dyn_compatible<O>(_: &mut dyn CollectorBase<Output = O>) {}
 
 // You actually read this? So here's a workaround for issues
 // when you can't even name the type (e.g. closures, async blocks).

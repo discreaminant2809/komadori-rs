@@ -3,7 +3,7 @@ use std::{cmp::Ordering, ops::ControlFlow};
 use super::{MinBy, MinByKey, min_assign};
 
 use crate::{
-    collector::{Collector, CollectorBase, assert_collector},
+    collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},
     iter::Fold,
 };
 
@@ -87,6 +87,8 @@ impl<T> CollectorBase for Min<T> {
     fn finish(self) -> Self::Output {
         self.min
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<T: Ord> Collector<T> for Min<T> {

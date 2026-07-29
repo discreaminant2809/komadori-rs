@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, break_hint};
+use crate::collector::{Collector, CollectorBase, break_hint, finish_boxed_impl};
 
 /// A collector that skips the first collected items that satisfy a predicate
 /// before accumulating.
@@ -31,6 +31,8 @@ where
     fn finish(self) -> Self::Output {
         self.collector.finish()
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use itertools::MinMaxResult;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 use super::Comparator;
 
@@ -59,6 +59,8 @@ where
             State::MinMax { min, max, .. } => MinMaxResult::MinMax(min, max),
         }
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<T, Cmp> Collector<T> for MinMaxBase<T, Cmp>

@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt::Debug, ops::ControlFlow};
 
 use crate::{
-    collector::{Collector, CollectorBase, assert_collector},
+    collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},
     iter::Fold,
 };
 
@@ -61,6 +61,8 @@ impl<T, F> CollectorBase for MaxBy<T, F> {
     fn finish(self) -> Self::Output {
         self.max
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<T, F> Collector<T> for MaxBy<T, F>

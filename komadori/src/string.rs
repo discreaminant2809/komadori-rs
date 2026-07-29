@@ -15,7 +15,7 @@ use std::{borrow::Borrow, ops::ControlFlow};
 use alloc::string::String;
 
 use crate::{
-    collector::{Collector, CollectorBase},
+    collector::{Collector, CollectorBase, finish_boxed_impl},
     slice::{Concat, ConcatItem, ConcatItemSealed, ConcatSealed},
 };
 
@@ -79,6 +79,8 @@ impl CollectorBase for IntoCollector {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {
@@ -156,6 +158,8 @@ impl<'a> CollectorBase for CollectorMut<'a> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

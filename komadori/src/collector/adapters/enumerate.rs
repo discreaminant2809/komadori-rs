@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that feeds the underlying collector with the current count
 /// alongside with the item.
@@ -28,6 +28,8 @@ where
     fn finish(self) -> Self::Output {
         self.collector.finish()
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

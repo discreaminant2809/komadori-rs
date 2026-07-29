@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 /// A collector that searches for the first item satisfying a predicate.
 ///
@@ -75,6 +75,8 @@ impl<T, F> CollectorBase for Find<T, F> {
             None
         }
     }
+
+    finish_boxed_impl!();
 
     // Technically, we don't need to override it
     // since when this collector stops the method is useless anyway.

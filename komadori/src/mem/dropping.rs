@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that [`drops`](drop) every collected items.
 ///
@@ -33,6 +33,8 @@ impl CollectorBase for Dropping {
     type Output = ();
 
     fn finish(self) -> Self::Output {}
+
+    finish_boxed_impl!();
 }
 
 impl<T> Collector<T> for Dropping {

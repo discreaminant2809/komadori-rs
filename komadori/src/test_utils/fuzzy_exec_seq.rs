@@ -46,6 +46,7 @@ pub enum MiddleSeqNode {
 #[derive(Debug, Clone, Copy)]
 pub enum EndSeqNode {
     Finish,
+    FinishBoxed,
     CollectThenFinish,
 }
 
@@ -124,14 +125,15 @@ impl FuzzyExecSeqStrategy {
         } else if exccessive {
             EndSeqNode::Finish
         } else {
-            match rng.random_range(0..=2) {
+            match rng.random_range(0..=3) {
                 0 => EndSeqNode::Finish,
-                1 => EndSeqNode::CollectThenFinish,
-                2 => {
+                1 => EndSeqNode::FinishBoxed,
+                2 => EndSeqNode::CollectThenFinish,
+                3 => {
                     middles.push(MiddleSeqNode::CollectMany { n: self.n / 3 });
                     EndSeqNode::Finish
                 }
-                _ => unreachable!("impossible random value for 0..=2 range"),
+                _ => unreachable!("impossible random value for 0..=3 range"),
             }
         };
 

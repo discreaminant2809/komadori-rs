@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 use super::raw_all_any::RawAllAny;
 
@@ -74,6 +74,8 @@ impl<F> CollectorBase for Any<F> {
     fn finish(self) -> Self::Output {
         self.inner.get()
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn max_afford(&self, request: usize) -> usize {

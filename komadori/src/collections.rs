@@ -18,7 +18,7 @@ pub mod vec_deque;
 
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase, IntoCollectorBase};
+use crate::collector::{Collector, CollectorBase, IntoCollectorBase, finish_boxed_impl};
 
 #[cfg(feature = "std")]
 use std::{
@@ -88,6 +88,8 @@ macro_rules! collector_impl {
             fn finish(self) -> Self::Output {
                 self.0
             }
+
+            finish_boxed_impl!();
 
             #[inline]
             fn reserve(&mut self, additional: usize) {
@@ -197,6 +199,8 @@ macro_rules! collector_impl {
             fn finish(self) -> Self::Output {
                 self.0
             }
+
+            finish_boxed_impl!();
 
             #[inline]
             fn reserve(&mut self, additional: usize) {

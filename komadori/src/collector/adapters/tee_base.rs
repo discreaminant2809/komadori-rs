@@ -2,6 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::collector::{
     Collector, CollectorBase, Fuse, advanced_collect_many_default_impl, and_break,
+    finish_boxed_impl,
 };
 
 #[derive(Debug, Clone)]
@@ -81,6 +82,8 @@ where
     fn finish(self) -> Self::Output {
         (self.collector1.finish(), self.collector2.finish())
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

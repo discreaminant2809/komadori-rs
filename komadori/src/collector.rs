@@ -162,6 +162,16 @@
 //!   })
 //!   ```
 //!
+//! # Semver guarantee
+//!
+//! Implementations of collector traits for `&mut C` and `Box<C>`
+//! (where [`C: CollectorBase + ?Sized`](CollectorBase))
+//! are reserved by this crate, even though it appears that this crate does not
+//! implement all possible collector types as of now.
+//! The future addition of such implementations will **not** be considered a breaking change.
+//! Therefore, you should avoid implementing collector traits for `&mut C` and `Box<C>`.
+//! Instead, wrap them in a new type.
+//!
 //! # Examples
 //!
 //! Suppose we are building a tokenizer to process text for an NLP model.
@@ -194,6 +204,11 @@
 //!     fn finish(self) -> Self::Output {
 //!         // Just return itself.
 //!         self
+//!     }
+//!
+//!     // As for now, we must manually implement it.
+//!     fn finish_boxed(self: Box<Self>) -> Self::Output {
+//!         (*self).finish()
 //!     }
 //! }
 //!
@@ -309,3 +324,32 @@ fn advanced_collect_many_default_impl<T>(
 
     items.try_for_each(|item| collector.collect(item))
 }
+
+/// The canonical, must-be, implementation is just to forward to `finish()`.
+/// This handles feature combinations as well.
+///
+/// `finish_boxed_impl! {}`
+macro_rules! finish_boxed_impl {
+    () => {
+        cfg_select! {
+            feature = "std" => {
+                #[inline]
+                fn finish_boxed(self: ::std::boxed::Box<Self>) -> Self::Output {
+                    (*self).finish()
+                }
+            }
+
+            feature = "alloc" => {
+                #[inline]
+                fn finish_boxed(self: ::alloc::boxed::Box<Self>) -> Self::Output {
+                    (*self).finish()
+                }
+            }
+
+            _ => {
+                // Nothing. This method does not exist without allocation.
+            }
+        }
+    };
+}
+pub(crate) use finish_boxed_impl;

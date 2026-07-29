@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 use super::{Min, ValueKey};
 
@@ -64,6 +64,8 @@ impl<T, K, F> CollectorBase for MinByKey<T, K, F> {
     fn finish(self) -> Self::Output {
         self.value_key_collector.finish().map(ValueKey::into_value)
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<T, K, F> Collector<T> for MinByKey<T, K, F>

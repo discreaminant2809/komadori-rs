@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 use super::{IsSortedBase, IsSortedStore};
 
@@ -75,6 +75,8 @@ impl<T> CollectorBase for IsSorted<T> {
     fn finish(self) -> Self::Output {
         self.base.finish()
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<T> Collector<T> for IsSorted<T>

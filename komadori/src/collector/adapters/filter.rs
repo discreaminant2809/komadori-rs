@@ -1,4 +1,4 @@
-use crate::collector::{Collector, CollectorBase, break_hint};
+use crate::collector::{Collector, CollectorBase, break_hint, finish_boxed_impl};
 
 use std::{fmt::Debug, ops::ControlFlow};
 
@@ -27,6 +27,8 @@ where
     fn finish(self) -> Self::Output {
         self.collector.finish()
     }
+
+    finish_boxed_impl!();
 
     // We don't know how many exactly to reserve.
 

@@ -9,7 +9,7 @@ use std::{
     sync::mpsc::{Sender, SyncSender},
 };
 
-use crate::collector::CollectorBase;
+use crate::collector::{CollectorBase, finish_boxed_impl};
 
 /// A collector that sends items through a [`std::sync::mpsc::channel()`].
 /// Its [`Output`](CollectorBase::Output) is [`Sender`].
@@ -225,6 +225,8 @@ impl<T> CollectorBase for IntoCollector<T> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 }
 
 impl<T> crate::collector::Collector<T> for IntoCollector<T> {
@@ -257,6 +259,8 @@ impl<'a, T> CollectorBase for Collector<'a, T> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 }
 
 impl<'a, T> crate::collector::Collector<T> for Collector<'a, T> {
@@ -289,6 +293,8 @@ impl<T> CollectorBase for IntoSyncCollector<T> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 }
 
 impl<T> crate::collector::Collector<T> for IntoSyncCollector<T> {
@@ -321,6 +327,8 @@ impl<'a, T> CollectorBase for SyncCollector<'a, T> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 }
 
 impl<'a, T> crate::collector::Collector<T> for SyncCollector<'a, T> {

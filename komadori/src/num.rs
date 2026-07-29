@@ -10,7 +10,7 @@ use std::num::Saturating;
 use std::{num::Wrapping, ops::ControlFlow};
 
 use crate::{
-    collector::{Collector, CollectorBase, assert_collector},
+    collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},
     ops,
 };
 
@@ -107,6 +107,8 @@ macro_rules! prim_adding_impl {
             fn finish(self) -> Self::Output {
                 self.0
             }
+
+            finish_boxed_impl!();
         }
 
         impl Collector<$pri_ty> for IntoSum<$pri_ty> {
@@ -223,6 +225,8 @@ macro_rules! prim_muling_impl {
             fn finish(self) -> Self::Output {
                 self.0
             }
+
+            finish_boxed_impl!();
         }
 
         impl Collector<$pri_ty> for IntoProduct<$pri_ty> {
@@ -362,6 +366,8 @@ macro_rules! unsigned_saturating_add_impl {
             fn finish(self) -> Self::Output {
                 self.0
             }
+
+            finish_boxed_impl!();
 
             #[inline]
             fn max_afford(&self, request: usize) -> usize {

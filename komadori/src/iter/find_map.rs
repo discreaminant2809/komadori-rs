@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 use super::Find;
 
@@ -77,6 +77,8 @@ impl<P, R> CollectorBase for FindMap<P, R> {
             None
         }
     }
+
+    finish_boxed_impl!();
 
     // Technically, we don't need to override it
     // since when this collector stops the method is useless anyway.

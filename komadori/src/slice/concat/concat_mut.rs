@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 use super::ConcatItem;
 
@@ -27,6 +27,8 @@ impl<'a, S> CollectorBase for ConcatMut<'a, S> {
     fn finish(self) -> Self::Output {
         self.owned_slice
     }
+
+    finish_boxed_impl!();
 }
 
 impl<'a, S, T> Collector<T> for ConcatMut<'a, S>

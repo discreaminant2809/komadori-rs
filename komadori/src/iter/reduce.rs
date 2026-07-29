@@ -1,4 +1,4 @@
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 use std::{fmt::Debug, ops::ControlFlow};
 
@@ -57,6 +57,8 @@ impl<T, F> CollectorBase for Reduce<T, F> {
     fn finish(self) -> Self::Output {
         self.accum
     }
+
+    finish_boxed_impl!();
 }
 
 impl<T, F> Collector<T> for Reduce<T, F>

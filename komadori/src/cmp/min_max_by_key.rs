@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::ControlFlow};
 
 use itertools::MinMaxResult;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 use super::{MinMax, ValueKey};
 
@@ -75,6 +75,8 @@ where
         let res = self.base.finish();
         unwrap_min_max_res(res)
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<T, K, F> Collector<T> for MinMaxByKey<T, K, F>
