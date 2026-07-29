@@ -1,7 +1,5 @@
 use super::{CollectorBase, break_hint};
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::boxed::Box;
 use std::ops::ControlFlow;
 
 /// Defines what item types are accepted and how items are collected.
@@ -220,105 +218,6 @@ pub trait Collector<T>: CollectorBase {
     //     assert_collector::<_, &mut U>(Map::new(self, f))
     // }
 }
-
-/// A mutable reference to a collect produce nothing.
-///
-/// This is useful when you *just* want to feed items to a collector without
-/// finishing it.
-impl<C, T> Collector<T> for &mut C
-where
-    C: Collector<T>,
-{
-    #[inline]
-    fn collect(&mut self, item: T) -> ControlFlow<()> {
-        C::collect(self, item)
-    }
-
-    #[inline]
-    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
-        unsafe {
-            // SAFETY: The caller has reserved for one item.
-            C::assume_reserved_collect(self, item)
-        }
-    }
-
-    #[inline]
-    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        // FIXED: specialization for unsized type.
-        // We can't add `?Sized` to the bound of `C` because this method requires `Sized`.
-        C::collect_many(self, items)
-    }
-
-    // The default implementation for `collect_then_finish()` is sufficient.
-}
-
-#[cfg(feature = "alloc")]
-impl<C, T> Collector<T> for Box<C>
-where
-    C: Collector<T>,
-{
-    #[inline]
-    fn collect(&mut self, item: T) -> ControlFlow<()> {
-        C::collect(self, item)
-    }
-
-    #[inline]
-    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
-        unsafe {
-            // SAFETY: The caller has reserved for one item.
-            C::assume_reserved_collect(self, item)
-        }
-    }
-
-    #[inline]
-    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        // FIXED: specialization for unsized type.
-        // We can't add `?Sized` to the bound of `C` because this method requires `Sized`.
-        C::collect_many(self, items)
-    }
-
-    // The default implementation for `collect_then_finish()` is sufficient.
-}
-
-macro_rules! dyn_impl {
-    ($($traits:ident)*) => {
-        impl<T, O> Collector<T> for &mut (dyn Collector<T, Output = O> $(+ $traits)* + '_) {
-            #[inline]
-            fn collect(&mut self, item: T) -> ControlFlow<()> {
-                (**self).collect(item)
-            }
-
-            #[inline]
-            unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
-                unsafe {
-                    // SAFETY: The caller has reserved for one item.
-                    (**self).assume_reserved_collect(item)
-                }
-            }
-        }
-
-        #[cfg(feature = "alloc")]
-        impl<T, O> Collector<T> for Box<dyn Collector<T, Output = O> $(+ $traits)* + '_> {
-            #[inline]
-            fn collect(&mut self, item: T) -> ControlFlow<()> {
-                (**self).collect(item)
-            }
-
-            #[inline]
-            unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
-                unsafe {
-                    // SAFETY: The caller has reserved for one item.
-                    (**self).assume_reserved_collect(item)
-                }
-            }
-        }
-    };
-}
-
-dyn_impl!();
-dyn_impl!(Send);
-dyn_impl!(Sync);
-dyn_impl!(Send Sync);
 
 // `Output` shouldn't be required to be specified.
 fn _dyn_compatible<T, O>(_: &mut dyn Collector<T, Output = O>) {}

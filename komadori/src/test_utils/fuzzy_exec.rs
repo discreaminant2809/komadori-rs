@@ -50,7 +50,7 @@ pub fn fuzzy_execute<T, C, EO, S>(
     seq: &FuzzyExecSeq,
 
     mut model: CollectorModel<S, impl FnMut(&mut S, T), impl FnMut(&S, usize) -> usize>,
-) -> Result<(), TestCaseError>
+) -> Result<EO, TestCaseError>
 where
     T: Debug,
     EO: Debug,
@@ -230,7 +230,7 @@ where
         "mismatched output: expected {expected_output:?}, got {actual_output:?}"
     );
 
-    Ok(())
+    Ok(expected_output)
 }
 
 fn mismatch_after_step_error(

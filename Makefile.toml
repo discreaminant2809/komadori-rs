@@ -22,6 +22,11 @@ args = ["run", "nightly", "cargo", "doc", "--all-features", "--no-deps"]
 [tasks.check]
 env = { RUSTFLAGS="-D warnings" }
 command = "cargo"
+args = ["hack", "check", "--feature-powerset", "--all-targets"]
+
+[tasks.lint]
+env = { RUSTFLAGS="-D warnings" }
+command = "cargo"
 args = ["hack", "clippy", "--feature-powerset", "--all-targets"]
 
 [tasks.tree]

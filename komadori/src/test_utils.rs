@@ -86,7 +86,7 @@ macro_rules! collector_test {
                     count,
                 );
 
-                $crate::test_utils::fuzzy_execute(
+                let _ = $crate::test_utils::fuzzy_execute(
                     $iter_base,
                     $iter_for_model,
 
@@ -119,5 +119,7 @@ pub mod prelude {
     pub use crate::prelude::*;
 
     pub(crate) use super::collector_test;
-    pub use super::{CollectorModel, theo_inf_collector_model};
+    pub use super::{
+        CollectorModel, FuzzyExecSeqStrategy, fuzzy_execute, theo_inf_collector_model,
+    };
 }
