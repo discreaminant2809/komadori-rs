@@ -243,8 +243,6 @@ extern crate core as std;
 
 // #[cfg(feature = "unstable")]
 // pub mod aggregate;
-// #[cfg(feature = "alloc")]
-// pub mod boxed;
 pub mod cmp;
 #[cfg(feature = "alloc")]
 pub mod collections;
@@ -263,6 +261,9 @@ pub mod unit;
 #[cfg(feature = "alloc")]
 pub mod vec;
 
+#[cfg(feature = "alloc")]
+mod boxed;
+mod reference;
 #[cfg(all(test, feature = "std"))]
 mod test_utils;
 

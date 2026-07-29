@@ -83,7 +83,7 @@ use tee_base::*;
 use crate::test_utils::CollectorModel;
 
 #[cfg(all(test, feature = "std"))]
-fn take_collector_model<T>(
+pub(crate) fn take_collector_model<T>(
     n: usize,
 ) -> CollectorModel<usize, impl FnMut(&mut usize, T), impl FnMut(&usize, usize) -> usize> {
     CollectorModel {
