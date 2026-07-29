@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase, Fuse, break_hint};
+use crate::collector::{Collector, CollectorBase, Fuse, break_hint, finish_boxed_impl};
 
 /// A collector that feeds the first collector until it stop accumulating,
 /// then feeds the second collector.
@@ -39,6 +39,8 @@ where
     fn finish(self) -> Self::Output {
         (self.collector1.finish(), self.collector2.finish())
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {
@@ -166,6 +168,8 @@ mod proptests {
 
 #[cfg(all(test, feature = "alloc"))]
 mod miri_tests {
+    use crate::collector::finish_boxed_impl;
+
     #[test]
     fn lying_first_collector() {
         use crate::prelude::*;
@@ -182,6 +186,8 @@ mod miri_tests {
             type Output = ();
 
             fn finish(self) -> Self::Output {}
+
+            finish_boxed_impl!();
 
             fn max_afford(&self, request: usize) -> usize {
                 self.0.get().min(request)

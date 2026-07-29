@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 use super::ConcatItem;
 
@@ -27,6 +27,8 @@ impl<S> CollectorBase for IntoConcat<S> {
     fn finish(self) -> Self::Output {
         self.owned_slice
     }
+
+    finish_boxed_impl!();
 }
 
 impl<S, T> Collector<T> for IntoConcat<S>

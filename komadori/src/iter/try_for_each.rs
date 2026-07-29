@@ -1,7 +1,7 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
 use crate::{
-    collector::{Collector, CollectorBase, assert_collector},
+    collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},
     ops::Try,
 };
 
@@ -130,6 +130,8 @@ where
             ControlFlow::Break(residual) => A::from_residual(residual),
         }
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn max_afford(&self, request: usize) -> usize {

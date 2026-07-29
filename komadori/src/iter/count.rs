@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector_base};
+use crate::collector::{Collector, CollectorBase, assert_collector_base, finish_boxed_impl};
 
 /// A collector that counts the number of items it collects.
 ///
@@ -54,6 +54,8 @@ impl CollectorBase for Count {
     fn finish(self) -> usize {
         self.count
     }
+
+    finish_boxed_impl!();
 }
 
 impl<T> Collector<T> for Count {

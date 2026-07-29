@@ -5,6 +5,7 @@
 ### Added
 
 - Reserve API.
+- Support for `CollectorBase::Output` in trait objects.
 
 ### Fixed
 

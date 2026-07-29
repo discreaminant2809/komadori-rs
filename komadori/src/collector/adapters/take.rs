@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that stops accumulating after collecting the first `n` items.
 ///
@@ -31,6 +31,8 @@ where
     fn finish(self) -> Self::Output {
         self.collector.finish()
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

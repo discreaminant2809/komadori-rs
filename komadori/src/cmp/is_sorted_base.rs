@@ -3,7 +3,7 @@ use std::{
     ops::ControlFlow,
 };
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 #[derive(Clone)]
 pub struct IsSortedBase<T, S> {
@@ -81,6 +81,8 @@ impl<K, S> CollectorBase for IsSortedBase<K, S> {
     fn finish(self) -> Self::Output {
         matches!(self.state, State::StillSorted { .. })
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<T, K, S> Collector<T> for IsSortedBase<K, S>

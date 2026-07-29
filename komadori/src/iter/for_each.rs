@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 /// A collector that calls a provided closure for each collected item.
 ///
@@ -41,6 +41,8 @@ impl<F> CollectorBase for ForEach<F> {
 
     #[inline]
     fn finish(self) -> Self::Output {}
+
+    finish_boxed_impl!();
 }
 
 impl<F, T> Collector<T> for ForEach<F>

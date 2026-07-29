@@ -1,4 +1,4 @@
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 use std::ops::ControlFlow;
 
@@ -24,6 +24,8 @@ where
     fn finish(self) -> Self::Output {
         self.0.finish()
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

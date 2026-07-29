@@ -207,7 +207,8 @@ where
             // Keep the iterator for the overreaching check.
             collector.collect_then_finish(&mut iter_for_collector)
         }
-        _ => collector.finish(),
+        (_, EndSeqNode::Finish | EndSeqNode::CollectThenFinish) => collector.finish(),
+        (_, EndSeqNode::FinishBoxed) => Box::new(collector).finish_boxed(),
     };
     if iter_for_collector.overreached() {
         return Err(TestCaseError::Fail(Reason::from(

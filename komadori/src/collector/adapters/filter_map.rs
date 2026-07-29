@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, break_hint};
+use crate::collector::{Collector, CollectorBase, break_hint, finish_boxed_impl};
 
 /// A collector that both filters and maps each item before collecting.
 ///
@@ -28,6 +28,8 @@ where
     fn finish(self) -> Self::Output {
         self.collector.finish()
     }
+
+    finish_boxed_impl!();
 
     // We don't know how many exactly to reserve.
 

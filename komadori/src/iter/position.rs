@@ -1,9 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::{
-    collector::assert_collector,
-    collector::{Collector, CollectorBase},
-};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 /// A collector that outputs the n-th item (0-based) satisfying a predicate.
 ///
@@ -70,6 +67,8 @@ impl<P> CollectorBase for Position<P> {
     fn finish(self) -> Self::Output {
         self.pred.is_none().then_some(self.idx)
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn max_afford(&self, request: usize) -> usize {

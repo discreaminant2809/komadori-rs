@@ -1,6 +1,8 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, IntoCollector, IntoCollectorBase};
+use crate::collector::{
+    Collector, CollectorBase, IntoCollector, IntoCollectorBase, finish_boxed_impl,
+};
 
 /// A collector that feeds every item in the first collector until it stops accumulating,
 /// then creates a second collector from the output of the first collector
@@ -91,6 +93,8 @@ where
             State::Second { collector } => collector.finish(),
         }
     }
+
+    finish_boxed_impl!();
 
     fn reserve(&mut self, additional: usize) {
         match &mut self.state {

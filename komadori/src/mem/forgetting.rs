@@ -1,6 +1,6 @@
 use std::{fmt::Debug, mem::forget, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that "[forgets](forget)" every item it collects.
 ///
@@ -34,6 +34,8 @@ impl CollectorBase for Forgetting {
     type Output = ();
 
     fn finish(self) -> Self::Output {}
+
+    finish_boxed_impl!();
 }
 
 impl<T> Collector<T> for Forgetting {

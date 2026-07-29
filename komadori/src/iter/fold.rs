@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, assert_collector};
+use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
 /// A collector that accumulates items using a function.
 ///
@@ -43,6 +43,8 @@ impl<A, F> CollectorBase for Fold<A, F> {
     fn finish(self) -> Self::Output {
         self.accum
     }
+
+    finish_boxed_impl!();
 }
 
 impl<A, T, F> Collector<T> for Fold<A, F>

@@ -3,7 +3,7 @@
 //! This module corresponds to [`mod@std::vec`].
 
 use crate::{
-    collector::{Collector, CollectorBase},
+    collector::{Collector, CollectorBase, finish_boxed_impl},
     slice::{Concat, ConcatItem, ConcatItemSealed, ConcatSealed},
 };
 
@@ -59,6 +59,8 @@ impl<T> CollectorBase for IntoCollector<T> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {
@@ -169,6 +171,8 @@ impl<'a, T> CollectorBase for CollectorMut<'a, T> {
     fn finish(self) -> Self::Output {
         self.0
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

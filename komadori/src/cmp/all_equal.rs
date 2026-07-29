@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use itertools::Itertools;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that determines whether all collected items are equal to each other.
 ///
@@ -41,6 +41,8 @@ impl<T> CollectorBase for AllEqual<T> {
     fn finish(self) -> Self::Output {
         matches!(self.state, State::StillEqual { .. })
     }
+
+    finish_boxed_impl! {}
 
     fn max_afford(&self, request: usize) -> usize {
         if matches!(self.state, State::StillEqual { .. }) {

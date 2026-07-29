@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that transforms the final accumulated result.
 ///
@@ -28,6 +28,8 @@ where
     fn finish(self) -> Self::Output {
         (self.f)(self.collector.finish())
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

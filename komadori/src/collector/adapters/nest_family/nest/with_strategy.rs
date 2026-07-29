@@ -3,7 +3,7 @@ use std::{
     ops::ControlFlow,
 };
 
-use crate::collector::{Collector, CollectorBase, Fuse, break_hint};
+use crate::collector::{Collector, CollectorBase, Fuse, break_hint, finish_boxed_impl};
 
 use super::super::strategy::{Strategy, StrategyBase};
 
@@ -55,6 +55,8 @@ where
 
         self.outer.finish()
     }
+
+    finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {

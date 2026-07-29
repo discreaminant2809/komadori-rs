@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that flattens items by one level of nesting before collecting.
 ///
@@ -26,6 +26,8 @@ where
     fn finish(self) -> Self::Output {
         self.collector.finish()
     }
+
+    finish_boxed_impl!();
 
     // We don't know how many exactly to reserve.
 
