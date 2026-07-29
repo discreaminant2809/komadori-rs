@@ -6,6 +6,7 @@
 
 - Reserve API.
 - Support for `CollectorBase::Output` in trait objects.
+- Collector implementations for tuples from 1-ary to 12-ary.
 
 ### Fixed
 

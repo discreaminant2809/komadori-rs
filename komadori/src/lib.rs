@@ -257,6 +257,7 @@ pub mod slice;
 pub mod string;
 #[cfg(feature = "std")]
 pub mod sync;
+pub mod tuple;
 pub mod unit;
 #[cfg(feature = "alloc")]
 pub mod vec;

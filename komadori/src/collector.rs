@@ -297,7 +297,7 @@ fn and_break(cf1: ControlFlow<()>, cf2: ControlFlow<()>) -> ControlFlow<()> {
 }
 
 #[inline]
-fn advanced_collect_many_default_impl<T>(
+pub(crate) fn advanced_collect_many_default_impl<T>(
     collector: &mut impl Collector<T>,
     items: impl IntoIterator<Item = T>,
 ) -> ControlFlow<()> {
