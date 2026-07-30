@@ -2,16 +2,13 @@
 use alloc::boxed::Box;
 use std::ops::ControlFlow;
 
-// #[cfg(feature = "itertools")]
-// use itertools::Either;
-
 #[cfg(feature = "itertools")]
 use super::Update;
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
-    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Skip, SkipWhile, Take, TakeWhile, Tee,
-    TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching, Unzip, assert_collector,
-    assert_collector_base,
+    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip, SkipWhile, Take,
+    TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching, Unzip,
+    assert_collector, assert_collector_base,
 };
 #[cfg(feature = "unstable")]
 use super::{Funnel, Nest, NestExact, Then};
@@ -856,33 +853,41 @@ pub trait CollectorBase {
 
     // fn step_by()
 
-    // /// Creates a collector that distributes items between two collectors based on a predicate.
-    // ///
-    // /// Items for which the predicate returns `true` are sent to the first collector,
-    // /// and those for which it returns `false` go to the second collector.
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // /// use komadori::prelude::*;
-    // ///
-    // /// let collector = vec![]
-    // ///     .into_collector()
-    // ///     .partition(|&mut x| x % 2 == 0, vec![]);
-    // /// let (evens, odds) = collector.collect_then_finish(-5..5);
-    // ///
-    // /// assert_eq!(evens, [-4, -2, 0, 2, 4]);
-    // /// assert_eq!(odds, [-5, -3, -1, 1, 3]);
-    // /// ```
-    // #[inline]
-    // fn partition<C, F, T>(self, pred: F, other_if_false: C) -> Partition<Self, C::IntoCollector, F>
-    // where
-    //     Self: Collector<T> + Sized,
-    //     C: IntoCollector<T>,
-    //     F: FnMut(&mut T) -> bool,
-    // {
-    //     assert_collector::<_, T>(Partition::new(self, other_if_false.into_collector(), pred))
-    // }
+    /// Creates a collector that distributes items between two collectors based on
+    /// whether an item is "left" or "right."
+    ///
+    /// Items in [`Either::Left`] go to the first collector,
+    /// and items in [`Either::Right`] go to the second collector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::{prelude::*, either::Either};
+    ///
+    /// let collector = vec![]
+    ///     .into_collector()
+    ///     .partition(vec![])
+    ///     .map(|x| if x % 2 == 0 {
+    ///         Either::Left(x)
+    ///     } else {
+    ///         Either::Right(x)
+    ///     });
+    /// let (evens, odds) = collector.collect_then_finish(-5..5);
+    ///
+    /// assert_eq!(evens, [-4, -2, 0, 2, 4]);
+    /// assert_eq!(odds, [-5, -3, -1, 1, 3]);
+    /// ```
+    ///
+    /// [`Either::Left`]: crate::either::Either::Left
+    /// [`Either::Right`]: crate::either::Either::Right
+    #[inline]
+    fn partition<R>(self, right: R) -> Partition<Self, R::IntoCollector>
+    where
+        Self: Sized,
+        R: IntoCollectorBase,
+    {
+        assert_collector_base(Partition::new(self, right.into_collector()))
+    }
 
     // /// Creates a collector that lets both collectors collect the same item.
     // ///

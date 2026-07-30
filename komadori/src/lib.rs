@@ -247,6 +247,7 @@ pub mod cmp;
 #[cfg(feature = "alloc")]
 pub mod collections;
 pub mod collector;
+pub mod either;
 pub mod iter;
 pub mod mem;
 pub mod num;
