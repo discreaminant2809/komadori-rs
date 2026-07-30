@@ -46,7 +46,7 @@ mod t_binder {
 }
 
 pub(super) trait Teer<T>: for<'a> DefinePassDown<'a, T> {
-    const ITEM_IS_COPY: bool = false;
+    const TEE_CHEAP: bool = false;
 
     fn pass_down<'a>(&mut self, item: &'a mut T) -> <Self as DefinePassDown<'a, T>>::PassDown;
 
@@ -109,7 +109,7 @@ where
 {
     #[inline]
     fn collect(&mut self, mut item: T) -> ControlFlow<()> {
-        if TF::ITEM_IS_COPY {
+        if TF::TEE_CHEAP {
             let cf1 = self.collector1.collect(self.teer.pass_down(&mut item));
             let cf2 = self.collector2.collect(item);
             and_break(cf1, cf2)
@@ -127,7 +127,7 @@ where
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, mut item: T) -> ControlFlow<()> {
         unsafe {
-            if TF::ITEM_IS_COPY {
+            if TF::TEE_CHEAP {
                 let cf1 = self
                     .collector1
                     .assume_reserved_collect(self.teer.pass_down(&mut item));

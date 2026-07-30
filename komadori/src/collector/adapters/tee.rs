@@ -92,7 +92,7 @@ impl<T> Teer<T> for CopyTeer
 where
     T: Copy,
 {
-    const ITEM_IS_COPY: bool = true;
+    const TEE_CHEAP: bool = true;
 
     #[inline]
     fn pass_down(&mut self, item: &mut T) -> T {

@@ -85,6 +85,8 @@ impl<'a, T> DefinePassDown<'a, T> for FunnelTeer {
 }
 
 impl<T> Teer<T> for FunnelTeer {
+    const TEE_CHEAP: bool = true;
+
     #[inline]
     fn pass_down<'a>(&mut self, item: &'a mut T) -> &'a mut T {
         item
