@@ -69,7 +69,7 @@ required-features = ["unstable"]
 harness = false
 
 [[bench]]
-name = "max_doubles"
+name = "sum_doubles"
 required-features = ["alloc"]
 harness = false
 

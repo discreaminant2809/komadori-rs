@@ -94,12 +94,21 @@ impl<T> CollectorBase for Min<T> {
 impl<T: Ord> Collector<T> for Min<T> {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        // Somehow it yields a little bit codegen!
-        // For now max-vec benefits from it.
-        self.min = Some(match self.min.take() {
-            None => item,
-            Some(min) => min.min(item),
-        });
+        if const { std::mem::size_of::<T>() <= 64 } {
+            // Somehow it yields a little bit codegen (e.g. vectorization)!
+            // For now, min-vec benefits from it.
+            // However, for very large item types, this may become a `memcpy` fest,
+            // so we check the size first.
+            self.min = Some(match self.min.take() {
+                None => item,
+                Some(min) => min.min(item),
+            });
+        } else {
+            match &mut self.min {
+                min @ None => *min = Some(item),
+                Some(min) => min_assign(min, item),
+            }
+        }
 
         ControlFlow::Continue(())
     }
