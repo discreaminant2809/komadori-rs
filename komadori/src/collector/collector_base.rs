@@ -889,37 +889,6 @@ pub trait CollectorBase {
         assert_collector_base(Partition::new(self, right.into_collector()))
     }
 
-    // /// Creates a collector that lets both collectors collect the same item.
-    // ///
-    // /// For each item collected, the first collector collects the item
-    // /// mapped by a given closure before the second collector collects it.
-    // /// If the second collector stops accumulating, the item will **not**
-    // /// be mapped, and instead is fed directly into the first collector.
-    // ///
-    // /// `tee_with()` only stops when **both** collectors have stopped.
-    // ///
-    // /// If the item type of this adapter is `T`, the first collector must implement
-    // /// [`Collector<T>`](super::Collector) and [`Collector<U>`](super::Collector),
-    // /// and the second collector must implement [`Collector<T>`](super::Collector).
-    // /// Since many collectors do not collect two or more types of items,
-    // /// `U` is effectively also `T` in this case.
-    // ///
-    // /// The [`Output`](CollectorBase::Output) is a tuple containing the outputs of
-    // /// both underlying collectors, in order.
-    // ///
-    // /// See the [module-level documentation](crate::collector) for
-    // /// when this adapter is used and other variants of `tee` adapters.
-    // #[inline]
-    // #[cfg(feature = "unstable")]
-    // fn tee_with<C, F, T, U>(self, f: F, other: C) -> TeeWith<Self, C::IntoCollector, F>
-    // where
-    //     Self: Collector<T> + Collector<U> + Sized,
-    //     C: IntoCollector<T>,
-    //     F: FnMut(&mut T) -> U,
-    // {
-    //     assert_collector::<_, T>(TeeWith::new(self, other.into_collector(), f))
-    // }
-
     /// Creates a collector with a custom collection logic.
     ///
     /// This adaptor is useful for behaviors that cannot be expressed
@@ -965,42 +934,6 @@ pub trait CollectorBase {
     {
         assert_collector_base(Unbatching::new(self, f))
     }
-
-    // ///
-    // #[inline]
-    // fn map_ref_ref<F, T, U>(self, f: F) -> Map<Self, F>
-    // where
-    //     Self: for<'a> Collector<&'a T> + Sized,
-    //     F: FnMut(&U) -> &T,
-    //     T: ?Sized,
-    //     U: ?Sized,
-    // {
-    //     assert_collector::<_, &U>(Map::new(self, f))
-    // }
-
-    // ///
-    // #[inline]
-    // fn map_mut_ref<F, T, U>(self, f: F) -> Map<Self, F>
-    // where
-    //     Self: for<'a> Collector<&'a T> + Sized,
-    //     F: FnMut(&mut U) -> &T,
-    //     T: ?Sized,
-    //     U: ?Sized,
-    // {
-    //     assert_collector::<_, &mut U>(Map::new(self, f))
-    // }
-
-    // ///
-    // #[inline]
-    // fn map_mut_mut<F, T, U>(self, f: F) -> Map<Self, F>
-    // where
-    //     Self: for<'a> Collector<&'a mut T> + Sized,
-    //     F: FnMut(&mut U) -> &mut T,
-    //     T: ?Sized,
-    //     U: ?Sized,
-    // {
-    //     assert_collector::<_, &mut U>(Map::new(self, f))
-    // }
 
     /// A collector that flattens items by one level of nesting before collecting.
     ///
@@ -1380,44 +1313,6 @@ pub trait CollectorBase {
     {
         TryingResults::new(self)
     }
-
-    // /// Creates a collector that distributes items between two collectors based on a predicate.
-    // ///
-    // /// Items for which the predicate returns [`Either::Left`] go to the first collector,
-    // /// and those for which it returns [`Either::Right`] go to the second collector.
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // /// use komadori::prelude::*;
-    // ///
-    // /// let mut collector = vec![]
-    // ///     .into_collector()
-    // ///     .partition_map(From::from, vec![]);
-    // ///
-    // /// assert!(collector.collect(Ok(1)).is_continue());
-    // /// assert!(collector.collect(Err("Error")).is_continue());
-    // /// assert!(collector.collect(Ok(2)).is_continue());
-    // ///
-    // /// let (errs, oks) = collector.finish();
-    // ///
-    // /// assert_eq!(oks, [1, 2]);
-    // /// assert_eq!(errs, ["Error"]);
-    // /// ```
-    // #[cfg(feature = "itertools")]
-    // #[inline]
-    // fn partition_map<C, F, T, L, R>(
-    //     self,
-    //     pred: F,
-    //     collector_right: C,
-    // ) -> PartitionMap<Self, C::IntoCollector, F>
-    // where
-    //     Self: Collector<L> + Sized,
-    //     C: IntoCollector<R>,
-    //     F: FnMut(T) -> Either<L, R>,
-    // {
-    //     PartitionMap::new(self, collector_right.into_collector(), pred)
-    // }
 
     /// Creates a collector that mutates each item first before collecting.
     ///

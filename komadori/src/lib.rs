@@ -241,8 +241,6 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 extern crate core as std;
 
-// #[cfg(feature = "unstable")]
-// pub mod aggregate;
 pub mod cmp;
 #[cfg(feature = "alloc")]
 pub mod collections;
