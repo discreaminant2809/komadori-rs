@@ -94,12 +94,21 @@ impl<T> CollectorBase for Max<T> {
 impl<T: Ord> Collector<T> for Max<T> {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        // Somehow it yields a little bit codegen!
-        // For now max-vec benefits from it.
-        self.max = Some(match self.max.take() {
-            None => item,
-            Some(max) => max.max(item),
-        });
+        if const { std::mem::size_of::<T>() <= 64 } {
+            // Somehow it yields a little bit codegen (e.g. vectorization)!
+            // For now, max-vec benefits from it.
+            // However, for very large item types, this may become a `memcpy` fest,
+            // so we check the size first.
+            self.max = Some(match self.max.take() {
+                None => item,
+                Some(max) => max.max(item),
+            });
+        } else {
+            match &mut self.max {
+                max @ None => *max = Some(item),
+                Some(max) => max_assign(max, item),
+            }
+        }
 
         ControlFlow::Continue(())
     }
