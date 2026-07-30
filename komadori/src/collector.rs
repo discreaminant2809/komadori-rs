@@ -120,9 +120,14 @@
 //! When you call [`reserve(additional)`](CollectorBase::reserve) on a collector,
 //! the amount of items that collector reserves for is set (**not** "gained" or "added")
 //! to `additional`. A call to [`collect()`] or [`assume_reserved_collect()`]
-//! reduced the reserved amount by `1`, and a call to [`collect_many()`] reset
-//! the reserved amount to `0`. This is tracked conceptually, so you may
-//! have to track outside. You can only call [`assume_reserved_collect()`]
+//! reduces the reserved amount by `1`. A call to [`collect_many()`] resets
+//! the reserved amount to `0`, regardless of the size of the iterator.
+//! Resetting or "disturbing" the state of the collector
+//! (e.g. assigning a new collector, changing from [`Either::Left`] to [`Either::Right`])
+//! also resets the reserved amount to `0` (unless otherwise specified by the implementors).
+//! This is tracked conceptually, so you may have to track outside.
+//!
+//! You can only call [`assume_reserved_collect()`]
 //! **if and only if** the reserved amount is `1` or greater.
 //! Calling that method without any reservation could lead to undefined behavior,
 //! memory corruption, or other kinds of unsafety.
@@ -243,6 +248,8 @@
 //! [`collect()`]: Collector::collect
 //! [`collect_many()`]: Collector::collect_many
 //! [`assume_reserved_collect()`]: Collector::assume_reserved_collect
+//! [`Either::Left`]: crate::either::Either::Left
+//! [`Either::Right`]: crate::either::Either::Right
 
 mod adapters;
 #[allow(clippy::module_inception)]
