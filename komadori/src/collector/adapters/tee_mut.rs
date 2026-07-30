@@ -92,6 +92,8 @@ impl<'i, T> Teer<&'i mut T> for MutTeer
 where
     T: ?Sized,
 {
+    const TEE_CHEAP: bool = true;
+
     #[inline]
     fn pass_down<'a>(
         &mut self,
