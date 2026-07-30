@@ -8,6 +8,10 @@
 - Support for `CollectorBase::Output` in trait objects.
 - Collector implementations for tuples from 1-ary to 12-ary.
 
+### Changed
+
+- `CollectorBase::partition()` now just accepting `Either`.
+
 ### Fixed
 
 - `CollectorBase::trying_results()` and `CollectorBase::trying_options()`
@@ -17,6 +21,7 @@
 ### Removed
 
 - `CollectorBase::break_hint()`.
+- `CollectorBase::partition_map()`.
 - Unstable: `CollectorBase::alt_break_hint()`.
 
 ## 0.7.0
