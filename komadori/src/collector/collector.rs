@@ -184,39 +184,6 @@ pub trait Collector<T>: CollectorBase {
     unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
         self.collect(item)
     }
-
-    // /// A special case for [`map()`](Collector::map) that works around
-    // /// lifetime inference issues in closure parameters.
-    // ///
-    // /// This maps an item of type `&U` to `T`. If `T` is a reference
-    // /// whose lifetime is tied to `&U`,
-    // /// consider using [`map_ref_ref()`](CollectorBase::map_ref_ref).
-    // #[inline]
-    // fn map_ref<F, U>(self, f: F) -> Map<Self, F>
-    // where
-    //     Self: Sized,
-    //     F: FnMut(&U) -> T,
-    //     U: ?Sized,
-    // {
-    //     assert_collector::<_, &U>(Map::new(self, f))
-    // }
-
-    // /// A special case for [`map()`](Collector::map) that works around
-    // /// lifetime inference issues in closure parameters.
-    // ///
-    // /// This maps an item of type `&mut U` to `T`. If `T` is a (mutable) reference
-    // /// whose lifetime is tied to `&mut U`,
-    // /// consider using [`map_mut_ref()`](CollectorBase::map_mut_ref)
-    // /// or [`map_mut_mut()`](CollectorBase::map_mut_mut).
-    // #[inline]
-    // fn map_mut<F, U>(self, f: F) -> Map<Self, F>
-    // where
-    //     Self: Sized,
-    //     F: FnMut(&mut U) -> T,
-    //     U: ?Sized,
-    // {
-    //     assert_collector::<_, &mut U>(Map::new(self, f))
-    // }
 }
 
 // `Output` shouldn't be required to be specified.

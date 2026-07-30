@@ -23,6 +23,7 @@
 - `CollectorBase::break_hint()`.
 - `CollectorBase::partition_map()`.
 - Unstable: `CollectorBase::alt_break_hint()`.
+- Unstable: `CollectorBase::tee_with()`.
 
 ## 0.7.0
 

@@ -25,8 +25,6 @@ mod tee_base;
 mod tee_clone;
 mod tee_funnel;
 mod tee_mut;
-// #[cfg(feature = "unstable")]
-// mod tee_with;
 #[cfg(feature = "unstable")]
 mod then;
 mod trying_options;
@@ -62,8 +60,6 @@ pub use tee::*;
 pub use tee_clone::*;
 pub use tee_funnel::*;
 pub use tee_mut::*;
-// #[cfg(feature = "unstable")]
-// pub use tee_with::*;
 #[cfg(feature = "unstable")]
 pub use then::*;
 pub use trying_options::*;
