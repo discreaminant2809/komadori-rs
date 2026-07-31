@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 
-use crate::collector::{Collector, CollectorBase};
+use crate::collector::{Collector, CollectorBase, advanced_collect_many_default_impl};
 
 impl<C> CollectorBase for Box<C>
 where
@@ -116,6 +116,11 @@ macro_rules! dyn_impl {
             #[inline]
             fn collect(&mut self, item: T) -> ControlFlow<()> {
                 (**self).collect(item)
+            }
+
+            #[inline]
+            fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+                advanced_collect_many_default_impl(self, items)
             }
 
             #[inline]

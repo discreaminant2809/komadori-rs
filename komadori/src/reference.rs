@@ -1,6 +1,8 @@
 use core::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
+use crate::collector::{
+    Collector, CollectorBase, advanced_collect_many_default_impl, finish_boxed_impl,
+};
 
 /// A mutable reference to a collect produce nothing.
 ///
@@ -103,6 +105,11 @@ macro_rules! dyn_impl {
             #[inline]
             fn collect(&mut self, item: T) -> ControlFlow<()> {
                 (**self).collect(item)
+            }
+
+            #[inline]
+            fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+                advanced_collect_many_default_impl(self, items)
             }
 
             #[inline]
