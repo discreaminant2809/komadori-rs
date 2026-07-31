@@ -11,6 +11,14 @@ use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_
 ///
 /// This collector corresponds to [`Iterator::position()`].
 ///
+/// `Position::new(f)` is exactly
+/// ```text
+/// First::new()
+///     .filter_map(move |(i, x)| f(x).then_some(i))
+///     .enumerate()
+/// ```
+/// except the former is much shorter and more intuitive.
+///
 /// # Examples
 ///
 /// ```

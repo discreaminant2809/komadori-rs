@@ -1,7 +1,12 @@
+#![allow(deprecated)]
+
 use std::{hint::black_box, time::Duration};
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use komadori::{iter::Find, prelude::*};
+use komadori::{
+    iter::{Find, First},
+    prelude::*,
+};
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 
 fn find(criterion: &mut Criterion) {
@@ -9,7 +14,8 @@ fn find(criterion: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(seed);
 
     macro_rules! bench_fn {
-        ($group:ident.$fn_name:ident($nums:expr)) => {
+        ($expected:expr, $group:ident.$fn_name:ident($nums:expr)) => {
+            assert_eq!($expected, $fn_name($nums));
             $group.bench_function(stringify!($fn_name), |bencher| {
                 bencher.iter(|| $fn_name(black_box($nums)));
             });
@@ -23,9 +29,11 @@ fn find(criterion: &mut Criterion) {
     println!("First 10 elements: {:?}", &nums[..10]);
     nums[400_000] = 0;
     let mut group = criterion.benchmark_group("find_found_late");
-    bench_fn!(group.iter_find_0(&nums));
-    bench_fn!(group.bc_collect_find_0(&nums));
-    bench_fn!(group.bc_collect_then_finish_find_0(&nums));
+    let expected = iterator(&nums);
+    bench_fn!(expected, group.manual(&nums));
+    bench_fn!(expected, group.komadori_first_filter(&nums));
+    bench_fn!(expected, group.iterator(&nums));
+    bench_fn!(expected, group.komadori_manual_collect_find(&nums));
     group.finish();
 
     let nums: Box<_> = std::iter::repeat_with(|| rng.random_range(1..=i32::MAX))
@@ -34,9 +42,11 @@ fn find(criterion: &mut Criterion) {
     println!("Seed: {seed}");
     println!("First 10 elements: {:?}", &nums[..10]);
     let mut group = criterion.benchmark_group("find_not_found");
-    bench_fn!(group.iter_find_0(&nums));
-    bench_fn!(group.bc_collect_find_0(&nums));
-    bench_fn!(group.bc_collect_then_finish_find_0(&nums));
+    let expected = iterator(&nums);
+    bench_fn!(expected, group.manual(&nums));
+    bench_fn!(expected, group.komadori_first_filter(&nums));
+    bench_fn!(expected, group.iterator(&nums));
+    bench_fn!(expected, group.komadori_manual_collect_find(&nums));
     group.finish();
 }
 
@@ -50,13 +60,27 @@ criterion_group! {
 }
 criterion_main!(benches);
 
-fn iter_find_0(nums: &[i32]) -> Option<i32> {
+#[unsafe(no_mangle)]
+#[allow(clippy::manual_find)]
+fn manual(nums: &[i32]) -> Option<i32> {
+    for &num in nums {
+        if num == 0 {
+            return Some(num);
+        }
+    }
+
+    None
+}
+
+#[unsafe(no_mangle)]
+fn iterator(nums: &[i32]) -> Option<i32> {
     nums.iter().find(|&&num| num == 0).copied()
 }
 
 // Use manual `collect` because `tee_*` uses this method anyway.
 // Not to mention `Find`'s `collect_then_finish` forwards to `find()`.
-fn bc_collect_find_0(nums: &[i32]) -> Option<i32> {
+#[unsafe(no_mangle)]
+fn komadori_manual_collect_find(nums: &[i32]) -> Option<i32> {
     let mut collector = Find::new(|&num| num == 0);
     let mut nums = nums.iter().copied();
 
@@ -67,6 +91,9 @@ fn bc_collect_find_0(nums: &[i32]) -> Option<i32> {
     collector.finish()
 }
 
-fn bc_collect_then_finish_find_0(nums: &[i32]) -> Option<i32> {
-    nums.iter().feed_into(Find::new(|&&num| num == 0)).copied()
+#[unsafe(no_mangle)]
+fn komadori_first_filter(nums: &[i32]) -> Option<i32> {
+    nums.iter()
+        .copied()
+        .feed_into(First::new().filter(|&num| num == 0))
 }
