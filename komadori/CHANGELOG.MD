@@ -8,6 +8,7 @@
 - Support for `CollectorBase::Output` in trait objects.
 - Collector implementations for tuples from 1-ary to 12-ary.
 - Collector implementations for `Either`.
+- `crate::iter::First`.
 
 ### Changed
 
@@ -25,6 +26,11 @@
 - `CollectorBase::partition_map()`.
 - Unstable: `CollectorBase::alt_break_hint()`.
 - Unstable: `CollectorBase::tee_with()`.
+
+### Deprecated
+
+- `crate::iter::Find`.
+- `crate::iter::FindMap`.
 
 ## 0.7.0
 

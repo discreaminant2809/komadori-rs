@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use komadori::{
     cmp::Max,
     iter::{Find, Fold},

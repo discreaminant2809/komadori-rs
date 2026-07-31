@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
@@ -14,36 +16,9 @@ use super::Find;
 ///
 /// This collector corresponds to [`Iterator::find_map()`].
 ///
-/// # Examples
-///
-/// ```
-/// use komadori::{prelude::*, iter::Find};
-///
-/// let mut collector = Find::map(|s: &str| s.parse().ok());
-///
-/// assert!(collector.collect("noble").is_continue());
-/// assert!(collector.collect("singer").is_continue());
-///
-/// // Found!
-/// assert!(collector.collect("1").is_break());
-///
-/// assert_eq!(collector.finish(), Some(1));
-/// ```
-///
-/// ```
-/// use komadori::{prelude::*, iter::Find};
-///
-/// let mut collector = Find::map(|s: &str| s.parse::<i32>().ok());
-///
-/// assert!(collector.collect("a").is_continue());
-/// assert!(collector.collect("b").is_continue());
-/// assert!(collector.collect("c").is_continue());
-///
-/// assert_eq!(collector.finish(), None);
-/// ```
-///
 /// [`Break(())`]: std::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
+#[deprecated(since = "0.8.0", note = "use `First::new().filter_map(f)` instead")]
 #[derive(Clone)]
 pub struct FindMap<P, R> {
     state: State<P, R>,

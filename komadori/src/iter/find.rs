@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
@@ -10,36 +12,9 @@ use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_
 ///
 /// This collector corresponds to [`Iterator::find()`].
 ///
-/// # Examples
-///
-/// ```
-/// use komadori::{prelude::*, iter::Find};
-///
-/// let mut collector = Find::new(|&x| x % 3 == 0);
-///
-/// assert!(collector.collect(1).is_continue());
-/// assert!(collector.collect(5).is_continue());
-///
-/// // Found!
-/// assert!(collector.collect(6).is_break());
-///
-/// assert_eq!(collector.finish(), Some(6));
-/// ```
-///
-/// ```
-/// use komadori::{prelude::*, iter::Find};
-///
-/// let mut collector = Find::new(|&x| x % 3 == 0);
-///
-/// assert!(collector.collect(1).is_continue());
-/// assert!(collector.collect(5).is_continue());
-/// assert!(collector.collect(-2).is_continue());
-///
-/// assert_eq!(collector.finish(), None);
-/// ```
-///
 /// [`Break(())`]: std::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
+#[deprecated(since = "0.8.0", note = "use `First::new().filter(f)` instead")]
 #[derive(Clone)]
 pub struct Find<T, F> {
     state: State<T, F>,
