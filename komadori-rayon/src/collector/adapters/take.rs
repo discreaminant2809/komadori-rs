@@ -393,6 +393,9 @@ mod unindexed {
 
     #[inline(always)]
     fn take_one(remaining: &AtomicUsize) -> TakeResult {
+        // `fetch_update` is gonna be deprecated, but we don't wanna
+        // update the method name right now due to MSRV.
+        #[allow(deprecated)]
         match remaining.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
             remaining.checked_sub(1)
         }) {
