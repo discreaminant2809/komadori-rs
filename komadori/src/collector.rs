@@ -338,25 +338,19 @@ pub(crate) fn advanced_collect_many_default_impl<T>(
 /// `finish_boxed_impl! {}`
 macro_rules! finish_boxed_impl {
     () => {
-        cfg_select! {
-            feature = "std" => {
-                #[inline]
-                fn finish_boxed(self: ::std::boxed::Box<Self>) -> Self::Output {
-                    (*self).finish()
-                }
-            }
-
-            feature = "alloc" => {
-                #[inline]
-                fn finish_boxed(self: ::alloc::boxed::Box<Self>) -> Self::Output {
-                    (*self).finish()
-                }
-            }
-
-            _ => {
-                // Nothing. This method does not exist without allocation.
-            }
+        #[cfg(feature = "std")]
+        #[inline]
+        fn finish_boxed(self: ::std::boxed::Box<Self>) -> Self::Output {
+            (*self).finish()
         }
+
+        #[cfg(all(feature = "alloc", not(feature = "std")))]
+        #[inline]
+        fn finish_boxed(self: ::alloc::boxed::Box<Self>) -> Self::Output {
+            (*self).finish()
+        }
+
+        // Otherwise, nothing. This method does not exist without allocation.
     };
 }
 pub(crate) use finish_boxed_impl;

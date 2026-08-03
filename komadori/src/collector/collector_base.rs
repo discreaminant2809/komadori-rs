@@ -457,24 +457,27 @@ pub trait CollectorBase {
     /// need a [`for<'a> Collector<&'a mut T>`](super::Collector)
     /// or [`for<'a> Collector<&'a T>`](super::Collector).
     ///
+    /// In a collector converted from a tuple, you may need this adapters
+    /// for collectors that are not the last in the chain.
+    ///
     /// Many collectors may have implementations for references, such as collections.
     /// In this case, you do not need this adapter.
     ///
     /// # Examples
     ///
     /// ```
-    /// use komadori::prelude::*;
+    /// use komadori::{prelude::*, cmp::{Max, Min}};
     ///
-    /// let collector = vec![]
-    ///     .into_concat()
-    ///     .cloning() // Try putting `cloning` before every other collector
-    ///     .filter(|num: &&Vec<_>| num.len() > 1);
+    /// let mut collector = (
+    ///     Max::new().cloning(),
+    ///     Min::new(),
+    /// ).into_collector();
     ///
-    /// let concat = [vec![0, 1, 2], vec![3], vec![4, 5]]
-    ///     .iter()
-    ///     .feed_into(collector);
+    /// assert!(collector.collect("a".to_owned()).is_continue());
+    /// assert!(collector.collect("c".to_owned()).is_continue());
+    /// assert!(collector.collect("b".to_owned()).is_continue());
     ///
-    /// assert_eq!(concat, [0, 1, 2, 4, 5]);
+    /// assert_eq!(collector.finish(), (Some("c".to_owned()), Some("a".to_owned())));
     /// ```
     #[inline]
     fn cloning(self) -> Cloning<Self>
@@ -490,23 +493,27 @@ pub trait CollectorBase {
     /// need a [`for<'a> Collector<&'a mut T>`](super::Collector)
     /// or [`for<'a> Collector<&'a T>`](super::Collector).
     ///
+    /// In a collector converted from a tuple, you may need this adapters
+    /// for collectors that are not the last in the chain.
+    ///
     /// Many collectors may have implementations for references, such as collections.
     /// In this case, you do not need this adapter.
     ///
     /// # Examples
     ///
     /// ```
-    /// use komadori::prelude::*;
+    /// use komadori::{prelude::*, cmp::{Max, Min}};
     ///
-    /// let collector = vec![]
-    ///     .into_collector()
-    ///     .copying();
+    /// let mut collector = (
+    ///     Max::new().copying(),
+    ///     Min::new(),
+    /// ).into_collector();
     ///
-    /// let concat = [0, 1, 2, 3, 4]
-    ///     .iter()
-    ///     .feed_into(collector);
+    /// assert!(collector.collect(2).is_continue());
+    /// assert!(collector.collect(3).is_continue());
+    /// assert!(collector.collect(1).is_continue());
     ///
-    /// assert_eq!(concat, [0, 1, 2, 3, 4]);
+    /// assert_eq!(collector.finish(), (Some(3), Some(1)));
     /// ```
     #[inline]
     fn copying(self) -> Copying<Self>

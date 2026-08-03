@@ -104,6 +104,7 @@ mod proptests {
     });
 
     fn f(num: &Cell<i32>) {
-        num.update(|num| num.wrapping_add(i32::MAX));
+        let old = num.get();
+        num.set(old.wrapping_add(i32::MAX));
     }
 }

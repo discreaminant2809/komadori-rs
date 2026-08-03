@@ -1,6 +1,7 @@
 //! [![Crates.io Version](https://img.shields.io/crates/v/komadori.svg)](https://crates.io/crates/komadori)
 //! [![Docs.rs](https://img.shields.io/docsrs/komadori)](https://docs.rs/komadori)
 //! [![GitHub Repo](https://img.shields.io/badge/github-komadori--rs-blue?logo=github)](https://github.com/discreaminant2809/komadori-rs.git)
+//! ![MSRV](https://img.shields.io/crates/msrv/komadori)
 //!
 //! Multi-reduction library. Provides a composable, declarative way to consume an iterator.
 //!
@@ -10,54 +11,64 @@
 //!
 //! # Motivation
 //!
-//! Suppose we are given an array of `i32` and we are asked to find its sum and maximum value.
-//! What would be our approach?
+//! Suppose we are given an array of `i32` and we are asked to calculate sum
+//! and create a [`Vec`] of every num being doubled. What would be our approach?
 //!
 //! - Approach 1: Two-pass
 //!
 //! ```
 //! let nums = [1, 3, 2];
 //! let sum: i32 = nums.into_iter().sum();
-//! let max = nums.into_iter().max().unwrap();
+//! let doubles = nums.into_iter()
+//!     .map(|num| num * 2)
+//!     .collect::<Vec<_>>();
 //!
 //! assert_eq!(sum, 6);
-//! assert_eq!(max, 3);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
-//! **Cons:** This performs two passes over the data, which is worse than one-pass in performance.
-//! That is fine for arrays, but can be much worse for [`HashSet`], [`LinkedList`],
-//! or... data from an IO stream.
+//! **Cons:** This performs two passes over the data, which may be worse than one-pass
+//! due to increased memory traffic. It is fine for arrays,
+//! but can be much worse for [`HashSet`], [`LinkedList`], or... data from an IO stream.
 //!
-//! - Approach 2: [`Iterator::fold()`]
+//! - Approach 2: `for`-loop (or [`Iterator::fold()`] if you prefer)
 //!
 //! ```
 //! let nums = [1, 3, 2];
-//! let (sum, max) = nums
-//!     .into_iter()
-//!     .fold((0, i32::MIN), |(sum, max), num| {
-//!         (sum + num, max.max(num))
-//!     });
+//!
+//! let mut sum = 0;
+//! let mut doubles = Vec::with_capacity(nums.len());
+//!
+//! for num in nums {
+//!     sum += num;
+//!     doubles.push(num * 2);
+//! }
 //!
 //! assert_eq!(sum, 6);
-//! assert_eq!(max, 3);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
-//! **Cons:** Not very declarative. The main logic is still kind of procedural.
-//! (Doing sum and max by ourselves)
+//! **Cons:** Not very declarative. Even with `fold()`,
+//! the main logic is still kind of procedural because you have to ensure that
+//! the logic is a one-pass.
+//! Moreover, its performance is much worse due to `doubles.push(num * 2)`
+//! being lowered into a scalar loop with repeaated capacity check
+//! (even though we have reserved beforehand!),
+//! inhibiting vectorization.
 //!
 //! - Approach 3: [`Iterator::inspect()`]
 //!
 //! ```
 //! let nums = [1, 3, 2];
 //! let mut sum = 0;
-//! let max = nums
+//! let doubles = nums
 //!     .into_iter()
-//!     .inspect(|i| sum += i)
-//!     .max()
-//!     .unwrap();
+//!     .inspect(|num| sum += num)
+//!     .map(|num| num * 2)
+//!     .collect::<Vec<_>>();
 //!
 //! assert_eq!(sum, 6);
-//! assert_eq!(max, 3);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
 //! **Cons:** This approach has multiple drawbacks:
@@ -69,13 +80,13 @@
 //!   It is possible that we can rearrange so that the "any" logic goes first,
 //!   but if the requirement changes to "find any negative value and even value,"
 //!   we cannot escape.
-//!
 //! - The state is kept outside. Now the iterator cannot go anywhere else
 //!   (e.g. returning from a function).
-//!
 //! - Very unintuitive and hack-y (hard to reason about).
-//!
-//! - And most importantly, not declarative enough.
+//! - Not declarative enough.
+//! - Slower than the upcoming approach.
+//!   (Pro tip: Use `map()` instead of `inspect()` results in way better performance,
+//!   but the above issues still exist)
 //!
 //! This crate proposes a one-pass, declarative approach:
 //!
@@ -83,17 +94,27 @@
 //! use komadori::{prelude::*, cmp::Max};
 //!
 //! let nums = [1, 3, 2];
-//! let (sum, max) = nums
+//! let (sum, doubles) = nums
 //!     .into_iter()
-//!     .feed_into(0_i32.into_sum().tee(Max::new()));
+//!     .feed_into((
+//!         0.into_sum(),
+//!         vec![].into_collector().map(|num| num * 2),
+//!     ));
 //!
 //! assert_eq!(sum, 6);
-//! assert_eq!(max.unwrap(), 3);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
-//! This approach achieves both one-pass and declarative, while is also composable (more of this later).
+//! This approach achieves:
 //!
-//! This is only with integers. How about with a non-`Copy` type?
+//! - One-pass.
+//! - Declarative.
+//! - Performance (LLVM lowers it into a very nice vectorized one-pass loop).
+//!
+//! See [this benchmark][sum-doubles-benchmark] to see more approaches.
+//! You can run the benchmark by yourself!
+//!
+//! This is only with integers. How about with non-`Copy` types?
 //!
 //! ```
 //! // Suppose we open a connection...
@@ -126,16 +147,14 @@
 //! // This crate's way:
 //! use komadori::{prelude::*, iter::Last, clb_mut};
 //!
-//! let ((byte_read, received), last_seen) = socket_stream()
-//!     .feed_into(
+//! let (byte_read, received, last_seen) = socket_stream()
+//!     .feed_into((
 //!         0_usize
 //!             .into_sum()
-//!             .map(
-//!                 clb_mut!(|s: &mut String| -> usize { s.len() })
-//!             )
-//!             .tee_funnel(vec![])
-//!             .tee_clone(Last::new())
-//!     );
+//!             .map(clb_mut!(|s: &mut String| -> usize { s.len() })),
+//!         vec![].into_collector().cloning(),
+//!         Last::new(),
+//!     ));
 //!
 //! assert_eq!((byte_read, received, last_seen), expected);
 //! ```
@@ -173,12 +192,12 @@
 //! // `Collector`
 //! let collector_way = socket_stream()
 //!     // No clone. The data flows smoothly.
-//!     .feed_into(
+//!     .feed_into((
 //!         String::new()
 //!             .into_concat()
-//!             .map(clb_mut!(|s: &mut String| -> &str { &s[..] }))
-//!             .tee_funnel(HashSet::new())
-//!     );
+//!             .map(clb_mut!(|s: &mut String| -> &str { &s[..] })),
+//!         HashSet::new(),
+//!     ));
 //!
 //! assert_eq!(unzip_way, collector_way);
 //! ```
@@ -219,9 +238,9 @@
 //! [`HashSet`]: std::collections::HashSet
 //! [`HashMap`]: std::collections::HashMap
 //! [`LinkedList`]: std::collections::LinkedList
-//! [`ControlFlow`]: core::ops::ControlFlow
 //! [`VecDeque`]: std::collections::VecDeque
 //! [`BTreeSet`]: std::collections::BTreeSet
+//! [sum-doubles-benchmark]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori/benches/sum_doubles.rs
 
 #![forbid(missing_docs)]
 #![deny(missing_debug_implementations)]

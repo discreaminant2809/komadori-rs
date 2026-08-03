@@ -2,6 +2,7 @@
 name = "komadori"
 version = "0.8.0"
 edition = "2024"
+rust-version = "1.85.1"
 authors = ["Ayabin"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/discreaminant2809/komadori-rs"
@@ -28,7 +29,7 @@ itertools = ["dep:itertools"]
 
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [[bench]]
 name = "sum_max"
