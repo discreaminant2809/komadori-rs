@@ -9,6 +9,32 @@ use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 /// The [`Output`](CollectorBase::Output) is `true` if no items were collected.
 ///
 /// This corresponds to [`Itertools::all_equal()`].
+///
+/// # Examples
+///
+/// ```
+/// use komadori::{prelude::*, cmp::AllEqual};
+///
+/// let mut collector = AllEqual::new();
+///
+/// assert!(collector.collect(1).is_continue());
+/// assert!(collector.collect(1).is_continue());
+/// assert!(collector.collect(1).is_continue());
+///
+/// assert!(collector.finish());
+/// ```
+///
+/// ```
+/// use komadori::{prelude::*, cmp::AllEqual};
+///
+/// let mut collector = AllEqual::new();
+///
+/// assert!(collector.collect(1).is_continue());
+/// assert!(collector.collect(1).is_continue());
+/// assert!(collector.collect(2).is_break());
+///
+/// assert!(!collector.finish());
+/// ```
 #[derive(Debug, Clone)]
 pub struct AllEqual<T> {
     state: State<T>,

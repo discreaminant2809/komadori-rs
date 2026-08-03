@@ -3,7 +3,8 @@ use std::{fmt::Debug, ops::ControlFlow};
 use crate::collector::{Collector, CollectorBase, Fuse, and_break, break_hint, finish_boxed_impl};
 use crate::either::Either;
 
-/// A collector that distributes items between two collectors based on a predicate.
+/// A collector that distributes items between two collectors based on
+/// whether an item is "left" or "right."
 ///
 /// This `struct` is created by [`CollectorBase::partition()`]. See its documentation for more.
 #[derive(Debug, Clone)]
