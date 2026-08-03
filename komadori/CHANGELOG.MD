@@ -13,6 +13,7 @@
 ### Changed
 
 - `CollectorBase::partition()` now just accepting `Either`.
+- API surfaces of `CollectorByRef` and `CollectorByMut`. (Practically non-affecting)
 
 ### Fixed
 
