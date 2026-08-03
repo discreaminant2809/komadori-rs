@@ -1,4 +1,4 @@
-use super::{CollectorBase, IntoCollectorBase};
+use super::IntoCollectorBase;
 
 /// A type that can be converted into a collector by shared reference.
 ///
@@ -13,37 +13,39 @@ use super::{CollectorBase, IntoCollectorBase};
 /// This trait is not intended for use in bounds.
 /// Use [`IntoCollector`] or [`IntoCollectorBase`] in trait bounds instead.
 ///
+/// # Examples
+///
+/// ```
+/// use std::sync::mpsc;
+/// use komadori::prelude::*;
+///
+/// let (tx, rx) = mpsc::channel();
+///
+/// [1; 3].into_iter().feed_into((
+///     // Use `.collector()` if you do chain adapters.
+///     tx.collector().copying(),
+///     // Use reference if you don't chain adapters (shorter and more readable).
+///     &tx,
+/// ));
+///
+/// let nums = rx.try_iter().feed_into(vec![]);
+/// assert_eq!(nums, [1; 6]);
+/// ```
+///
 /// [`IntoCollector`]: super::IntoCollector
 #[allow(private_bounds)]
-pub trait CollectorByRef: Sealed {
-    /// Which collector being produced?
-    type Collector<'a>: CollectorBase
-    where
-        Self: 'a;
-
-    /// Creates a collector from a shared reference of a value.
-    fn collector(&self) -> Self::Collector<'_>;
-}
-
-impl<T> CollectorByRef for T
+pub trait CollectorByRef
 where
-    T: ?Sized,
-    for<'a> &'a T: IntoCollectorBase,
+    for<'a> &'a Self: IntoCollectorBase,
 {
-    type Collector<'a>
-        = <&'a T as IntoCollectorBase>::IntoCollector
-    where
-        T: 'a;
-
+    /// Creates a collector from a shared reference of a value.
     #[inline]
-    fn collector(&self) -> Self::Collector<'_> {
+    fn collector(&self) -> <&Self as IntoCollectorBase>::IntoCollector {
         self.into_collector()
     }
 }
 
-trait Sealed {}
-
-impl<T> Sealed for T
+impl<T> CollectorByRef for T
 where
     T: ?Sized,
     for<'a> &'a T: IntoCollectorBase,

@@ -1,4 +1,4 @@
-use super::{CollectorBase, IntoCollectorBase};
+use super::IntoCollectorBase;
 
 /// A type that can be converted into a collector by mutable reference.
 ///
@@ -13,37 +13,39 @@ use super::{CollectorBase, IntoCollectorBase};
 /// This trait is not intended for use in bounds.
 /// Use [`IntoCollector`] or [`IntoCollectorBase`] in trait bounds instead.
 ///
+/// # Examples
+///
+/// ```
+/// use komadori::prelude::*;
+///
+/// let mut nums1 = vec![];
+/// let mut nums2 = vec![1, 2];
+///
+/// [3, 4, 5].into_iter().feed_into((
+///     // Use reference if you don't chain adapters (shorter and more readable).
+///     &mut nums1,
+///     // Use `.collector_mut()` if you do chain adapters.
+///     nums2.collector_mut().take(2),
+/// ));
+///
+/// assert_eq!(nums1, [3, 4, 5]);
+/// assert_eq!(nums2, [1, 2, 3, 4]);
+/// ```
+///
 /// [`IntoCollector`]: super::IntoCollector
 #[allow(private_bounds)]
-pub trait CollectorByMut: Sealed {
-    /// Which collector being produced?
-    type CollectorMut<'a>: CollectorBase
-    where
-        Self: 'a;
-
-    /// Creates a collector from a mutable reference of a value.
-    fn collector_mut(&mut self) -> Self::CollectorMut<'_>;
-}
-
-impl<T> CollectorByMut for T
+pub trait CollectorByMut
 where
-    T: ?Sized,
-    for<'a> &'a mut T: IntoCollectorBase,
+    for<'a> &'a mut Self: IntoCollectorBase,
 {
-    type CollectorMut<'a>
-        = <&'a mut T as IntoCollectorBase>::IntoCollector
-    where
-        T: 'a;
-
+    /// Creates a collector from a mutable reference of a value.
     #[inline]
-    fn collector_mut(&mut self) -> Self::CollectorMut<'_> {
+    fn collector_mut(&mut self) -> <&mut Self as IntoCollectorBase>::IntoCollector {
         self.into_collector()
     }
 }
 
-trait Sealed {}
-
-impl<T> Sealed for T
+impl<T> CollectorByMut for T
 where
     T: ?Sized,
     for<'a> &'a mut T: IntoCollectorBase,
