@@ -285,6 +285,11 @@ impl<T> Default for IntoCollector<T> {
 ///
 /// Must have reserved for at least one element via [`Vec::reserve()`] or similar methods.
 unsafe fn push_unchecked<T>(v: &mut Vec<T>, item: T) {
+    debug_assert!(
+        v.len() < v.capacity(),
+        "`assume_reserved_collect()` called without reservation"
+    );
+
     let len = v.len();
 
     unsafe {
