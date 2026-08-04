@@ -1,7 +1,5 @@
 use core::{fmt::Debug, ops::ControlFlow};
 
-use itertools::Itertools;
-
 use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
 /// A collector that calls a closure on each item before collecting.
@@ -56,14 +54,26 @@ where
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+        // Instead of forwarding to `Itertools::update`,
+        // try to use as many stuffs from the standard library as possible,
+        // because they're better specialized.
         self.collector
-            .collect_many(items.into_iter().update(&mut self.f))
+            .collect_many(items.into_iter().map(|mut item| {
+                (self.f)(&mut item);
+                item
+            }))
     }
 
     #[inline]
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
+    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
+        // Instead of forwarding to `Itertools::update`,
+        // try to use as many stuffs from the standard library as possible.
+        // because they're better specialized.
         self.collector
-            .collect_then_finish(items.into_iter().update(self.f))
+            .collect_then_finish(items.into_iter().map(move |mut item| {
+                (self.f)(&mut item);
+                item
+            }))
     }
 
     #[inline]

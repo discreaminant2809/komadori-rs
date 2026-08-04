@@ -58,14 +58,27 @@ where
         unsafe { self.collector.assume_reserved_collect(item) }
     }
 
+    #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.collector
-            .collect_many(items.into_iter().inspect(&mut self.f))
+        // `inspect()` does not implement `TrustedLen`, which is funny
+        // but could hurt performance if it matters (e.g. collecting to `Vec`).
+        #[allow(clippy::manual_inspect)]
+        self.collector.collect_many(items.into_iter().map(|item| {
+            (self.f)(&item);
+            item
+        }))
     }
 
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
+    #[inline]
+    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
+        // `inspect()` does not implement `TrustedLen`, which is funny
+        // but could hurt performance if it matters (e.g. collecting to `Vec`).
+        #[allow(clippy::manual_inspect)]
         self.collector
-            .collect_then_finish(items.into_iter().inspect(self.f))
+            .collect_then_finish(items.into_iter().map(move |item| {
+                (self.f)(&item);
+                item
+            }))
     }
 }
 
