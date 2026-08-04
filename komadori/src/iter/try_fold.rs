@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::{
     collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},
@@ -214,10 +214,10 @@ impl<A, F> Debug for TryFold<A, F>
 where
     A: Try<Output: Debug, Residual: Debug>,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("TryFold")
             .field("state", &self.state)
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 }
@@ -226,7 +226,7 @@ impl<A, F> Debug for State<A, F>
 where
     A: Try<Output: Debug, Residual: Debug>,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Continue { accum, .. } => {
                 f.debug_struct("Continue").field("accum", accum).finish()

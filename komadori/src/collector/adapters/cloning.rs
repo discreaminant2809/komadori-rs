@@ -1,6 +1,6 @@
 use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 /// A collector that [`clone`](Clone::clone)s every collected item.
 ///

@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 /// Comparator acting as an `FnMut(&T, &T) -> Ordering`
 /// for internal implementation.

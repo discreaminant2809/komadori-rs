@@ -1,6 +1,7 @@
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+use core::ops::ControlFlow;
+
+#[cfg(feature = "alloc")]
 use alloc::boxed::Box;
-use std::ops::ControlFlow;
 
 #[cfg(feature = "itertools")]
 use super::Update;
@@ -93,7 +94,7 @@ pub trait CollectorBase {
     /// Reserves for `additional` items before collecting.
     ///
     /// It does nothing for the default implementation and most collectors,
-    /// but it calls [`reserve()`](Vec::reserve) for [`Vec`].
+    /// but it calls [`reserve()`](alloc::vec::Vec::reserve) for [`Vec`](alloc::vec::Vec).
     ///
     /// This method has an interaction with [`assume_reserved_collect()`](Collector::assume_reserved_collect).
     /// See the ["Safety" section of the module-level documentation][safety-section] for more.
@@ -1514,6 +1515,8 @@ fn _dyn_compatible<O>(_: &mut dyn CollectorBase<Output = O>) {}
 // when you can't even name the type (e.g. closures, async blocks).
 #[cfg(feature = "std")]
 fn _unnamed_type_workaround() {
+    use alloc::vec;
+
     use crate::{cmp::Max, prelude::*};
 
     [|| ""].into_iter().feed_into(

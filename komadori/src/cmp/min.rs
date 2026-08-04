@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, ops::ControlFlow};
+use core::{cmp::Ordering, ops::ControlFlow};
 
 use super::{MinBy, MinByKey, min_assign};
 
@@ -94,7 +94,7 @@ impl<T> CollectorBase for Min<T> {
 impl<T: Ord> Collector<T> for Min<T> {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        if const { std::mem::size_of::<T>() <= 64 } {
+        if const { core::mem::size_of::<T>() <= 64 } {
             // Somehow it yields a little bit codegen (e.g. vectorization)!
             // For now, min-vec benefits from it.
             // However, for very large item types, this may become a `memcpy` fest,

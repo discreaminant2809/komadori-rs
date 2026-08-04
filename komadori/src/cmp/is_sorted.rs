@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
@@ -110,7 +110,7 @@ impl<T> Debug for IsSorted<T>
 where
     T: Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("IsSorted")
             .field("state", &self.base.debug_state(|_, _| {}))
             .finish()

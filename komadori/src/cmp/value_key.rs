@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 /// A helper struct for `max_by_key` and `min_by_key`
 ///

@@ -6,8 +6,8 @@
 //!
 //! You generally should **not** use `BinaryHeap::new().into_collector()`
 //! to construct a new `BinaryHeap`, since the time complexity is `O(n log n)`,
-//! which can be less efficient than constructing a [`Vec`] then converting to
-//! a `BinaryHeap` (`O(n)`).
+//! which can be less efficient than constructing a [`Vec`](alloc::vec::Vec)
+//! then converting to a `BinaryHeap` (`O(n)`).
 //!
 //! Do the following instead to construct a [`BinaryHeap`] from scratch:
 //!
@@ -22,10 +22,7 @@
 //! # collector.collect(1);
 //! ```
 
-#[cfg(not(feature = "std"))]
 use alloc::collections::BinaryHeap;
-#[cfg(feature = "std")]
-use std::collections::BinaryHeap;
 
 /// A collector that pushes collected items into a [`BinaryHeap`].
 /// Its [`Output`] is [`BinaryHeap`].

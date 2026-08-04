@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector_base, finish_boxed_impl};
 
@@ -88,7 +88,7 @@ mod proptests {
             let mut n = ..=10_usize;
         },
         other_data: {},
-        iter: std::iter::repeat_n((), n),
+        iter: core::iter::repeat_n((), n),
         collector: Count::new(),
         expected_f: |iter, _| (iter.count(), false),
         output_pred: PartialEq::eq,

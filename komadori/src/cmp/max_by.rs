@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Debug, ops::ControlFlow};
+use core::{cmp::Ordering, fmt::Debug, ops::ControlFlow};
 
 use crate::{
     collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},
@@ -113,10 +113,10 @@ where
 }
 
 impl<T: Debug, F> Debug for MaxBy<T, F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("MaxBy")
             .field("max", &self.max)
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 }
@@ -134,7 +134,7 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use std::cmp::Ordering;
+    use core::cmp::Ordering;
 
     use crate::test_utils::prelude::*;
 

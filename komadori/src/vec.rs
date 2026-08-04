@@ -7,9 +7,8 @@ use crate::{
     slice::{Concat, ConcatItem, ConcatItemSealed, ConcatSealed},
 };
 
-use std::{borrow::Borrow, ops::ControlFlow};
+use core::{borrow::Borrow, ops::ControlFlow};
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::vec::Vec;
 
 /// A collector that pushes collected items into a [`Vec`].

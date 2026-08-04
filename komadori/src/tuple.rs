@@ -1,6 +1,6 @@
 //! Collectors for tuples.
 
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{
     Collector, CollectorBase, Fuse, IntoCollectorBase, advanced_collect_many_default_impl,
@@ -65,7 +65,7 @@ impl<Cs> Debug for IntoCollector<Cs>
 where
     Cs: Tuple<IntoCollectorRepr: Debug>,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("IntoCollector").field(&self.0).finish()
     }
 }
@@ -275,6 +275,8 @@ tuple_impl!(CLast C0 C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11);
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
+    use alloc::{vec, vec::Vec};
+
     use crate::{collector::take_collector_model, test_utils::prelude::*};
 
     collector_test!(tuple_3_ary {

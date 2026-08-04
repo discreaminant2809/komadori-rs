@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
@@ -103,7 +103,7 @@ where
         // Worry not. By then, the `remaining` becomes useless
         // and acts as a *soft* fuse.
         if self.remaining <= lower_sh {
-            let n = std::mem::take(&mut self.remaining);
+            let n = core::mem::take(&mut self.remaining);
             let _ = self.collector.collect_many(items.take(n));
             return ControlFlow::Break(());
         }

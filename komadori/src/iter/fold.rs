@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
@@ -77,10 +77,10 @@ where
 }
 
 impl<A: Debug, F> Debug for Fold<A, F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Fold")
             .field("accum", &self.accum)
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 }

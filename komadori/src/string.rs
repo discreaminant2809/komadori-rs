@@ -9,9 +9,8 @@
 //!
 //! This module corresponds to [`std::string`].
 
-use std::{borrow::Borrow, ops::ControlFlow};
+use core::{borrow::Borrow, ops::ControlFlow};
 
-#[cfg(not(feature = "std"))]
 use alloc::string::String;
 
 use crate::{

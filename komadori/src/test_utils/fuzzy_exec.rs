@@ -1,4 +1,6 @@
-use std::{
+use alloc::{boxed::Box, format};
+
+use core::{
     fmt::{Debug, Display},
     ops::ControlFlow,
 };

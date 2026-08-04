@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
@@ -41,7 +41,7 @@ use super::raw_all_any::RawAllAny;
 /// assert!(!collector.finish());
 /// ```
 ///
-/// [`Break(())`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: core::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[derive(Clone)]
 pub struct All<F> {
@@ -99,7 +99,7 @@ where
 }
 
 impl<F> Debug for All<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.inner.debug_impl(f.debug_struct("All"))
     }
 }

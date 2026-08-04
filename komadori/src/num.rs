@@ -6,8 +6,8 @@
 //! This module corresponds to [`std::num`].
 
 #[cfg(feature = "unstable")]
-use std::num::Saturating;
-use std::{num::Wrapping, ops::ControlFlow};
+use core::num::Saturating;
+use core::{num::Wrapping, ops::ControlFlow};
 
 use crate::{
     collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},

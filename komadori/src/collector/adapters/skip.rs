@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 use crate::collector::{Collector, CollectorBase, break_hint, finish_boxed_impl};
 
@@ -83,7 +83,7 @@ where
         if self.remaining <= lower_sh {
             items
                 .by_ref()
-                .take(std::mem::take(&mut self.remaining))
+                .take(core::mem::take(&mut self.remaining))
                 .try_for_each(|_| break_hint(&self.collector))?;
 
             return self.collector.collect_many(items);
@@ -121,7 +121,7 @@ where
         if self.remaining <= lower_sh {
             return if items
                 .by_ref()
-                .take(std::mem::take(&mut self.remaining))
+                .take(core::mem::take(&mut self.remaining))
                 .try_for_each(|_| break_hint(&self.collector))
                 .is_break()
             {

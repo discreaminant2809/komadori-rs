@@ -6,7 +6,7 @@
 //!
 //! The crate also provides collector implementations for [`Either`].
 
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 pub use either::Either;
 

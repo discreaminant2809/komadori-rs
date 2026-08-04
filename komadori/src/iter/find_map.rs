@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
@@ -16,7 +16,7 @@ use super::Find;
 ///
 /// This collector corresponds to [`Iterator::find_map()`].
 ///
-/// [`Break(())`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: core::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[deprecated(since = "0.8.0", note = "use `First::new().filter_map(f)` instead")]
 #[derive(Clone)]
@@ -111,10 +111,10 @@ impl<P, R> Debug for FindMap<P, R>
 where
     R: Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("FindMap")
             .field("state", &self.state)
-            .field("f", &std::any::type_name::<P>())
+            .field("f", &core::any::type_name::<P>())
             .finish()
     }
 }
@@ -123,7 +123,7 @@ impl<P, R> Debug for State<P, R>
 where
     R: Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Searching(_) => f.debug_struct("Searching").finish(),
             Self::Found(res) => f.debug_tuple("Found").field(res).finish(),

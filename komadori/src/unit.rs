@@ -2,7 +2,7 @@
 //!
 //! [`Collector`]: crate::collector::Collector
 
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{CollectorBase, IntoCollectorBase, finish_boxed_impl};
 
@@ -67,7 +67,7 @@ impl<T> crate::collector::Collector<T> for Collector {
 }
 
 impl Debug for Collector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Collector").finish()
     }
 }

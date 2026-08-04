@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 #[derive(Clone)]
 // ALL = true: ALL mode
@@ -49,14 +49,14 @@ impl<F, const ALL: bool> RawAllAny<F, ALL> {
     }
 
     #[inline]
-    pub fn debug_impl(&self, mut f: std::fmt::DebugStruct<'_, '_>) -> std::fmt::Result {
+    pub fn debug_impl(&self, mut f: core::fmt::DebugStruct<'_, '_>) -> core::fmt::Result {
         f
             // We exclude all fields containing closures/markers,
             // but then we're left with nothing.
             // So, we trick outside that we have a
             // "phantom" state tracking the accumulation result.
             .field(if ALL { "all" } else { "any" }, &self.get())
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 

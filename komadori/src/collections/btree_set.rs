@@ -2,10 +2,7 @@
 //!
 //! This module corresponds to [`std::collections::btree_set`].
 
-#[cfg(not(feature = "std"))]
 use alloc::collections::BTreeSet;
-#[cfg(feature = "std")]
-use std::collections::BTreeSet;
 
 /// A collector that inserts collected items into a [`BTreeSet`].
 /// Its [`Output`] is [`BTreeSet`].

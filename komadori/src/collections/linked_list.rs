@@ -2,10 +2,7 @@
 //!
 //! This module corresponds to [`std::collections::linked_list`].
 
-#[cfg(not(feature = "std"))]
 use alloc::collections::LinkedList;
-#[cfg(feature = "std")]
-use std::collections::LinkedList;
 
 /// A collector that pushes collected items into the back of a [`LinkedList`].
 /// Its [`Output`] is [`LinkedList`].

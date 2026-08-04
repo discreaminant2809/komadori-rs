@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
@@ -47,7 +47,7 @@ use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_
 /// assert_eq!(collector.finish(), None);
 /// ```
 ///
-/// [`Break(())`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: core::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[derive(Clone)]
 pub struct Position<P> {
@@ -111,10 +111,10 @@ where
 }
 
 impl<P> Debug for Position<P> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Position")
             .field("idx", &self.idx)
-            .field("pred", &std::any::type_name::<P>())
+            .field("pred", &core::any::type_name::<P>())
             .finish()
     }
 }

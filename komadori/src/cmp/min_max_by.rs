@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Debug, ops::ControlFlow};
+use core::{cmp::Ordering, fmt::Debug, ops::ControlFlow};
 
 use itertools::MinMaxResult;
 
@@ -97,10 +97,10 @@ impl<T, F> Debug for MinMaxBy<T, F>
 where
     T: Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("MinMaxBy")
             .field("state", self.base.debug_state())
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 }
