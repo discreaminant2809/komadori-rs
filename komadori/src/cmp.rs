@@ -88,47 +88,59 @@ mod test_utils {
     /// This is crucial to test that the correct item is pertained
     /// if there are multiple equal maximal/minimal items.
     #[derive(Debug, Clone, Copy, Eq)]
-    pub struct Id {
+    pub struct Id<T = i32> {
         pub id: usize,
-        pub num: i32,
+        pub num: T,
     }
 
-    impl Id {
+    impl<T> Id<T>
+    where
+        T: Eq,
+    {
         pub fn full_eq(self, other: Self) -> bool {
             self.id == other.id && self.num == other.num
         }
 
         pub fn full_eq_opt(x: Option<Self>, y: Option<Self>) -> bool {
+            Self::full_eq_opt_ref(&x, &y)
+        }
+
+        pub fn full_eq_opt_ref(x: &Option<Self>, y: &Option<Self>) -> bool {
             match (x, y) {
-                (Some(x), Some(y)) => x.full_eq(y),
+                (Some(x), Some(y)) => x.id == y.id && x.num == y.num,
                 (None, None) => true,
                 _ => false,
             }
         }
 
-        pub fn full_eq_opt_ref(&x: &Option<Self>, &y: &Option<Self>) -> bool {
-            Self::full_eq_opt(x, y)
-        }
-
         #[cfg(feature = "itertools")]
         pub fn full_eq_minmax_res(x: MinMaxResult<Self>, y: MinMaxResult<Self>) -> bool {
-            x.into_option() == y.into_option()
+            x == y
         }
     }
 
-    impl PartialEq for Id {
+    impl<T> PartialEq for Id<T>
+    where
+        T: PartialEq,
+    {
         fn eq(&self, other: &Self) -> bool {
             self.num == other.num
         }
     }
 
-    impl PartialOrd for Id {
+    impl<T> PartialOrd for Id<T>
+    where
+        T: PartialOrd,
+    {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            Some(self.cmp(other))
+            self.num.partial_cmp(&other.num)
         }
     }
 
-    impl Ord for Id {
+    impl<T> Ord for Id<T>
+    where
+        T: Ord,
+    {
         fn cmp(&self, other: &Self) -> Ordering {
             self.num.cmp(&other.num)
         }

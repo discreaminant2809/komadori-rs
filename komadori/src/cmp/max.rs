@@ -147,7 +147,7 @@ mod proptests {
 
     use super::super::test_utils::Id;
 
-    collector_test!(collector {
+    collector_test!(collector_small {
         iter_data: {
             let mut nums = propvec(any::<i32>(), ..=5);
         },
@@ -158,4 +158,34 @@ mod proptests {
         output_pred: PartialEq::eq,
         model: theo_inf_collector_model(),
     });
+
+    collector_test!(collector_big {
+        iter_data: {
+            let mut nums = propvec(any::<i32>().prop_map(Big::new), ..=5);
+        },
+        other_data: {},
+        iter: nums.iter().enumerate().map(|(id, &num)| Id { id, num }),
+        collector: Max::new(),
+        expected_f: |iter, _| (iter.max(), false),
+        output_pred: PartialEq::eq,
+        model: theo_inf_collector_model(),
+    });
+
+    const _: () = assert!(size_of::<i32>() <= 64);
+    const _: () = assert!(size_of::<Big>() > 64);
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    struct Big {
+        num: i32,
+        _padding: [i32; 16],
+    }
+
+    impl Big {
+        fn new(num: i32) -> Self {
+            Self {
+                num,
+                _padding: Default::default(),
+            }
+        }
+    }
 }
