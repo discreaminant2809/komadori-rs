@@ -235,30 +235,34 @@
 //!
 //! [`Collector`]: crate::collector::Collector
 //! [`feed_into()`]: crate::iter::IteratorExt::feed_into
+//! [`Vec`]: alloc::vec::Vec
 //! [`HashSet`]: std::collections::HashSet
 //! [`HashMap`]: std::collections::HashMap
-//! [`LinkedList`]: std::collections::LinkedList
-//! [`VecDeque`]: std::collections::VecDeque
-//! [`BTreeSet`]: std::collections::BTreeSet
+//! [`LinkedList`]: alloc::collections::LinkedList
+//! [`VecDeque`]: alloc::collections::VecDeque
+//! [`BTreeSet`]: alloc::collections::BTreeSet
 //! [sum-doubles-benchmark]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori/benches/sum_doubles.rs
 
-#![forbid(missing_docs)]
+#![forbid(
+    missing_docs,
+    clippy::std_instead_of_alloc,
+    clippy::std_instead_of_core,
+    clippy::alloc_instead_of_core
+)]
 #![deny(missing_debug_implementations)]
 #![cfg_attr(test, deny(deprecated))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(
-    not(any(doc, all(feature = "alloc", not(feature = "std")))),
-    forbid(unused_extern_crates)
-)]
 // To make doc examples in sync (prevent accidental deprecated items usage in doc).
 #![doc(test(attr(deny(deprecated))))]
+#![no_std]
 
-#[cfg(any(doc, all(feature = "alloc", not(feature = "std"))))]
+// We need doc to be able to refer to `alloc` crate also.
+#[cfg(any(doc, feature = "alloc"))]
 extern crate alloc;
 
-#[cfg(not(feature = "std"))]
-extern crate core as std;
+// We need doc to be able to refer to `std` crate also.
+#[cfg(any(doc, feature = "std"))]
+extern crate std;
 
 pub mod cmp;
 #[cfg(feature = "alloc")]
@@ -273,7 +277,6 @@ pub mod prelude;
 pub mod slice;
 #[cfg(feature = "alloc")]
 pub mod string;
-#[cfg(feature = "std")]
 pub mod sync;
 pub mod tuple;
 pub mod unit;

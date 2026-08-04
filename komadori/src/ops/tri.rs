@@ -1,4 +1,4 @@
-use std::{convert::Infallible, ops::ControlFlow, task::Poll};
+use core::{convert::Infallible, ops::ControlFlow, task::Poll};
 
 pub trait Try {
     type Output;

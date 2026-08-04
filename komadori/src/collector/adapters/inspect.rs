@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
@@ -70,17 +70,17 @@ where
 }
 
 impl<C: Debug, F> Debug for Inspect<C, F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Inspect")
             .field("collector", &self.collector)
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 }
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use std::cell::Cell;
+    use core::cell::Cell;
 
     use crate::test_utils::prelude::*;
 

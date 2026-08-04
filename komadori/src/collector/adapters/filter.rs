@@ -1,6 +1,6 @@
 use crate::collector::{Collector, CollectorBase, break_hint, finish_boxed_impl};
 
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 /// A collector that uses a closure to determine whether an item should be collected.
 ///
@@ -66,10 +66,10 @@ where
 }
 
 impl<C: Debug, F> Debug for Filter<C, F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Filter")
             .field("collector", &self.collector)
-            .field("pred", &std::any::type_name::<F>())
+            .field("pred", &core::any::type_name::<F>())
             .finish()
     }
 }

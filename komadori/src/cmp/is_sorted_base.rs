@@ -1,4 +1,4 @@
-use std::{
+use core::{
     fmt::{Debug, DebugStruct},
     ops::ControlFlow,
 };
@@ -54,7 +54,7 @@ impl<K, S> IsSortedBase<K, S> {
             T: Debug,
             F: Fn(&mut DebugStruct, &P),
         {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 match self.state {
                     State::StillSorted { prev, store } => {
                         let mut dbg_struct = f.debug_struct("StillSorted");

@@ -16,23 +16,19 @@ pub mod hash_set;
 pub mod linked_list;
 pub mod vec_deque;
 
-use std::ops::ControlFlow;
-
-use crate::collector::{Collector, CollectorBase, IntoCollectorBase, finish_boxed_impl};
-
 #[cfg(feature = "std")]
-use std::{
+use core::{
     cmp::Eq,
-    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
     hash::{BuildHasher, Hash},
 };
+use core::{cmp::Ord, ops::ControlFlow};
 
-#[cfg(not(feature = "std"))]
-// Hashtables are not in `alloc`.
 use alloc::collections::{BTreeMap, BTreeSet, BinaryHeap, LinkedList, VecDeque};
 
-#[cfg(feature = "alloc")]
-use std::cmp::Ord;
+#[cfg(feature = "std")]
+use std::collections::{HashMap, HashSet};
+
+use crate::collector::{Collector, CollectorBase, IntoCollectorBase, finish_boxed_impl};
 
 // Note: All of the collections so far, even VecDeque, don't have APIs to
 // unchecked-ly push to the reserved area.

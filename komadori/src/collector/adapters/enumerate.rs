@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
@@ -68,7 +68,7 @@ where
             // skipping one index for the next call of collect-related method!
             items
                 .into_iter()
-                .zip(std::iter::repeat_with(|| {
+                .zip(core::iter::repeat_with(|| {
                     let idx = self.idx;
                     self.idx += 1;
                     idx

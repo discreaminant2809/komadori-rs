@@ -1,4 +1,4 @@
-use std::{iter::FusedIterator, ops::ControlFlow};
+use core::{iter::FusedIterator, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, Fuse as CollectorFuse};
 

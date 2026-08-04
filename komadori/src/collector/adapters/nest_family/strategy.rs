@@ -1,4 +1,4 @@
-use std::fmt::{Debug, DebugStruct};
+use core::fmt::{Debug, DebugStruct};
 
 use crate::collector::{Collector, CollectorBase};
 

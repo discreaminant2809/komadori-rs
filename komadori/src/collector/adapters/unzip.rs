@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 use crate::collector::{
     Collector, CollectorBase, Fuse, advanced_collect_many_default_impl, and_break,

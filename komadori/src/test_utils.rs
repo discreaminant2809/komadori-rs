@@ -111,10 +111,12 @@ pub(super) use collector_test;
 
 #[allow(unused_imports)]
 pub mod prelude {
+    pub use std::prelude::rust_2024::*;
+
     pub use proptest::collection::vec as propvec;
     pub use proptest::option::of as prop_opt5050;
     pub use proptest::prelude::*;
-    use proptest::test_runner::TestCaseResult;
+    pub use proptest::test_runner::TestCaseResult;
 
     pub use crate::prelude::*;
 

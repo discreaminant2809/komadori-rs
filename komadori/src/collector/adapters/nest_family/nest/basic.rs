@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
@@ -75,7 +75,7 @@ where
     CO: Debug,
     CI: CollectorBase + Clone + Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut debug_struct = f.debug_struct("Nest");
         self.0.debug_struct(&mut debug_struct);
         debug_struct.finish()
@@ -84,7 +84,7 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use std::ops::Range;
+    use core::ops::Range;
 
     use crate::test_utils::prelude::*;
 
@@ -105,7 +105,7 @@ mod proptests {
             .take(row)
             .nest(vec![].into_collector().take(column)),
         expected_f: |mut iter, _| {
-            let res: Vec<_> = std::iter::from_fn(move || {
+            let res: Vec<_> = core::iter::from_fn(move || {
                 let column = iter.by_ref().take(column).collect::<Vec<_>>();
                 (!column.is_empty()).then_some(column)
             })

@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 

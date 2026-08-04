@@ -266,7 +266,7 @@ pub use collector_by_mut::*;
 pub use collector_by_ref::*;
 pub use into_collector::*;
 
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 #[inline(always)]
 pub(crate) const fn assert_collector_base<C>(collector: C) -> C
@@ -338,13 +338,7 @@ pub(crate) fn advanced_collect_many_default_impl<T>(
 /// `finish_boxed_impl! {}`
 macro_rules! finish_boxed_impl {
     () => {
-        #[cfg(feature = "std")]
-        #[inline]
-        fn finish_boxed(self: ::std::boxed::Box<Self>) -> Self::Output {
-            (*self).finish()
-        }
-
-        #[cfg(all(feature = "alloc", not(feature = "std")))]
+        #[cfg(feature = "alloc")]
         #[inline]
         fn finish_boxed(self: ::alloc::boxed::Box<Self>) -> Self::Output {
             (*self).finish()

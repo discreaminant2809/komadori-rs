@@ -79,7 +79,7 @@ fn min_assign<T: Ord>(min: &mut T, value: T) {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_utils {
-    use std::cmp::Ordering;
+    use core::cmp::Ordering;
 
     #[cfg(feature = "itertools")]
     use itertools::MinMaxResult;

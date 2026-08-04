@@ -1,6 +1,6 @@
 use super::{CollectorBase, break_hint};
 
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 /// Defines what item types are accepted and how items are collected.
 pub trait Collector<T>: CollectorBase {

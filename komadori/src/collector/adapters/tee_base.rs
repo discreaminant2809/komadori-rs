@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 use crate::collector::{
     Collector, CollectorBase, Fuse, advanced_collect_many_default_impl, and_break,
@@ -37,7 +37,7 @@ pub(super) trait DefinePassDown<
 
 /// Used for the hack. Should not be able to be referred outside.
 mod t_binder {
-    use std::marker::PhantomData;
+    use core::marker::PhantomData;
 
     pub trait Sealed {}
     #[allow(missing_debug_implementations)]

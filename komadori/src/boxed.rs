@@ -1,6 +1,5 @@
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
-#[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 
 use crate::collector::{Collector, CollectorBase, advanced_collect_many_default_impl};

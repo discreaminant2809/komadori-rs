@@ -2,10 +2,7 @@
 //!
 //! This module corresponds to [`std::collections::vec_deque`].
 
-#[cfg(not(feature = "std"))]
 use alloc::collections::VecDeque;
-#[cfg(feature = "std")]
-use std::collections::VecDeque;
 
 /// A collector that pushes collected items into the back of a [`VecDeque`].
 /// Its [`Output`] is [`VecDeque`].

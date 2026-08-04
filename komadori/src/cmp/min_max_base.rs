@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use itertools::MinMaxResult;
 
@@ -72,7 +72,8 @@ where
         match &mut self.state {
             State::NoElements => self.state = State::OneElement(item),
             State::OneElement(_) => {
-                let State::OneElement(prev) = std::mem::replace(&mut self.state, State::NoElements)
+                let State::OneElement(prev) =
+                    core::mem::replace(&mut self.state, State::NoElements)
                 else {
                     unreachable!("the state is somehow incorrect");
                 };
@@ -130,7 +131,7 @@ where
                     };
 
                     let State::OneElement(prev) =
-                        std::mem::replace(&mut self.state, State::NoElements)
+                        core::mem::replace(&mut self.state, State::NoElements)
                     else {
                         unreachable!("the state is somehow incorrect");
                     };

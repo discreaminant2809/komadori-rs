@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, break_hint, finish_boxed_impl};
 
@@ -141,10 +141,10 @@ impl<C, P> Debug for SkipWhile<C, P>
 where
     C: Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("SkipWhile")
             .field("collector", &self.collector)
-            .field("pred", &std::any::type_name::<P>())
+            .field("pred", &core::any::type_name::<P>())
             .finish()
     }
 }

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::{
     collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl},
@@ -193,7 +193,7 @@ impl<A, F> Debug for TryForEach<A, F>
 where
     A: Try<Output = (), Residual: Debug>,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         struct DebugState<'a, R, F> {
             state: &'a ControlFlow<R, F>,
         }
@@ -202,7 +202,7 @@ where
         where
             R: Debug,
         {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 match self.state {
                     ControlFlow::Continue { .. } => f.debug_struct("Continue").finish(),
                     ControlFlow::Break(residual) => f.debug_tuple("Break").field(residual).finish(),
@@ -212,7 +212,7 @@ where
 
         f.debug_struct("TryForEach")
             .field("state", &DebugState { state: &self.state })
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 }
@@ -235,7 +235,7 @@ where
 
 #[cfg(all(test, feature = "std"))]
 mod proptests {
-    use std::convert::identity;
+    use core::convert::identity;
 
     use crate::test_utils::prelude::*;
 

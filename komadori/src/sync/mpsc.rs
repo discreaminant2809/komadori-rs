@@ -4,10 +4,9 @@
 //!
 //! [`Collector`]: crate::collector::Collector
 
-use std::{
-    ops::ControlFlow,
-    sync::mpsc::{Sender, SyncSender},
-};
+use core::ops::ControlFlow;
+
+use std::sync::mpsc::{Sender, SyncSender};
 
 use crate::collector::{CollectorBase, finish_boxed_impl};
 
@@ -345,8 +344,8 @@ impl<'a, T> crate::collector::Collector<T> for SyncCollector<'a, T> {
 
 macro_rules! debug_clone_impl {
     ($ty_name:ident<$($lts:lifetime,)* $($generics:ident),*>) => {
-        impl<T> std::fmt::Debug for $ty_name<$($lts,)* $($generics),*> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl<T> core::fmt::Debug for $ty_name<$($lts,)* $($generics),*> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 f.debug_tuple(stringify!($ty_name))
                     .field(&self.0)
                     .finish()

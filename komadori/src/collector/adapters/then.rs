@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{
     Collector, CollectorBase, IntoCollector, IntoCollectorBase, finish_boxed_impl,
@@ -40,7 +40,7 @@ where
 
 impl<C1, C2, F> State<C1, C2, F> {
     fn take_first_state(&mut self) -> (C1, F) {
-        let State::First { collector, f } = std::mem::replace(self, Self::Invalid) else {
+        let State::First { collector, f } = core::mem::replace(self, Self::Invalid) else {
             unreachable!("must be First");
         };
         (collector, f)
@@ -52,13 +52,13 @@ where
     C1: Debug,
     C2: Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Invalid => invalid_state(),
             Self::First { collector, .. } => f
                 .debug_struct("First")
                 .field("collector", collector)
-                .field("f", &std::any::type_name::<F>())
+                .field("f", &core::any::type_name::<F>())
                 .finish(),
             Self::Second { collector } => f
                 .debug_struct("Second")
@@ -73,7 +73,7 @@ where
     C1: Debug,
     C2: Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Then").field("state", &self.state).finish()
     }
 }

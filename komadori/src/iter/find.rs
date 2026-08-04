@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 
-use std::{fmt::Debug, ops::ControlFlow};
+use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
 
@@ -12,7 +12,7 @@ use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_
 ///
 /// This collector corresponds to [`Iterator::find()`].
 ///
-/// [`Break(())`]: std::ops::ControlFlow::Break
+/// [`Break(())`]: core::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
 #[deprecated(since = "0.8.0", note = "use `First::new().filter(f)` instead")]
 #[derive(Clone)]
@@ -106,7 +106,7 @@ where
 }
 
 impl<T: Debug, F> Debug for Find<T, F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let item = if let State::Found(ref item) = self.state {
             Some(item)
         } else {
@@ -115,7 +115,7 @@ impl<T: Debug, F> Debug for Find<T, F> {
 
         f.debug_struct("Find")
             .field("found", &item)
-            .field("f", &std::any::type_name::<F>())
+            .field("f", &core::any::type_name::<F>())
             .finish()
     }
 }

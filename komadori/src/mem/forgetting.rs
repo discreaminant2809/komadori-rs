@@ -1,4 +1,4 @@
-use std::{fmt::Debug, mem::forget, ops::ControlFlow};
+use core::{fmt::Debug, mem::forget, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 
