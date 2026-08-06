@@ -870,20 +870,26 @@ pub trait CollectorBase {
     /// # Examples
     ///
     /// ```
-    /// use komadori::{prelude::*, either::Either};
+    /// use komadori::{
+    ///     prelude::*,
+    ///     either::Either,
+    ///     cmp::Max,
+    ///     iter::Count,
+    /// };
     ///
-    /// let collector = vec![]
-    ///     .into_collector()
-    ///     .partition(vec![])
+    /// let nums = [1, 4, 2, 5];
+    ///
+    /// let (max_even, odd_count) = nums
+    ///     .into_iter()
     ///     .map(|x| if x % 2 == 0 {
     ///         Either::Left(x)
     ///     } else {
     ///         Either::Right(x)
-    ///     });
-    /// let (evens, odds) = collector.collect_then_finish(-5..5);
+    ///     })
+    ///     .feed_into(Max::new().partition(Count::new()));
     ///
-    /// assert_eq!(evens, [-4, -2, 0, 2, 4]);
-    /// assert_eq!(odds, [-5, -3, -1, 1, 3]);
+    /// assert_eq!(max_even, Some(4));
+    /// assert_eq!(odd_count, 2);
     /// ```
     ///
     /// [`Either::Left`]: crate::either::Either::Left
