@@ -2,6 +2,10 @@
 
 ## 0.8.1
 
+### Added
+
+- Unstable: `crate::collector::partition()`.
+
 ## 0.8.0
 
 ### Added

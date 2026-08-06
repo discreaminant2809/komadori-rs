@@ -1,6 +1,9 @@
 use core::{fmt::Debug, ops::ControlFlow};
 
-use crate::collector::{Collector, CollectorBase, Fuse, and_break, break_hint, finish_boxed_impl};
+use crate::collector::{
+    Collector, CollectorBase, Fuse, IntoCollectorBase, and_break, assert_collector_base,
+    break_hint, finish_boxed_impl,
+};
 use crate::either::Either;
 
 /// A collector that distributes items between two collectors based on
@@ -15,6 +18,51 @@ pub struct Partition<L, R> {
     right: Fuse<R>,
 }
 
+/// Creates a new instance of [`Partition`].
+///
+/// Use this when the two collectors are nearly equally long,
+/// or you can just use this generally to express the
+/// for readability.
+///
+/// # Examples
+///
+/// ```
+/// use komadori::{
+///     prelude::*,
+///     collector::partition,
+///     either::Either,
+/// };
+///
+/// let (evens, odds) = (-5..5)
+///     .map(|x| if x % 2 == 0 {
+///         Either::Left(x)
+///     } else {
+///         Either::Right(x)
+///     })
+///     // More readable than `vec![].into_collector().partition(vec![])`!
+///     .feed_into(partition(vec![], vec![]));
+///
+/// assert_eq!(evens, [-4, -2, 0, 2, 4]);
+/// assert_eq!(odds, [-5, -3, -1, 1, 3]);
+/// ```
+#[cfg(feature = "unstable")]
+#[inline]
+// This is factored out as a method instead of a `Partition`'s constructor
+// to be consistent with the (future) one in `komadori-rayon` which is `par_partition`.
+// It makes less sense to have `Partition::new()` in `komadori_rayon` because
+// it doesn't have the `Par` prefix, not to mention it will clash with the same
+// struct in `komadori`.
+pub fn partition<L, R>(left: L, right: R) -> Partition<L::IntoCollector, R::IntoCollector>
+where
+    L: IntoCollectorBase,
+    R: IntoCollectorBase,
+{
+    assert_collector_base(Partition::new(
+        left.into_collector(),
+        right.into_collector(),
+    ))
+}
+
 impl<L, R> Partition<L, R>
 where
     L: CollectorBase,
@@ -22,8 +70,8 @@ where
 {
     pub(in crate::collector) fn new(left: L, right: R) -> Self {
         Self {
-            left: Fuse::new(left),
-            right: Fuse::new(right),
+            left: left.into_collector().fuse(),
+            right: right.into_collector().fuse(),
         }
     }
 }
