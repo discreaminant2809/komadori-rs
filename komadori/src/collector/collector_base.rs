@@ -3,6 +3,8 @@ use core::ops::ControlFlow;
 #[cfg(feature = "alloc")]
 use alloc::boxed::Box;
 
+use crate::collector::{Intersperse, IntersperseWith};
+
 #[cfg(feature = "itertools")]
 use super::Update;
 use super::{
@@ -1326,6 +1328,123 @@ pub trait CollectorBase {
         Self: Sized,
     {
         TryingResults::new(self)
+    }
+
+    /// Creates a collector that separates collected items with a separator.
+    ///
+    /// No separator is collected when the first item is collected. Afterwards,
+    /// the underlying collector collects a separator first before an item.
+    ///
+    /// The separator must implement [`Clone`].
+    ///
+    /// # Truncation
+    ///
+    /// If you call [`max_afford()`](Self::max_afford) with `request` more than
+    /// [`isize::MAX`], it may yield less than expected, even though
+    /// the underlying collector is infinite.
+    ///
+    /// # Panics
+    ///
+    /// [`reserve()`](Self::reserve) of this adapter may panic if you reserve
+    /// for more than [`isize::MAX`] items.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = String::new()
+    ///     .into_concat()
+    ///     .intersperse(" ");
+    ///
+    /// assert!(collector.collect("noble").is_continue());
+    ///
+    /// assert_eq!(collector.finish(), "noble");
+    /// ```
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = String::new()
+    ///     .into_concat()
+    ///     .intersperse(" ");
+    ///
+    /// assert!(collector.collect("noble").is_continue());
+    /// assert!(collector.collect("and").is_continue());
+    /// assert!(collector.collect("singer").is_continue());
+    ///
+    /// assert_eq!(collector.finish(), "noble and singer");
+    /// ```
+    #[inline]
+    fn intersperse<S>(self, sep: S) -> Intersperse<Self, S>
+    where
+        Self: Sized,
+        S: Clone,
+    {
+        assert_collector_base(Intersperse::new(self, sep))
+    }
+
+    /// Creates a collector that separates collected items with a separator
+    /// from a function.
+    ///
+    /// `intersperse_with()` works the same as [`intersperse()`](Self::intersperse),
+    /// except each separator is generated from a function instead.
+    /// This is useful when the separator type is not [`Clone`]
+    /// or you want to compute the separators every time.
+    ///
+    /// # Truncation
+    ///
+    /// If you call [`max_afford()`](Self::max_afford) with `request` more than
+    /// [`isize::MAX`], it may yield less than expected, even though
+    /// the underlying collector is infinite.
+    ///
+    /// # Panics
+    ///
+    /// [`reserve()`](Self::reserve) of this adapter may panic if you reserve
+    /// for more than [`isize::MAX`] items.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut sep = 0;
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .intersperse_with(move || {
+    ///         sep -= 1;
+    ///         sep
+    ///     });
+    ///
+    /// assert!(collector.collect(1).is_continue());
+    ///
+    /// assert_eq!(collector.finish(), [1]);
+    /// ```
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut sep = 0;
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .intersperse_with(move || {
+    ///         sep -= 1;
+    ///         sep
+    ///     });
+    ///
+    /// assert!(collector.collect(1).is_continue());
+    /// assert!(collector.collect(2).is_continue());
+    /// assert!(collector.collect(3).is_continue());
+    ///
+    /// assert_eq!(collector.finish(), [1, -1, 2, -2, 3]);
+    /// ```
+    #[inline]
+    fn intersperse_with<FS, S>(self, sep_f: FS) -> IntersperseWith<Self, FS>
+    where
+        Self: Sized,
+        FS: FnMut() -> S,
+    {
+        assert_collector_base(IntersperseWith::new(self, sep_f))
     }
 
     /// Creates a collector that mutates each item first before collecting.

@@ -64,14 +64,14 @@ where
     // to guard against malformed test cases regarding `assume_reserved_collect()`.
     let mut reserved_amount = 0;
     let mut actual_final_cf = None;
-    let mut last_i = None;
+    let mut last_step = 0;
     let mut collected_count = 0_usize;
 
     // The `middles` iterator is fused anyway.
     for (i, &node) in seq.middles.iter().enumerate() {
         const MISSING_ITEM_MSG: &str = "there should be an element";
 
-        last_i = Some(i);
+        last_step = i + 1;
 
         match node {
             MiddleSeqNode::Reserve { additional } => {
@@ -183,7 +183,7 @@ where
     match (break_after, collected_count, actual_final_cf) {
         (None, _, Some(ControlFlow::Break(()))) => {
             return Err(mismatch_after_step_error(
-                last_i.unwrap_or(0),
+                last_step,
                 format_args!("{:?}", ControlFlow::<()>::Continue(())),
                 format_args!("{:?}", ControlFlow::<()>::Break(())),
             ));
@@ -192,7 +192,7 @@ where
             if break_after >= collected_count =>
         {
             return Err(mismatch_after_step_error(
-                last_i.unwrap_or(0),
+                last_step,
                 format_args!("{:?}", ControlFlow::<()>::Break(())),
                 format_args!("{:?}", ControlFlow::<()>::Continue(())),
             ));
