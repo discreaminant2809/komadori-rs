@@ -1,8 +1,7 @@
 use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{
-    Collector, CollectorBase, Fuse, IntoCollectorBase, and_break, assert_collector_base,
-    break_hint, finish_boxed_impl,
+    Collector, CollectorBase, Fuse, IntoCollectorBase, and_break, break_hint, finish_boxed_impl,
 };
 use crate::either::Either;
 
@@ -57,6 +56,8 @@ where
     L: IntoCollectorBase,
     R: IntoCollectorBase,
 {
+    use crate::collector::assert_collector_base;
+
     assert_collector_base(Partition::new(
         left.into_collector(),
         right.into_collector(),

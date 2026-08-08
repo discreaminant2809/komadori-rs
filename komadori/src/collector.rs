@@ -123,7 +123,8 @@
 //! reduces the reserved amount by `1`. A call to [`collect_many()`] resets
 //! the reserved amount to `0`, regardless of the size of the iterator.
 //! Resetting or "disturbing" the state of the collector
-//! (e.g. assigning a new collector, changing from [`Either::Left`] to [`Either::Right`])
+//! (e.g. assigning a new collector, changing from [`Either::Left`] to [`Either::Right`],
+//! panicking while collecting)
 //! also resets the reserved amount to `0` (unless otherwise specified by the implementors).
 //! This is tracked conceptually, so you may have to track outside.
 //!

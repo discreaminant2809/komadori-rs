@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 249a22f6dee50946542dd2c2a9ee1e246071c78af79903b507dcf1985bac1ed0 # shrinks to (nums, count, seq) = ([1273790571, 570289064, 439827343, -685728031, 341848982], 5, FuzzyExecSeq { middles: [Collect, Reserve { additional: 3 }, AssumeReservedCollect, MaxAfford { request: 5 }, Collect], end: CollectThenFinish }), mut starting_nums = [-512147141]
+cc 94eb504a7deecd33a9cdcbfc8de891db486eab54440b86909e4c2a7a4ce680de # shrinks to (nums, count, seq) = ([902158210, -128127506, -941251173, 1530251797, 1833998033], 5, FuzzyExecSeq { middles: [Collect, CollectMany { n: 0 }, MaxAfford { request: 6 }, Collect, Reserve { additional: 1 }, AssumeReservedCollect, Reserve { additional: 1 }], end: CollectThenFinish }), mut starting_nums = []
+cc 3c812b965a2e24a7445e10c2ab76b48efaa9222660f25d006dc9a7e00997181d # shrinks to (nums, count, seq) = ([1091909965, -52209246, -1243043452, 1468960018, -1646797507], 5, FuzzyExecSeq { middles: [MaxAfford { request: 7 }, Reserve { additional: 5 }, AssumeReservedCollect, AssumeReservedCollect, Reserve { additional: 0 }], end: CollectThenFinish }), mut starting_nums = []
