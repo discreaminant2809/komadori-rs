@@ -4,6 +4,8 @@
 
 ### Added
 
+- `CollectorBase::intersperse()`.
+- `CollectorBase::intersperse_with()`.
 - Unstable: `crate::collector::partition()`.
 
 ## 0.8.0
