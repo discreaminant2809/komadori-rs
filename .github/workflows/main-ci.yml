@@ -45,6 +45,9 @@ jobs:
       - name: Check (Compilation)
         run: RUSTFLAGS="-D warnings" cargo hack check --feature-powerset --all-targets
 
+      - name: Check (Compilation) (debug-assertions=off)
+        run: RUSTFLAGS="-D warnings -C debug-assertions=off" cargo hack check --feature-powerset --all-targets
+
       - name: Run Tests
         run: cargo hack test --feature-powerset --lib
 

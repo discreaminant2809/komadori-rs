@@ -16,18 +16,46 @@ use alloc::vec::Vec;
 ///
 /// This struct is created by `Vec::into_collector()`.
 ///
+/// # Panics
+///
+/// Because this is considered fundamental in the Reserve API,
+/// with `debug-assertions` on, this collector will track the reservation amount when used.
+/// If any contracts of the Reserve API are violated, a panic results.
+/// It is to catch bugs easier during development.
+/// However, this behavior is not guarateed to survive between versions,
+/// and it disappears when `debug-assertions` is off, so you should **not**
+/// rely on it for correctness.
+///
 /// [`Output`]: CollectorBase::Output
 #[derive(Debug, Clone)]
-pub struct IntoCollector<T>(Vec<T>);
+pub struct IntoCollector<T> {
+    base: Vec<T>,
+    #[cfg(debug_assertions)]
+    reservation: usize,
+}
 
 /// A collector that pushes collected items into a [`&mut Vec`](Vec).
 /// Its [`Output`] is [`&mut Vec`](Vec).
 ///
 /// This struct is created by `Vec::collector_mut()`.
 ///
+/// # Panics
+///
+/// Because this is considered fundamental in the Reserve API,
+/// with `debug-assertions` on, this collector will track the reservation amount when used.
+/// If any contracts of the Reserve API are violated, a panic results.
+/// It is to catch bugs easier during development.
+/// However, this behavior is not guarateed to survive between versions,
+/// and it disappears when `debug-assertions` is off, so you should **not**
+/// rely on it for correctness.
+///
 /// [`Output`]: CollectorBase::Output
 #[derive(Debug)]
-pub struct CollectorMut<'a, T>(&'a mut Vec<T>);
+pub struct CollectorMut<'a, T> {
+    base: &'a mut Vec<T>,
+    #[cfg(debug_assertions)]
+    reservation: usize,
+}
 
 impl<T> crate::collector::IntoCollectorBase for Vec<T> {
     type Output = Self;
@@ -36,7 +64,11 @@ impl<T> crate::collector::IntoCollectorBase for Vec<T> {
 
     #[inline]
     fn into_collector(self) -> Self::IntoCollector {
-        IntoCollector(self)
+        IntoCollector {
+            base: self,
+            #[cfg(debug_assertions)]
+            reservation: 0,
+        }
     }
 }
 
@@ -47,7 +79,11 @@ impl<'a, T> crate::collector::IntoCollectorBase for &'a mut Vec<T> {
 
     #[inline]
     fn into_collector(self) -> Self::IntoCollector {
-        CollectorMut(self)
+        CollectorMut {
+            base: self,
+            #[cfg(debug_assertions)]
+            reservation: 0,
+        }
     }
 }
 
@@ -56,41 +92,65 @@ impl<T> CollectorBase for IntoCollector<T> {
 
     #[inline]
     fn finish(self) -> Self::Output {
-        self.0
+        self.base
     }
 
     finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {
-        self.0.reserve(additional);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = additional;
+        }
+
+        self.base.reserve(additional);
     }
 }
 
 impl<T> Collector<T> for IntoCollector<T> {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        self.0.push(item);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = self.reservation.saturating_sub(1);
+        }
+
+        self.base.push(item);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.0.extend(items);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = 0;
+        }
+
+        self.base.extend(items);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        self.0.extend(items);
-        self.0
+        self.base.extend(items);
+        self.base
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                self.reservation > 0,
+                "`assume_reserved_collect()` called without any reservation"
+            );
+            self.reservation -= 1;
+        }
+
         unsafe {
             // SAFETY: the caller has reserved for at least one element.
-            push_unchecked(&mut self.0, item);
+            push_unchecked(&mut self.base, item);
         }
 
         ControlFlow::Continue(())
@@ -103,27 +163,46 @@ where
 {
     #[inline]
     fn collect(&mut self, &item: &'i T) -> ControlFlow<()> {
-        self.0.push(item);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = self.reservation.saturating_sub(1);
+        }
+
+        self.base.push(item);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = &'i T>) -> ControlFlow<()> {
-        self.0.extend(items);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = 0;
+        }
+
+        self.base.extend(items);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_then_finish(mut self, items: impl IntoIterator<Item = &'i T>) -> Self::Output {
-        self.0.extend(items);
-        self.0
+        self.base.extend(items);
+        self.base
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, &item: &'i T) -> ControlFlow<()> {
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                self.reservation > 0,
+                "`assume_reserved_collect()` called without any reservation"
+            );
+            self.reservation -= 1;
+        }
+
         unsafe {
             // SAFETY: the caller has reserved for at least one element.
-            push_unchecked(&mut self.0, item);
+            push_unchecked(&mut self.base, item);
         }
 
         ControlFlow::Continue(())
@@ -136,27 +215,46 @@ where
 {
     #[inline]
     fn collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
-        self.0.push(item);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = self.reservation.saturating_sub(1);
+        }
+
+        self.base.push(item);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = &'i mut T>) -> ControlFlow<()> {
-        self.0.extend(items.into_iter().map(|&mut item| item));
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = 0;
+        }
+
+        self.base.extend(items.into_iter().map(|&mut item| item));
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_then_finish(mut self, items: impl IntoIterator<Item = &'i mut T>) -> Self::Output {
-        self.0.extend(items.into_iter().map(|&mut item| item));
-        self.0
+        self.base.extend(items.into_iter().map(|&mut item| item));
+        self.base
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                self.reservation > 0,
+                "`assume_reserved_collect()` called without any reservation"
+            );
+            self.reservation -= 1;
+        }
+
         unsafe {
             // SAFETY: the caller has reserved for at least one element.
-            push_unchecked(&mut self.0, item);
+            push_unchecked(&mut self.base, item);
         }
 
         ControlFlow::Continue(())
@@ -168,41 +266,65 @@ impl<'a, T> CollectorBase for CollectorMut<'a, T> {
 
     #[inline]
     fn finish(self) -> Self::Output {
-        self.0
+        self.base
     }
 
     finish_boxed_impl!();
 
     #[inline]
     fn reserve(&mut self, additional: usize) {
-        self.0.reserve(additional);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = additional;
+        }
+
+        self.base.reserve(additional);
     }
 }
 
 impl<'a, T> Collector<T> for CollectorMut<'a, T> {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        self.0.push(item);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = self.reservation.saturating_sub(1);
+        }
+
+        self.base.push(item);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.0.extend(items);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = 0;
+        }
+
+        self.base.extend(items);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        self.0.extend(items);
-        self.0
+        self.base.extend(items);
+        self.base
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                self.reservation > 0,
+                "`assume_reserved_collect()` called without any reservation"
+            );
+            self.reservation -= 1;
+        }
+
         unsafe {
             // SAFETY: the caller has reserved for at least one element.
-            push_unchecked(self.0, item);
+            push_unchecked(self.base, item);
         }
 
         ControlFlow::Continue(())
@@ -215,27 +337,46 @@ where
 {
     #[inline]
     fn collect(&mut self, &item: &'i T) -> ControlFlow<()> {
-        self.0.push(item);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = self.reservation.saturating_sub(1);
+        }
+
+        self.base.push(item);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = &'i T>) -> ControlFlow<()> {
-        self.0.extend(items);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = 0;
+        }
+
+        self.base.extend(items);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_then_finish(self, items: impl IntoIterator<Item = &'i T>) -> Self::Output {
-        self.0.extend(items);
-        self.0
+        self.base.extend(items);
+        self.base
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, &item: &'i T) -> ControlFlow<()> {
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                self.reservation > 0,
+                "`assume_reserved_collect()` called without any reservation"
+            );
+            self.reservation -= 1;
+        }
+
         unsafe {
             // SAFETY: the caller has reserved for at least one element.
-            push_unchecked(self.0, item);
+            push_unchecked(self.base, item);
         }
 
         ControlFlow::Continue(())
@@ -248,27 +389,46 @@ where
 {
     #[inline]
     fn collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
-        self.0.push(item);
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = self.reservation.saturating_sub(1);
+        }
+
+        self.base.push(item);
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = &'i mut T>) -> ControlFlow<()> {
-        self.0.extend(items.into_iter().map(|&mut item| item));
+        #[cfg(debug_assertions)]
+        {
+            self.reservation = 0;
+        }
+
+        self.base.extend(items.into_iter().map(|&mut item| item));
         ControlFlow::Continue(())
     }
 
     #[inline]
     fn collect_then_finish(self, items: impl IntoIterator<Item = &'i mut T>) -> Self::Output {
-        self.0.extend(items.into_iter().map(|&mut item| item));
-        self.0
+        self.base.extend(items.into_iter().map(|&mut item| item));
+        self.base
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                self.reservation > 0,
+                "`assume_reserved_collect()` called without any reservation"
+            );
+            self.reservation -= 1;
+        }
+
         unsafe {
             // SAFETY: the caller has reserved for at least one element.
-            push_unchecked(self.0, item);
+            push_unchecked(self.base, item);
         }
 
         ControlFlow::Continue(())
@@ -276,8 +436,13 @@ where
 }
 
 impl<T> Default for IntoCollector<T> {
+    #[inline]
     fn default() -> Self {
-        Self(Default::default())
+        Self {
+            base: Default::default(),
+            #[cfg(debug_assertions)]
+            reservation: 0,
+        }
     }
 }
 
