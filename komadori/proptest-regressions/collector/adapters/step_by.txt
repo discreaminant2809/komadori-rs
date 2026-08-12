@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7f0d1bab4a9e13ff37a019cb307369a585aee3135359a587c81739345ea9a776 # shrinks to (nums, count, seq) = ([0], 1, FuzzyExecSeq { middles: [], end: CollectThenFinish }), n = 1, step = 1
+cc 12b8bc19bb8635c166ca98ffa47129ff52e6ea7327e1cd59ba92c65bef6a5a4d # shrinks to (nums, count, seq) = ([-993600280, -1869637996, -950918516, 1336938286, -583019683], 5, FuzzyExecSeq { middles: [], end: CollectThenFinish }), n = 4, step = 2

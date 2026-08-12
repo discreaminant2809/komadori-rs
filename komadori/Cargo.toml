@@ -74,6 +74,11 @@ name = "sum_doubles"
 required-features = ["alloc"]
 harness = false
 
+[[bench]]
+name = "step_by"
+required-features = ["alloc"]
+harness = false
+
 [[example]]
 name = "asm_view"
 required-features = ["std"]

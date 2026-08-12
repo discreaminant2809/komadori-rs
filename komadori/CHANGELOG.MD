@@ -6,6 +6,7 @@
 
 - `CollectorBase::intersperse()`.
 - `CollectorBase::intersperse_with()`.
+- `CollectorBase::step_by()`.
 - Reservation counters when `debug-assertions` is on for `crate::vec::IntoCollector`
   and `crate::vec::CollectorMut`.
 - Unstable: `crate::collector::partition()`.
