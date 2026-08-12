@@ -903,24 +903,38 @@ pub trait CollectorBase {
     /// ```
     /// use komadori::{
     ///     prelude::*,
-    ///     either::Either,
     ///     cmp::Max,
     ///     iter::Count,
     /// };
+    /// use either::IntoEither;
     ///
     /// let nums = [1, 4, 2, 5];
     ///
     /// let (max_even, odd_count) = nums
     ///     .into_iter()
-    ///     .map(|x| if x % 2 == 0 {
-    ///         Either::Left(x)
-    ///     } else {
-    ///         Either::Right(x)
-    ///     })
+    ///     .map(|x| x.into_either(x % 2 == 0))
     ///     .feed_into(Max::new().partition(Count::new()));
     ///
     /// assert_eq!(max_even, Some(4));
     /// assert_eq!(odd_count, 2);
+    /// ```
+    ///
+    /// It may be more readable to use [`crate::collector::partition()`]:
+    ///
+    /// ```
+    /// use komadori::{
+    ///     prelude::*,
+    ///     collector::partition,
+    /// };
+    /// use either::IntoEither;
+    ///
+    /// let (evens, odds) = (-5..5)
+    ///     .map(|x| x.into_either(x % 2 == 0))
+    ///     // More readable than `vec![].into_collector().partition(vec![])`!
+    ///     .feed_into(partition(vec![], vec![]));
+    ///
+    /// assert_eq!(evens, [-4, -2, 0, 2, 4]);
+    /// assert_eq!(odds, [-5, -3, -1, 1, 3]);
     /// ```
     ///
     /// [`Either::Left`]: crate::either::Either::Left
