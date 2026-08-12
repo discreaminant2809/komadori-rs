@@ -230,11 +230,6 @@ if you want to delve into how collectors work.
   Items gated behind this feature do **not** follow normal semver guarantees
   and may change or be removed at any time.
 
-  Although the crate as a whole is technically still experimental, the items under
-  `unstable` are even more experimental, and it is generally
-  discouraged to use them until their designs are finalized and not
-  under this flag anymore.
-
 [`Collector`]: https://docs.rs/komadori/latest/komadori/collector/trait.Collector.html
 [`feed_into()`]: https://docs.rs/komadori/latest/komadori/iter/trait.IteratorExt.html#method.feed_into
 [`Iterator`]: https://doc.rust-lang.org/std/iter/trait.Iterator.html
