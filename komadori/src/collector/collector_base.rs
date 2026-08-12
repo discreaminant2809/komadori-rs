@@ -9,7 +9,7 @@ use crate::collector::{Intersperse, IntersperseWith};
 use super::Update;
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
-    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip, SkipWhile, Take,
+    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip, SkipWhile, StepBy, Take,
     TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching, Unzip,
     assert_collector, assert_collector_base,
 };
@@ -861,7 +861,36 @@ pub trait CollectorBase {
         assert_collector::<_, T>(TakeWhile::new(self, pred))
     }
 
-    // fn step_by()
+    /// Creates a collector that enters a fixed "cooldown" after accumulating one item.
+    /// Items that are collected during the cooldown will be ignored.
+    ///
+    /// The first item is guaranteed to be accumulated. Then, `step_by(n)`
+    /// will be skipping the next `n - 1` items before it can accumulate again.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n` is `0`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .step_by(3);
+    ///
+    /// assert!(collector.collect_many(0..=10).is_continue());
+    ///
+    /// assert_eq!(collector.finish(), [0, 3, 6, 9]);
+    /// ```
+    #[inline]
+    fn step_by(self, step: usize) -> StepBy<Self>
+    where
+        Self: Sized,
+    {
+        assert_collector_base(StepBy::new(self, step))
+    }
 
     /// Creates a collector that distributes items between two collectors based on
     /// whether an item is "left" or "right."
