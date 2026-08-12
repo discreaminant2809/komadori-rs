@@ -598,6 +598,7 @@ pub trait CollectorBase {
     /// [`Break(())`]: ControlFlow::Break
     /// [`collect()`]: Collector::collect
     /// [`collect_many()`]: Collector::collect_many
+    #[inline]
     fn skip(self, n: usize) -> Skip<Self>
     where
         Self: Sized,
@@ -716,6 +717,7 @@ pub trait CollectorBase {
     ///
     /// assert_eq!(average.finish(), Some(3.25));
     /// ```
+    #[inline]
     fn map_output<F, T>(self, f: F) -> MapOutput<Self, F>
     where
         Self: Sized,
@@ -853,6 +855,7 @@ pub trait CollectorBase {
     ///
     /// assert_eq!(collector.finish(), "abcdef");
     /// ```
+    #[inline]
     fn take_while<F, T>(self, pred: F) -> TakeWhile<Self, F>
     where
         Self: Collector<T> + Sized,
@@ -986,12 +989,13 @@ pub trait CollectorBase {
     ///
     /// assert_eq!(max_subarray_sum.finish(), Some(6));
     /// ```
+    #[inline]
     fn unbatching<F, T>(self, f: F) -> Unbatching<Self, F>
     where
         Self: Sized,
         F: FnMut(&mut Self, T) -> ControlFlow<()>,
     {
-        assert_collector_base(Unbatching::new(self, f))
+        assert_collector::<_, T>(Unbatching::new(self, f))
     }
 
     /// A collector that flattens items by one level of nesting before collecting.
@@ -1096,7 +1100,7 @@ pub trait CollectorBase {
     where
         Self: Sized,
     {
-        self
+        assert_collector_base(self)
     }
 
     /// Creates a collector that "views" each item first before collecting.
@@ -1162,7 +1166,7 @@ pub trait CollectorBase {
     where
         Self: Sized,
     {
-        Enumerate::new(self)
+        assert_collector_base(Enumerate::new(self))
     }
 
     /// Creates a collector that both filters and maps each item before collecting.
@@ -1273,7 +1277,7 @@ pub trait CollectorBase {
         Self: Collector<T> + Sized,
         P: FnMut(&T) -> bool,
     {
-        SkipWhile::new(self, pred)
+        assert_collector::<_, T>(SkipWhile::new(self, pred))
     }
 
     /// Creates a collector that sets the [`Output`] to [`None`] when
@@ -1323,7 +1327,7 @@ pub trait CollectorBase {
     where
         Self: Sized,
     {
-        TryingOptions::new(self)
+        assert_collector_base(TryingOptions::new(self))
     }
 
     /// Creates a collector that sets the [`Output`] to [`Err(e)`](Err) when
@@ -1370,7 +1374,7 @@ pub trait CollectorBase {
     where
         Self: Sized,
     {
-        TryingResults::new(self)
+        assert_collector_base(TryingResults::new(self))
     }
 
     /// Creates a collector that separates collected items with a separator.
@@ -1514,7 +1518,7 @@ pub trait CollectorBase {
         Self: Collector<T> + Sized,
         F: FnMut(&mut T),
     {
-        Update::new(self, f)
+        assert_collector::<_, T>(Update::new(self, f))
     }
 
     /// Creates a collector that collects all outputs produced by an inner collector.
@@ -1558,6 +1562,7 @@ pub trait CollectorBase {
     /// [`finish()`]: CollectorBase::finish
     /// [`collect_then_finish()`]: Collector::collect_then_finish
     #[cfg(feature = "unstable")]
+    #[inline]
     fn nest<C>(self, inner: C) -> Nest<Self, C::IntoCollector>
     where
         Self: Collector<C::Output> + Sized,
@@ -1607,6 +1612,7 @@ pub trait CollectorBase {
     /// [`finish()`]: CollectorBase::finish
     /// [`collect_then_finish()`]: Collector::collect_then_finish
     #[cfg(feature = "unstable")]
+    #[inline]
     fn nest_exact<C>(self, inner: C) -> NestExact<Self, C::IntoCollector>
     where
         Self: Collector<C::Output> + Sized,
