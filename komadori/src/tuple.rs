@@ -86,7 +86,9 @@ where
 }
 
 impl<C> Tuple for (C,) {
-    type IntoCollectorRepr = C;
+    // So that we debug, the callers can see a 1-ary tuple
+    // and infer it's converted from a 1-ary tuple.
+    type IntoCollectorRepr = (C,);
 }
 
 impl<C> IntoCollectorBase for (C,)
@@ -100,7 +102,7 @@ where
     #[inline]
     fn into_collector(self) -> Self::IntoCollector {
         let (collector,) = self;
-        IntoCollector(collector.into_collector())
+        IntoCollector((collector.into_collector(),))
     }
 }
 
@@ -111,17 +113,17 @@ where
     type Output = (C::Output,);
 
     fn finish(self) -> Self::Output {
-        (self.0.finish(),)
+        (self.0.0.finish(),)
     }
 
     finish_boxed_impl! {}
 
     fn reserve(&mut self, additional: usize) {
-        self.0.reserve(additional);
+        self.0.0.reserve(additional);
     }
 
     fn max_afford(&self, request: usize) -> usize {
-        self.0.max_afford(request)
+        self.0.0.max_afford(request)
     }
 }
 
@@ -133,24 +135,24 @@ where
 {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        self.0.collect(item)
+        self.0.0.collect(item)
     }
 
     #[inline]
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.0.collect_many(items)
+        self.0.0.collect_many(items)
     }
 
     #[inline]
     fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        (self.0.collect_then_finish(items),)
+        (self.0.0.collect_then_finish(items),)
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
         unsafe {
             // SAFETY: The caller has reserved for one item.
-            self.0.assume_reserved_collect(item)
+            self.0.0.assume_reserved_collect(item)
         }
     }
 }
