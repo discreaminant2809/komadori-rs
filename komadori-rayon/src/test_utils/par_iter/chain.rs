@@ -36,10 +36,10 @@ where
     I1: IndexedParallelIterator,
     I2: IndexedParallelIterator<Item = I1::Item>,
 {
-    fn indexed_producer(&mut self) -> impl super::IndexedProducer<Item = Self::Item> {
+    fn take_indexed_producer(&mut self) -> impl super::IndexedProducer<Item = Self::Item> {
         Producer::Both {
-            producer1: self.iter1.indexed_producer(),
-            producer2: self.iter2.indexed_producer(),
+            producer1: self.iter1.take_indexed_producer(),
+            producer2: self.iter2.take_indexed_producer(),
         }
     }
 

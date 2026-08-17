@@ -193,74 +193,39 @@ mod consumer {
 mod proptests {
     use crate::test_utils::prelude::*;
 
-    proptest! {
-        /// Pre-requisite:
-        /// - [`crate::vec::IntoParCollector`]
-        /// - [`ParallelCollectorBase::take()`]
-        #[test]
-        fn indexed(
-            (split_decision, nums) in propvec(any::<i32>(), ..=5)
-                .prop_flat_map(|nums| {
-                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
-                }),
-            take_count in ..=5_usize,
-            pool in CoroutinePool::prop(),
-        ) {
-            indexed_impl(pool, split_decision, nums, take_count)?;
-        }
-    }
+    par_collector_test!(indexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut n = ..=5_usize;
+        },
+        iter: nums.par_iter(),
+        collector: vec![].into_par_collector().take(n).copying(),
+        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.copied().take(n).collect();
+            (res, if count < n { Continue(()) } else { Break(()) })
+        },
+        output_pred: PartialEq::eq,
+        state_pred: state_is_irrelevant(),
+    });
 
-    proptest! {
-        /// Pre-requisite:
-        /// - [`crate::vec::IntoParCollector`]
-        /// - [`ParallelCollectorBase::take()`]
-        #[test]
-        fn unindexed(
-            nums in propvec(any::<i32>(), ..=5),
-            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
-            take_count in ..=5_usize,
-            pool in CoroutinePool::prop(),
-        ) {
-            unindexed_impl(pool, split_decision, nums, take_count)?;
-        }
-    }
-
-    fn indexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: IndexedSplitDecision,
-        nums: Vec<i32>,
-        take_count: usize,
-    ) -> TestCaseResult {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter(),
-            collector_factory: || vec![].into_par_collector().take(take_count).copying(),
-            should_break_pred: |_| nums.len() >= take_count,
-            pred: |_, output| PredError::assert_eq(output, nums.iter().copied().take(take_count).collect()),
-        }
-        .test_par_collector(&mut pool, &split_decision)
-    }
-
-    fn unindexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: UnindexedSplitDecision,
-        nums: Vec<i32>,
-        take_count: usize,
-    ) -> TestCaseResult {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter(),
-            collector_factory: || vec![].into_par_collector().take(take_count).copying(),
-            should_break_pred: |_| nums.len() >= take_count,
-            pred: |_, output| {
-                PredError::assert_eq(output.len(), nums.len().min(take_count))?;
-
-                PredError::assert_fn(
-                    output,
-                    &nums,
-                    |actual, expected| is_subsequence(&actual[..], &expected[..]),
-                    "not a subsequence",
-                )
-            },
-        }
-        .test_unindexed_par_collector(&mut pool, &split_decision)
-    }
+    unindexed_par_collector_test!(unindexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut n = ..=5_usize;
+        },
+        iter: nums.par_iter(),
+        collector: vec![].into_par_collector().take(n).copying(),
+        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.copied().collect();
+            (res, if count < n { Continue(()) } else { Break(()) })
+        },
+        output_pred: |actual, expected| actual.len() == nums.len().min(n) && is_subsequence(actual, expected),
+        state_pred: state_is_irrelevant(),
+    });
 }

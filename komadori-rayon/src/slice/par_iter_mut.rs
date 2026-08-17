@@ -2,29 +2,23 @@ use crate::test_utils::{
     IndexedParallelIterator, IndexedProducer, IntoParallelIterator, ParallelIterator, Producer as IProducer,
 };
 
-pub struct ParIter<'a, T>(&'a [T]);
+pub struct ParIterMut<'a, T>(&'a mut [T]);
 
-impl<T> Clone for ParIter<'_, T> {
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
+impl<'a, T: 'a> IntoParallelIterator for &'a mut [T] {
+    type Item = &'a mut T;
 
-impl<'a, T: 'a> IntoParallelIterator for &'a [T] {
-    type Item = &'a T;
-
-    type IntoParIter = ParIter<'a, T>;
+    type IntoParIter = ParIterMut<'a, T>;
 
     fn into_par_iter(self) -> Self::IntoParIter {
-        ParIter(self)
+        ParIterMut(self)
     }
 }
 
-impl<'a, T> ParallelIterator for ParIter<'a, T> {
-    type Item = &'a T;
+impl<'a, T> ParallelIterator for ParIterMut<'a, T> {
+    type Item = &'a mut T;
 
     fn take_producer(&mut self) -> impl IProducer<Item = Self::Item> {
-        Producer(self.0).into_unindexed()
+        self.take_indexed_producer().into_unindexed()
     }
 
     fn count(self) -> usize {
@@ -32,9 +26,9 @@ impl<'a, T> ParallelIterator for ParIter<'a, T> {
     }
 }
 
-impl<'a, T> IndexedParallelIterator for ParIter<'a, T> {
+impl<'a, T> IndexedParallelIterator for ParIterMut<'a, T> {
     fn take_indexed_producer(&mut self) -> impl IndexedProducer<Item = Self::Item> {
-        Producer(self.0)
+        Producer(std::mem::take(&mut self.0))
     }
 
     fn len(&self) -> usize {
@@ -42,13 +36,13 @@ impl<'a, T> IndexedParallelIterator for ParIter<'a, T> {
     }
 }
 
-struct Producer<'a, T>(&'a [T]);
+struct Producer<'a, T>(&'a mut [T]);
 
 impl<'a, T> IndexedProducer for Producer<'a, T> {
-    type Item = &'a T;
+    type Item = &'a mut T;
 
     fn into_iter(self) -> impl Iterator<Item = Self::Item> {
-        self.0.iter()
+        self.0.iter_mut()
     }
 
     fn len(&self) -> usize {
@@ -56,7 +50,7 @@ impl<'a, T> IndexedProducer for Producer<'a, T> {
     }
 
     fn split_off_left_at(&mut self, index: usize) -> Self {
-        let (left, right) = self.0.split_at(index);
+        let (left, right) = std::mem::take(&mut self.0).split_at_mut(index);
         self.0 = right;
         Self(left)
     }

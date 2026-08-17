@@ -9,3 +9,5 @@ pub(crate) mod drainer;
 pub(crate) mod in_place_write;
 #[cfg(test)]
 pub(crate) mod par_iter;
+#[cfg(test)]
+pub(crate) mod par_iter_mut;

@@ -211,51 +211,43 @@ mod consumer {
 mod proptests {
     use crate::test_utils::prelude::*;
 
-    proptest! {
-        /// Pre-requisite:
-        /// - [`crate::vec::IntoParCollector`]
-        /// - [`ParallelCollectorBase::take()`]
-        #[test]
-        fn indexed(
-            (split_decision, nums) in propvec(any::<i32>(), ..=5)
-                .prop_flat_map(|nums| {
-                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
-                }),
-            (take_count, start) in prop_oneof![..=2_usize, usize::MAX - 2..]
-                .prop_flat_map(|start| (..=(usize::MAX - start).min(5), Just(start))),
-            pool in CoroutinePool::prop(),
-        ) {
-            indexed_impl(pool, split_decision, nums, take_count, start)?;
-        }
-    }
+    par_collector_test!(indexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut n_and_start = prop_oneof![..=2_usize, usize::MAX - 2..]
+                .prop_flat_map(|start| (..=(usize::MAX - start).min(5), Just(start)));
+        },
+        iter: nums.par_iter().cloned(),
+        collector: {
+            let (n, start) = n_and_start;
+            let mut collector = vec![].into_par_collector().take(n).enumerate();
+            collector.idx = start;
+            collector
+        },
+        starting_bh: if n_and_start.0 > 0 {
+            Continue(())
+        } else {
+            Break(())
+        },
+        expected_f: |iter, count| {
+            let (n, start) = n_and_start;
+            let mut idx = start;
 
-    fn indexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: IndexedSplitDecision,
-        nums: Vec<i32>,
-        take_count: usize,
-        start: usize,
-    ) -> TestCaseResult {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter().cloned(),
-            collector_factory: || {
-                let mut collector = vec![].into_par_collector().take(take_count).enumerate();
-                collector.idx = start;
-                collector
-            },
-            should_break_pred: |_| nums.len() >= take_count,
-            pred: |_, output| {
-                let expected: Vec<_> = nums
-                    .iter()
-                    .copied()
-                    .zip(start..=usize::MAX)
-                    .map(|(num, i)| (i, num))
-                    .take(take_count)
-                    .collect();
+            let res: Vec<_> = iter
+                .zip(std::iter::repeat_with(|| {
+                    let old_idx = idx;
+                    idx += 1;
+                    old_idx
+                }))
+                .map(|(num, i)| (i, num))
+                .take(n)
+                .collect();
 
-                PredError::assert_eq(output, expected)
-            },
-        }
-        .test_par_collector(&mut pool, &split_decision)
-    }
+            (res, if count < n { Continue(idx) } else { Break(()) })
+        },
+        output_pred: PartialEq::eq,
+        state_pred: |collector, &idx| collector.idx == idx,
+    });
 }

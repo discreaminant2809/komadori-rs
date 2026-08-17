@@ -354,103 +354,75 @@ mod consumer {
 
 #[cfg(test)]
 mod proptests {
+    use std::sync::atomic::Ordering;
+
     use crate::test_utils::prelude::*;
 
-    proptest! {
-        /// Pre-requisite:
-        /// - [`crate::vec::IntoParCollector`]
-        /// - [`ParallelCollectorBase::take()`]
-        #[test]
-        fn indexed(
-            (split_decision, nums) in propvec(any::<i32>(), ..=5)
-                .prop_flat_map(|nums| {
-                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
-                }),
-            take_count in ..=5_usize,
-            pool in CoroutinePool::prop(),
-        ) {
-            indexed_impl(pool, split_decision, nums, take_count)?;
-        }
+    par_collector_test!(indexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut n = ..=5_usize;
+        },
+        iter: nums.par_iter().cloned(),
+        collector: vec![].into_par_collector().take(n).take_any_while(pred),
+        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
+        expected_f: |iter, count| {
+            let mut all_satisfied = true;
+            let res: Vec<_> = iter.filter(track_satisfied(&mut all_satisfied)).collect();
+
+            (
+                res,
+                if count < n && all_satisfied {
+                    Continue(())
+                } else {
+                    Break(())
+                },
+            )
+        },
+        output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
+        state_pred: state_is_irrelevant(),
+    });
+
+    unindexed_par_collector_test!(unindexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut n = ..=5_usize;
+        },
+        iter: nums.par_iter().cloned(),
+        collector: vec![].into_par_collector().take(n).take_any_while(pred),
+        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
+        expected_f: |iter, count| {
+            let mut all_satisfied = true;
+            let res: Vec<_> = iter.filter(track_satisfied(&mut all_satisfied)).collect();
+
+            (
+                res,
+                if count < n && all_satisfied {
+                    Continue(())
+                } else {
+                    Break(())
+                },
+            )
+        },
+        output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
+        // Technically if `collector.take_pred.stopped` is `false`,
+        // the collector has stopped, hence we don't have a right to fetch the state.
+        state_pred: |collector, &_: &()| !collector.take_pred.stopped.load(Ordering::Relaxed),
+    });
+
+    fn pred(&num: &i32) -> bool {
+        num >= 0
     }
 
-    proptest! {
-        /// Pre-requisite:
-        /// - [`crate::vec::IntoParCollector`]
-        /// - [`ParallelCollectorBase::take()`]
-        #[test]
-        fn unindexed(
-            nums in propvec(any::<i32>(), ..=5),
-            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
-            take_count in ..=5_usize,
-            pool in CoroutinePool::prop(),
-        ) {
-            unindexed_impl(pool, split_decision, nums, take_count)?;
-        }
-    }
-
-    fn indexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: IndexedSplitDecision,
-        nums: Vec<i32>,
-        take_count: usize,
-    ) -> TestCaseResult {
-        par_collector_tester(&nums, take_count).test_par_collector(&mut pool, &split_decision)
-    }
-
-    fn unindexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: UnindexedSplitDecision,
-        nums: Vec<i32>,
-        take_count: usize,
-    ) -> TestCaseResult {
-        par_collector_tester(&nums, take_count).test_unindexed_par_collector(&mut pool, &split_decision)
-    }
-
-    // Grouped into one method because
-    // both the indexed and unindexed paths are the same anyway.
-    fn par_collector_tester(
-        nums: &[i32],
-        take_count: usize,
-    ) -> impl ParallelCollectorTester + UnindexedParallelCollectorTester {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter().cloned(),
-            collector_factory: move || {
-                vec![]
-                    .into_par_collector()
-                    .take(take_count)
-                    .take_any_while(|&num| num >= 0)
-            },
-            should_break_pred: move |mut iter| {
-                iter.clone().count() >= take_count || !iter.take_iter().all(|num| num >= 0)
-            },
-            pred: move |mut iter, output| {
-                // Properties:
-                // - At most `take_count` items.
-                // - All items must satisfy the predicate.
-                // - Subsequence-ness.
-
-                PredError::assert_fn(
-                    &output[..],
-                    // We could also add `.min(nums.len())`,
-                    // but `take()` has alr been tested this possibility.
-                    take_count,
-                    |output, &take_count| output.len() <= take_count,
-                    "excessive amount of items",
-                )?;
-
-                if !output.iter().all(|&num| num >= 0) {
-                    return Err(PredError::IncorrectOutput(format!(
-                        "{output:?} contains an item dissatisfying the predicate"
-                    )));
-                }
-
-                PredError::assert_fn(
-                    output,
-                    iter.take_iter().collect::<Vec<_>>(),
-                    |actual, expected| is_subsequence(actual, expected),
-                    "not a subsequence",
-                )
-            },
+    fn track_satisfied(all_satisfied: &mut bool) -> impl FnMut(&i32) -> bool {
+        move |num| {
+            let res = pred(num);
+            *all_satisfied &= res;
+            res
         }
     }
 }
