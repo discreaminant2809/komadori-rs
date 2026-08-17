@@ -57,7 +57,7 @@ pub trait ParallelIterator {
 
 /// The indexed version of the thread-pool-agnostic parallel iterator.
 pub trait IndexedParallelIterator: ParallelIterator {
-    fn indexed_producer(&mut self) -> impl IndexedProducer<Item = Self::Item>;
+    fn take_indexed_producer(&mut self) -> impl IndexedProducer<Item = Self::Item>;
     fn len(&self) -> usize;
 }
 

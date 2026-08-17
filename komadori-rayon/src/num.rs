@@ -404,115 +404,63 @@ mod proptests {
         test_utils::prelude::*,
     };
 
-    proptest! {
-        #[test]
-        fn sum_indexed(
-            starting_num in -10_000..=10_000,
-            (split_decision, nums) in propvec(-10_000..=10_000, ..5)
-                .prop_flat_map(|nums| {
-                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
-                }),
-            pool in CoroutinePool::prop(),
-        ) {
-            sum_indexed_impl(pool, split_decision, starting_num, nums)?;
-        }
-    }
+    par_collector_test!(into_par_sum_indexed {
+        iter_data: {
+            let mut nums = propvec(any::<i8>().prop_map_into::<i64>(), ..=5);
+        },
+        other_data: {
+            let mut starting_num = any::<i8>().prop_map_into::<i64>();
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_num.into_par_sum(),
+        starting_bh: ControlFlow::Continue(()),
+        expected_f: |iter, _| (starting_num + iter.sum::<i64>(), Continue(())),
+        output_pred: PartialEq::eq,
+        state_pred: state_is_irrelevant(),
+    });
 
-    proptest! {
-        #[test]
-        fn sum_unindexed(
-            starting_num in -10_000..=10_000,
-            nums in propvec(-10_000..=10_000, ..5),
-            pool in CoroutinePool::prop(),
-            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
-        ) {
-            sum_unindexed_impl(pool, split_decision, starting_num, nums)?;
-        }
-    }
+    unindexed_par_collector_test!(into_par_sum_unindexed {
+        iter_data: {
+            let mut nums = propvec(any::<i8>().prop_map_into::<i64>(), ..=5);
+        },
+        other_data: {
+            let mut starting_num = any::<i8>().prop_map_into::<i64>();
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_num.into_par_sum(),
+        starting_bh: ControlFlow::Continue(()),
+        expected_f: |iter, _| (starting_num + iter.sum::<i64>(), Continue(())),
+        output_pred: PartialEq::eq,
+        state_pred: state_is_irrelevant(),
+    });
 
-    proptest! {
-        #[test]
-        fn product_indexed(
-            starting_num in -10..=10,
-            (split_decision, nums) in propvec(-10..=10, ..5)
-                .prop_flat_map(|nums| {
-                    (IndexedSplitStrategy::new(nums.len(), DEFAULT_MAX_DEPTH), Just(nums))
-                }),
-            pool in CoroutinePool::prop(),
-        ) {
-            product_indexed_impl(pool, split_decision, starting_num, nums)?;
-        }
-    }
+    par_collector_test!(into_par_product_indexed {
+        iter_data: {
+            let mut nums = propvec(any::<i8>().prop_map_into::<i64>(), ..=5);
+        },
+        other_data: {
+            let mut starting_num = any::<i8>().prop_map_into::<i64>();
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_num.into_par_product(),
+        starting_bh: ControlFlow::Continue(()),
+        expected_f: |iter, _| (starting_num * iter.product::<i64>(), Continue(())),
+        output_pred: PartialEq::eq,
+        state_pred: state_is_irrelevant(),
+    });
 
-    proptest! {
-        #[test]
-        fn product_unindexed(
-            starting_num in -10..=10,
-            nums in propvec(-10..=10, ..5),
-            pool in CoroutinePool::prop(),
-            split_decision in UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
-        ) {
-            product_unindexed_impl(pool, split_decision, starting_num, nums)?;
-        }
-    }
-
-    fn sum_indexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: IndexedSplitDecision,
-        starting_num: i32,
-        nums: Vec<i32>,
-    ) -> TestCaseResult {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter().cloned(),
-            collector_factory: || starting_num.into_par_sum(),
-            should_break_pred: |_| false,
-            pred: |_, output| PredError::assert_eq(output, starting_num + nums.iter().sum::<i32>()),
-        }
-        .test_par_collector(&mut pool, &split_decision)
-    }
-
-    fn sum_unindexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: UnindexedSplitDecision,
-        starting_num: i32,
-        nums: Vec<i32>,
-    ) -> TestCaseResult {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter().cloned(),
-            collector_factory: || starting_num.into_par_sum(),
-            should_break_pred: |_| false,
-            pred: |_, output| PredError::assert_eq(output, starting_num + nums.iter().sum::<i32>()),
-        }
-        .test_unindexed_par_collector(&mut pool, &split_decision)
-    }
-
-    fn product_indexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: IndexedSplitDecision,
-        starting_num: i32,
-        nums: Vec<i32>,
-    ) -> TestCaseResult {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter().cloned(),
-            collector_factory: || starting_num.into_par_product(),
-            should_break_pred: |_| false,
-            pred: |_, output| PredError::assert_eq(output, starting_num * nums.iter().product::<i32>()),
-        }
-        .test_par_collector(&mut pool, &split_decision)
-    }
-
-    fn product_unindexed_impl(
-        mut pool: CoroutinePool,
-        split_decision: UnindexedSplitDecision,
-        starting_num: i32,
-        nums: Vec<i32>,
-    ) -> TestCaseResult {
-        BasicParallelCollectorTester {
-            iter_factory: || nums.par_iter().cloned(),
-            collector_factory: || starting_num.into_par_product(),
-            should_break_pred: |_| false,
-            pred: |_, output| PredError::assert_eq(output, starting_num * nums.iter().product::<i32>()),
-        }
-        .test_unindexed_par_collector(&mut pool, &split_decision)
-    }
+    unindexed_par_collector_test!(into_par_product_unindexed {
+        iter_data: {
+            let mut nums = propvec(any::<i8>().prop_map_into::<i64>(), ..=5);
+        },
+        other_data: {
+            let mut starting_num = any::<i8>().prop_map_into::<i64>();
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_num.into_par_product(),
+        starting_bh: ControlFlow::Continue(()),
+        expected_f: |iter, _| (starting_num * iter.product::<i64>(), Continue(())),
+        output_pred: PartialEq::eq,
+        state_pred: state_is_irrelevant(),
+    });
 }

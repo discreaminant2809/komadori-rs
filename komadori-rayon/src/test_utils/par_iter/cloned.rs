@@ -34,9 +34,9 @@ where
     I: IndexedParallelIterator<Item = &'a T>,
     T: Clone + 'a,
 {
-    fn indexed_producer(&mut self) -> impl super::IndexedProducer<Item = Self::Item> {
+    fn take_indexed_producer(&mut self) -> impl super::IndexedProducer<Item = Self::Item> {
         Producer {
-            producer: self.iter.indexed_producer(),
+            producer: self.iter.take_indexed_producer(),
         }
     }
 
