@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - main
-      - nightly
+      - nightly-komadori
+      - nightly-komadori-rayon
   pull_request:
 
 jobs:

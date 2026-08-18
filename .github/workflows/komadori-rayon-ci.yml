@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - nightly
+      - nightly-komadori-rayon
   pull_request:
 
 env:
