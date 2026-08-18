@@ -4,7 +4,7 @@ Home for [`komadori`] and [`komdaori-rayon`] crates.
 
 ## Versions
 
-- [`komadori`]\: 0.8.1
+- [`komadori`]\: 0.8.2
 - [`komdaori-rayon`]\: 0.1.1
 
 [`komadori`]: https://github.com/discreaminant2809/komadori-rs/tree/main/komadori
