@@ -5,6 +5,7 @@
 ### Added
 
 - `crate::ops::And`.
+- `crate::ops::Or`.
 
 ## 0.8.1
 

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d0eb69d80f5bd8767ebe8e4523bc8889bc575f80ffc026e7f77e68fe6fed501e # shrinks to (bools, count, seq) = ([false, false, false], 3, FuzzyExecSeq { middles: [Reserve { additional: 2 }, MaxAfford { request: 5 }, AssumeReservedCollect, Collect, Collect], end: Finish })
