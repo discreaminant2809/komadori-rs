@@ -2,6 +2,10 @@
 
 ## 0.8.2
 
+### Added
+
+- `crate::ops::And`.
+
 ## 0.8.1
 
 ### Added
