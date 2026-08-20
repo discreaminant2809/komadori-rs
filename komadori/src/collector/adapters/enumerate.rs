@@ -48,40 +48,30 @@ where
 {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        let idx = self.idx;
+        // Put this here because if the index is `usize::MAX`
+        // and it's the last item the underlying can afford,
+        // we should still be able to collect it and exit early
+        // instead of panicking (in debug build).
+        self.collector.collect((self.idx, item))?;
         self.idx += 1;
-        self.collector.collect((idx, item))
+        ControlFlow::Continue(())
     }
 
     #[inline]
     unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
-        let idx = self.idx;
+        unsafe {
+            // SAFETY: The caller reserved for at least 1 item.
+            self.collector.assume_reserved_collect((self.idx, item))?;
+        }
+
         self.idx += 1;
-        // SAFETY: The caller has reserved at least 1 item.
-        unsafe { self.collector.assume_reserved_collect((idx, item)) }
+        ControlFlow::Continue(())
     }
 
-    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        self.collector.collect_many(
-            // Be careful! We have to `zip(items, indices)`, not `zip(indices, items)`.
-            // the iterator will pull out one index prematurely even tho `items` are exhausted,
-            // skipping one index for the next call of collect-related method!
-            items
-                .into_iter()
-                .zip(core::iter::repeat_with(|| {
-                    let idx = self.idx;
-                    self.idx += 1;
-                    idx
-                }))
-                .map(|(item, idx)| (idx, item)),
-        )
-    }
-
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        // This is fine, unlike `collect_many()`.
-        // We get rid of the collector anyway!
-        self.collector.collect_then_finish((self.idx..).zip(items))
-    }
+    // We can't meaningfully override the other two methods,
+    // because we need to uphold the "the index is `usize::MAX` and the last item"
+    // case, which would lead us to a manual `try_fold()`,
+    // which is the default implementation.
 }
 
 #[cfg(all(test, feature = "std"))]
@@ -95,12 +85,28 @@ mod proptests {
             let mut nums = propvec(any::<i32>(), ..=5);
         },
         other_data: {
-            let n = ..=5_usize;
+            let (n, start) = prop_oneof![..=2_usize, usize::MAX - 2..]
+                .prop_flat_map(|start| (..=(usize::MAX - start).min(5), Just(start)));
         },
         iter: nums.iter().copied(),
-        collector: vec![].into_collector().take(n).enumerate(),
+        collector: {
+            let mut collector = vec![].into_collector().take(n).enumerate();
+            collector.idx = start;
+            collector
+        },
         expected_f: |iter, count| {
-            let res: Vec<_> = iter.enumerate().take(n).collect();
+            let mut idx = start;
+
+            let res: Vec<_> = iter
+                .zip(core::iter::repeat_with(|| {
+                    let old_idx = idx;
+                    idx += 1;
+                    old_idx
+                }))
+                .map(|(num, i)| (i, num))
+                .take(n)
+                .collect();
+
             (res, count >= n)
         },
         output_pred: PartialEq::eq,
