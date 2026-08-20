@@ -59,6 +59,22 @@ use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_
 /// assert_eq!(collector.finish(), Some(1));
 /// ```
 ///
+/// `First::new().positions(f)` corresponds to
+/// [`Iterator::position(f)`](Iterator::position)
+/// (`itertools` feature is required):
+///
+/// ```
+/// use komadori::{prelude::*, iter::First};
+///
+/// let mut collector = First::new().positions(|x| x % 3 == 0);
+///
+/// assert!(collector.collect(1).is_continue());
+/// assert!(collector.collect(5).is_continue());
+/// assert!(collector.collect(6).is_break());
+///
+/// assert_eq!(collector.finish(), Some(2));
+/// ```
+///
 /// `First::new().skip(n)` corresponds to
 /// [`Iterator::nth(n)`](Iterator::nth):
 ///

@@ -6,6 +6,7 @@
 
 - `crate::ops::And`.
 - `crate::ops::Or`.
+- `CollectorBase::positions()`.
 
 ## 0.8.1
 

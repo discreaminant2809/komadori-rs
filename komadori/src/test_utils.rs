@@ -124,4 +124,7 @@ pub mod prelude {
     pub use super::{
         CollectorModel, FuzzyExecSeqStrategy, fuzzy_execute, theo_inf_collector_model,
     };
+
+    #[cfg(feature = "itertools")]
+    pub use itertools::Itertools;
 }
