@@ -1,3 +1,5 @@
+#![expect(deprecated)]
+
 use core::{fmt::Debug, ops::ControlFlow};
 
 use crate::collector::{Collector, CollectorBase, assert_collector, finish_boxed_impl};
@@ -16,6 +18,7 @@ use super::raw_all_any::RawAllAny;
 /// # Examples
 ///
 /// ```
+/// # #![expect(deprecated)]
 /// use komadori::{prelude::*, iter::Any};
 ///
 /// let mut collector = Any::new(|x| x < 0);
@@ -28,6 +31,7 @@ use super::raw_all_any::RawAllAny;
 /// ```
 ///
 /// ```
+/// # #![expect(deprecated)]
 /// use komadori::{prelude::*, iter::Any};
 ///
 /// let mut collector = Any::new(|x| x < 0);
@@ -43,6 +47,7 @@ use super::raw_all_any::RawAllAny;
 ///
 /// [`Break(())`]: core::ops::ControlFlow::Break
 /// [`Output`]: CollectorBase::Output
+#[deprecated(since = "0.8.2", note = "Use `Or::new().map(f)` instead")]
 #[derive(Clone)]
 pub struct Any<F> {
     inner: RawAllAny<F, false>,

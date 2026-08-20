@@ -8,6 +8,11 @@
 - `crate::ops::Or`.
 - `CollectorBase::positions()`.
 
+### Deprecated
+
+- `crate::iter::All`.
+- `crate::iter::Any`.
+
 ## 0.8.1
 
 ### Added
