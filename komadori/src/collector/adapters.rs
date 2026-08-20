@@ -6,7 +6,6 @@ mod filter;
 mod filter_map;
 mod flat_map;
 mod flatten;
-#[cfg(feature = "unstable")]
 mod funnel;
 mod fuse;
 mod inspect;
@@ -46,7 +45,6 @@ pub use filter::*;
 pub use filter_map::*;
 pub use flat_map::*;
 pub use flatten::*;
-#[cfg(feature = "unstable")]
 pub use funnel::*;
 pub use fuse::*;
 pub use inspect::*;

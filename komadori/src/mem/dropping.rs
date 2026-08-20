@@ -6,7 +6,7 @@ use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```
 /// use komadori::{prelude::*, mem::Dropping};
 /// use std::cell::Cell;
 ///
