@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Stabilized `CollectorBase::funnel()`.
 - `Either` as a collector now requires both arms to have the same `Output`.
 
 ### Deprecated

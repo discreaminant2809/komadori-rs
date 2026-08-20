@@ -8,13 +8,13 @@ use crate::collector::{Intersperse, IntersperseWith};
 #[cfg(feature = "itertools")]
 use super::Update;
 use super::{
-    Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
-    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Positions, Skip, SkipWhile,
-    StepBy, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults,
-    Unbatching, Unzip, assert_collector, assert_collector_base,
+    Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Funnel,
+    Fuse, Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Positions, Skip,
+    SkipWhile, StepBy, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions,
+    TryingResults, Unbatching, Unzip, assert_collector, assert_collector_base,
 };
 #[cfg(feature = "unstable")]
-use super::{Funnel, Nest, NestExact, Then};
+use super::{Nest, NestExact, Then};
 
 /// The base trait of a collector.
 ///
@@ -742,7 +742,6 @@ pub trait CollectorBase {
     /// assert!(collector.collect_many([1, 2, 3]).is_continue());
     /// assert_eq!(collector.finish(), [1, 2, 3]);
     /// ```
-    #[cfg(feature = "unstable")]
     #[inline]
     fn funnel(self) -> Funnel<Self>
     where

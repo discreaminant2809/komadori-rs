@@ -204,6 +204,54 @@ let collector_way = socket_stream()
 assert_eq!(unzip_way, collector_way);
 ```
 
+## Usage in API
+
+If a function looks like `fn foo(State, Iterator<T>) -> Output`
+and the iterator is accepted just to be traversed,
+consider rewriting it to `fn foo(State) -> Collector<T, Output>`,
+since the original unnecessarily owns the traversal, making it hard
+to additional add another reduction to traverse alongside with
+the source.
+
+Consider this example:
+
+```rust
+fn stats<'a>(records: impl IntoIterator<Item = &'a Record>) -> Stats {
+    // Implementations
+}
+
+fn checksum<'a>(records: impl IntoIterator<Item = &'a Record>) -> u64 {
+    // Implementations
+}
+```
+
+Now how can we obtain both `stats` and `checksum` in one traversal,
+especially if records are streamed instead of in an array?
+
+We can rewrite the above:
+
+```rust
+use komadori::prelude::*;
+
+fn stats() -> impl for<'a> Collector<&'a Record, Output = Stats> {
+    // Implementations
+}
+
+fn checksum() -> impl for<'a> Collector<&'a Record, Output = u64> {
+    // Implementations
+}
+
+fn as_ref(record: &mut Record) -> &Record {
+    record
+}
+
+// Now we can calculate both in one traversal!
+let (stats, checksum) = records.feed_into((
+    stats().map(as_ref),
+    checksum().map(as_ref).funnel(),
+));
+```
+
 ## Crate stucture
 
 Modules in this crate mirror those in the standard library, because this crate
@@ -221,7 +269,6 @@ if you want to delve into how collectors work.
 
 - **`std`** *(default)* — Enables the `alloc` feature and implementations
   for [`std`]-only types (e.g., [`HashMap`]).
-  When this feature is disabled, the crate builds in `no_std` mode.
 
 - **`itertools`** — Enables collectors and adapters that resemble those
   in the `itertools` crate.
