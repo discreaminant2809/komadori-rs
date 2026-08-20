@@ -9,9 +9,9 @@ use crate::collector::{Intersperse, IntersperseWith};
 use super::Update;
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
-    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip, SkipWhile, StepBy, Take,
-    TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching, Unzip,
-    assert_collector, assert_collector_base,
+    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Positions, Skip, SkipWhile,
+    StepBy, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults,
+    Unbatching, Unzip, assert_collector, assert_collector_base,
 };
 #[cfg(feature = "unstable")]
 use super::{Funnel, Nest, NestExact, Then};
@@ -1519,6 +1519,34 @@ pub trait CollectorBase {
         F: FnMut(&mut T),
     {
         assert_collector::<_, T>(Update::new(self, f))
+    }
+
+    /// Creates a collector that feeds the underlying collector
+    /// with indices of items that satisfy a predicate.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .positions(|num| num % 2 == 0);
+    ///
+    /// assert!(collector.collect(100).is_continue());
+    /// assert!(collector.collect(255).is_continue());
+    /// assert!(collector.collect(378).is_continue());
+    ///
+    /// assert_eq!(collector.finish(), [0, 2]);
+    /// ```
+    #[cfg(feature = "itertools")]
+    #[inline]
+    fn positions<P, T>(self, pred: P) -> Positions<Self, P>
+    where
+        Self: Collector<usize> + Sized,
+        P: FnMut(T) -> bool,
+    {
+        assert_collector::<_, T>(Positions::new(self, pred))
     }
 
     /// Creates a collector that collects all outputs produced by an inner collector.

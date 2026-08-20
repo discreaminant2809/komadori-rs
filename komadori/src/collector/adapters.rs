@@ -17,6 +17,8 @@ mod map_while;
 #[cfg(feature = "unstable")]
 mod nest_family;
 mod partition;
+#[cfg(feature = "itertools")]
+mod positions;
 mod skip;
 mod skip_while;
 mod step_by;
@@ -55,6 +57,8 @@ pub use map_while::*;
 #[cfg(feature = "unstable")]
 pub use nest_family::*;
 pub use partition::*;
+#[cfg(feature = "itertools")]
+pub use positions::*;
 pub use skip::*;
 pub use skip_while::*;
 pub use step_by::*;
