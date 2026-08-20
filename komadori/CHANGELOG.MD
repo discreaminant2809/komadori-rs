@@ -7,6 +7,9 @@
 - `crate::ops::And`.
 - `crate::ops::Or`.
 - `CollectorBase::positions()`.
+- `Either::into_collector()`.
+- `Either::collector_mut()`.
+- `Either::collector()`.
 
 ### Changed
 
