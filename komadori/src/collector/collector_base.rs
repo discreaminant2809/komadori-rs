@@ -5,16 +5,16 @@ use alloc::boxed::Box;
 
 use crate::collector::{Intersperse, IntersperseWith};
 
-#[cfg(feature = "itertools")]
-use super::Update;
 use super::{
-    Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Fuse,
-    Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip, SkipWhile, StepBy, Take,
-    TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching, Unzip,
-    assert_collector, assert_collector_base,
+    Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Funnel,
+    Fuse, Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip, SkipWhile, StepBy,
+    Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching,
+    Unzip, assert_collector, assert_collector_base,
 };
 #[cfg(feature = "unstable")]
-use super::{Funnel, Nest, NestExact, Then};
+use super::{Nest, NestExact, Then};
+#[cfg(feature = "itertools")]
+use super::{Positions, Update};
 
 /// The base trait of a collector.
 ///
@@ -742,7 +742,6 @@ pub trait CollectorBase {
     /// assert!(collector.collect_many([1, 2, 3]).is_continue());
     /// assert_eq!(collector.finish(), [1, 2, 3]);
     /// ```
-    #[cfg(feature = "unstable")]
     #[inline]
     fn funnel(self) -> Funnel<Self>
     where
@@ -1519,6 +1518,34 @@ pub trait CollectorBase {
         F: FnMut(&mut T),
     {
         assert_collector::<_, T>(Update::new(self, f))
+    }
+
+    /// Creates a collector that feeds the underlying collector
+    /// with indices of items that satisfy a predicate.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use komadori::prelude::*;
+    ///
+    /// let mut collector = vec![]
+    ///     .into_collector()
+    ///     .positions(|num| num % 2 == 0);
+    ///
+    /// assert!(collector.collect(100).is_continue());
+    /// assert!(collector.collect(255).is_continue());
+    /// assert!(collector.collect(378).is_continue());
+    ///
+    /// assert_eq!(collector.finish(), [0, 2]);
+    /// ```
+    #[cfg(feature = "itertools")]
+    #[inline]
+    fn positions<P, T>(self, pred: P) -> Positions<Self, P>
+    where
+        Self: Collector<usize> + Sized,
+        P: FnMut(T) -> bool,
+    {
+        assert_collector::<_, T>(Positions::new(self, pred))
     }
 
     /// Creates a collector that collects all outputs produced by an inner collector.

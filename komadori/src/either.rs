@@ -4,108 +4,141 @@
 //! However, to use all the functionalities assosciated with that type,
 //! use that crate instead.
 //!
-//! The crate also provides collector implementations for [`Either`].
+//! The crate also provides collector implementations for [`Either`],
+//! and extension methods related to collectors.
 
-use core::ops::ControlFlow;
+mod collector_impl;
 
 pub use either::Either;
 
-use either::{for_both, map_both};
+use either::map_both;
 
-use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
+use crate::collector::{IntoCollectorBase, assert_collector_base};
 
-/// [`Either`] is a collector when both branches are so.
-/// Its output is [`Either`] the left's or the right's output
-/// (depending on which variant is active),
-/// and it collects `T` when both branches can collect `T`.
-impl<L, R> CollectorBase for Either<L, R>
-where
-    L: CollectorBase,
-    R: CollectorBase,
-{
-    type Output = Either<L::Output, R::Output>;
+/// Extension trait for [`Either`] with collector-related methods.
+#[expect(private_bounds)]
+pub trait EitherExt<L, R>: Sealed {
+    /// Converts the inner value to a collector.
+    ///
+    /// The left and the right collectors must finish with
+    /// the same [`Output`](crate::collector::CollectorBase::Output),
+    /// and [`Either`] collects `T` when both branches can collect `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::collections::BinaryHeap;
+    /// use komadori::{prelude::*, either::Either};
+    ///
+    /// fn bin_heap(
+    ///     starting: impl Into<Vec<i32>>,
+    /// ) -> impl Collector<i32, Output = BinaryHeap<i32>> {
+    ///     let starting = starting.into();
+    ///
+    ///     if starting.is_empty() {
+    ///         // If we start without any elements,
+    ///         // this is more efficient (O(n)).
+    ///         Either::Left(starting.into_collector().map_output(BinaryHeap::from))
+    ///     } else {
+    ///         Either::Right(BinaryHeap::from(starting))
+    ///     }
+    ///     .into_collector()
+    /// }
+    ///
+    /// let nums = [1, 3, 2];
+    ///
+    /// assert_eq!(
+    ///     nums.into_iter().feed_into(bin_heap([])).into_sorted_vec(),
+    ///     [1, 2, 3],
+    /// );
+    ///
+    /// assert_eq!(
+    ///     nums.into_iter().feed_into(bin_heap([0, 4])).into_sorted_vec(),
+    ///     [0, 1, 2, 3, 4],
+    /// );
+    /// ```
+    fn into_collector(self) -> Either<L::IntoCollector, R::IntoCollector>
+    where
+        L: IntoCollectorBase,
+        R: IntoCollectorBase<Output = L::Output>;
 
+    /// Mutably borrows the inner value as a collector.
+    ///
+    /// The left and the right collectors must finish with
+    /// the same [`Output`](crate::collector::CollectorBase::Output),
+    /// and [`Either`] collects `T` when both branches can collect `T`.
+    ///
+    /// # Examples
+    ///
+    /// *Coming soon!*
+    fn collector_mut<'a>(
+        &'a mut self,
+    ) -> Either<
+        <&'a mut L as IntoCollectorBase>::IntoCollector,
+        <&'a mut R as IntoCollectorBase>::IntoCollector,
+    >
+    where
+        &'a mut L: IntoCollectorBase,
+        &'a mut R: IntoCollectorBase<Output = <&'a mut L as IntoCollectorBase>::Output>;
+
+    /// Borrows the inner value as a collector.
+    ///
+    /// The left and the right collectors must finish with
+    /// the same [`Output`](crate::collector::CollectorBase::Output),
+    /// and [`Either`] collects `T` when both branches can collect `T`.
+    ///
+    /// # Examples
+    ///
+    /// *Coming soon!*
+    fn collector<'a>(
+        &'a self,
+    ) -> Either<
+        <&'a L as IntoCollectorBase>::IntoCollector,
+        <&'a R as IntoCollectorBase>::IntoCollector,
+    >
+    where
+        &'a L: IntoCollectorBase,
+        &'a R: IntoCollectorBase<Output = <&'a L as IntoCollectorBase>::Output>;
+}
+
+impl<L, R> EitherExt<L, R> for Either<L, R> {
     #[inline]
-    fn finish(self) -> Self::Output {
-        map_both!(self, collector => collector.finish())
+    fn into_collector(self) -> Either<L::IntoCollector, R::IntoCollector>
+    where
+        L: IntoCollectorBase,
+        R: IntoCollectorBase<Output = L::Output>,
+    {
+        assert_collector_base(map_both!(self, this => this.into_collector()))
     }
 
-    finish_boxed_impl! {}
-
     #[inline]
-    fn reserve(&mut self, additional: usize) {
-        for_both!(self, collector => collector.reserve(additional));
+    fn collector_mut<'a>(
+        &'a mut self,
+    ) -> Either<
+        <&'a mut L as IntoCollectorBase>::IntoCollector,
+        <&'a mut R as IntoCollectorBase>::IntoCollector,
+    >
+    where
+        &'a mut L: IntoCollectorBase,
+        &'a mut R: IntoCollectorBase<Output = <&'a mut L as IntoCollectorBase>::Output>,
+    {
+        assert_collector_base(map_both!(self, this => this.into_collector()))
     }
 
     #[inline]
-    fn max_afford(&self, request: usize) -> usize {
-        for_both!(self, collector => collector.max_afford(request))
+    fn collector<'a>(
+        &'a self,
+    ) -> Either<
+        <&'a L as IntoCollectorBase>::IntoCollector,
+        <&'a R as IntoCollectorBase>::IntoCollector,
+    >
+    where
+        &'a L: IntoCollectorBase,
+        &'a R: IntoCollectorBase<Output = <&'a L as IntoCollectorBase>::Output>,
+    {
+        assert_collector_base(map_both!(self, this => this.into_collector()))
     }
 }
 
-/// [`Either`] is a collector when both branches are so.
-/// Its output is [`Either`] the left's or the right's output
-/// (depending on which variant is active),
-/// and it collects `T` when both branches can collect `T`.
-impl<L, R, T> Collector<T> for Either<L, R>
-where
-    L: Collector<T>,
-    R: Collector<T>,
-{
-    #[inline]
-    fn collect(&mut self, item: T) -> ControlFlow<()> {
-        for_both!(self, collector => collector.collect(item))
-    }
-
-    #[inline]
-    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-        for_both!(self, collector => collector.collect_many(items))
-    }
-
-    #[inline]
-    fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        map_both!(self, collector => collector.collect_then_finish(items))
-    }
-
-    #[inline]
-    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
-        unsafe {
-            // SAFETY: The caller has reserved for one item.
-            for_both!(self, collector => collector.assume_reserved_collect(item))
-        }
-    }
-}
-
-#[cfg(all(test, feature = "std"))]
-mod proptests {
-    use crate::{collector::take_collector_model, either::Either, test_utils::prelude::*};
-
-    collector_test!(adapter {
-        iter_data: {
-            let mut nums = propvec(any::<i32>(), ..=5);
-        },
-        other_data: {
-            let is_left = any::<bool>();
-            let n = ..=5_usize;
-        },
-        iter: nums.iter().copied(),
-        collector: if is_left {
-            Either::Left(vec![].into_collector().take(n))
-        } else {
-            Either::Right(vec![].into_collector().take(n))
-        },
-        expected_f: |iter, count| {
-            let res: Vec<_> = iter.take(n).collect();
-            (
-                if is_left {
-                    Either::Left(res)
-                } else {
-                    Either::Right(res)
-                },
-                count >= n,
-            )
-        },
-        output_pred: PartialEq::eq,
-        model: take_collector_model(n),
-    });
-}
+trait Sealed {}
+impl<L, R> Sealed for Either<L, R> {}

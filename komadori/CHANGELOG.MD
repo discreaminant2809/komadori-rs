@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+
+- `crate::ops::And`.
+- `crate::ops::Or`.
+- `CollectorBase::positions()`.
+- `Either::into_collector()`.
+- `Either::collector_mut()`.
+- `Either::collector()`.
+
+### Changed
+
+- Stabilized `CollectorBase::funnel()`.
+- `Either` as a collector now requires both arms to have the same `Output`.
+
+### Deprecated
+
+- `crate::iter::All`.
+- `crate::iter::Any`.
+
 ## 0.8.1
 
 ### Added
