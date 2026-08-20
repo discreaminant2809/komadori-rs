@@ -8,6 +8,10 @@
 - `crate::ops::Or`.
 - `CollectorBase::positions()`.
 
+### Changed
+
+- `Either` as a collector now requires both arms to have the same `Output`.
+
 ### Deprecated
 
 - `crate::iter::All`.
