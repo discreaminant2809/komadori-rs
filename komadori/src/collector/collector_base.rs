@@ -5,16 +5,16 @@ use alloc::boxed::Box;
 
 use crate::collector::{Intersperse, IntersperseWith};
 
-#[cfg(feature = "itertools")]
-use super::Update;
 use super::{
     Chain, Cloning, Collector, Copying, Enumerate, Filter, FilterMap, FlatMap, Flatten, Funnel,
-    Fuse, Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Positions, Skip,
-    SkipWhile, StepBy, Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions,
-    TryingResults, Unbatching, Unzip, assert_collector, assert_collector_base,
+    Fuse, Inspect, IntoCollectorBase, Map, MapOutput, MapWhile, Partition, Skip, SkipWhile, StepBy,
+    Take, TakeWhile, Tee, TeeClone, TeeFunnel, TeeMut, TryingOptions, TryingResults, Unbatching,
+    Unzip, assert_collector, assert_collector_base,
 };
 #[cfg(feature = "unstable")]
 use super::{Nest, NestExact, Then};
+#[cfg(feature = "itertools")]
+use super::{Positions, Update};
 
 /// The base trait of a collector.
 ///
