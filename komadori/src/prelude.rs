@@ -13,6 +13,7 @@ pub use crate::{
     collector::{
         Collector, CollectorBase, CollectorByMut, CollectorByRef, IntoCollector, IntoCollectorBase,
     },
+    either::EitherExt,
     iter::IteratorExt,
     ops::{IntoProduct, IntoSum},
     slice::Concat,
