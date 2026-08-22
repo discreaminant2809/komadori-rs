@@ -26,11 +26,19 @@ where
 #[allow(missing_debug_implementations)]
 pub struct MutTeer(());
 
-impl<'a, T> DefinePassDown<'a, &mut T> for MutTeer {
+impl<'a, T> DefinePassDown<'a, &mut T> for MutTeer
+where
+    T: ?Sized,
+{
     type PassDown = &'a mut T;
 }
 
-impl<'i, T> Teer<&'i mut T> for MutTeer {
+impl<'i, T> Teer<&'i mut T> for MutTeer
+where
+    T: ?Sized,
+{
+    const TEE_CHEAP: bool = true;
+
     #[inline]
     fn pass_down<'a>(&mut self, item: &'a mut &mut T) -> &'a mut T {
         item
@@ -46,20 +54,11 @@ impl<'i, T> Teer<&'i mut T> for MutTeer {
     }
 
     #[inline]
-    fn no_tee_collect_many(
+    unsafe fn no_tee_assume_reserved_collect(
         &mut self,
-        items: impl IntoIterator<Item = &'i mut T>,
-        collector: &mut impl for<'a> Collector<&'a mut T>,
+        collector: &mut impl for<'a> Collector<<Self as DefinePassDown<'a, &'i mut T>>::PassDown>,
+        item: &'i mut T,
     ) -> ControlFlow<()> {
-        collector.collect_many(items)
-    }
-
-    #[inline]
-    fn no_tee_collect_then_finish<O>(
-        &mut self,
-        items: impl IntoIterator<Item = &'i mut T>,
-        collector: impl for<'a> Collector<&'a mut T, Output = O>,
-    ) -> O {
-        collector.collect_then_finish(items)
+        unsafe { collector.assume_reserved_collect(item) }
     }
 }

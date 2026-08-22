@@ -2,6 +2,8 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
+use crate::collector::plumbing::finish_boxed_impl;
+
 use super::{DefineLocal, NestLocalBase, SplittableLocal};
 
 /// A parallel collector that uses a closure and local states
@@ -131,6 +133,8 @@ impl<L1, L2, F> CollectorBase for Inner<'_, L1, L2, F> {
     fn finish(self) -> Self::Output {
         (self.local1, self.local2)
     }
+
+    finish_boxed_impl! {}
 }
 
 impl<L1, L2, F, T> Collector<T> for Inner<'_, L1, L2, F>

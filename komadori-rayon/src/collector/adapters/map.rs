@@ -87,43 +87,36 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.max_afford(request)
     }
 
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        let (len, consumer, commit) = self.collector.parts(len);
-        unique::uniquify((
-            len,
-            consumer::Consumer::new(consumer, self.f.callable_mut()),
-            commit,
-        ))
+        let (consumer, commit) = self.collector.parts(len);
+        unique::uniquify((consumer::Consumer::new(consumer, self.f.callable_mut()), commit))
     }
 
     fn take_parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        let (len, consumer, commit) = self.collector.take_parts(len);
+        let (consumer, commit) = self.collector.take_parts(len);
         unique::take_uniquify((
-            len,
             consumer::Consumer::new(consumer, self.f.take_callable_mut()),
             commit,
         ))
@@ -231,8 +224,8 @@ mod consumer {
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.consumer.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            self.consumer.max_afford(request)
         }
     }
 
@@ -266,9 +259,16 @@ mod consumer {
             self.collector.finish()
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.collector.break_hint()
+        fn reserve(&mut self, additional: usize) {
+            self.collector.reserve(additional);
+        }
+
+        #[inline]
+        fn max_afford(&self, request: usize) -> usize {
+            self.collector.max_afford(request)
         }
     }
 
@@ -282,11 +282,21 @@ mod consumer {
             self.collector.collect(self.f.call_mut((item,)))
         }
 
+        #[inline]
+        unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+            unsafe {
+                // SAFETY: The caller reserved for at least 1 item.
+                self.collector.assume_reserved_collect(self.f.call_mut((item,)))
+            }
+        }
+
+        #[inline]
         fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
             self.collector
                 .collect_many(items.into_iter().map(|item| self.f.call_mut((item,))))
         }
 
+        #[inline]
         fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
             self.collector
                 .collect_then_finish(items.into_iter().map(move |item| self.f.call_mut((item,))))

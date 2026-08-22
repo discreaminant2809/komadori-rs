@@ -316,10 +316,12 @@ where
             let mut collector = consumer.into_collector();
             yield_now().await;
 
-            if collector.break_hint().is_break() {
-                yield_now().await;
-                return collector.finish();
-            }
+            // This is mostly an optimization hint.
+            // The plumbing must work correctly even without it.
+            // if collector.break_hint().is_break() {
+            //     yield_now().await;
+            //     return collector.finish();
+            // }
 
             loop {
                 // Dp this cuz of the stupid `clippy::await_holding_refcell_ref` lint

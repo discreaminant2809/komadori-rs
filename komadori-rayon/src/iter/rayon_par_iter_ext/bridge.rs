@@ -61,7 +61,7 @@ where
         P: Producer,
         C: Consumer<IntoCollector: Collector<P::Item>>,
     {
-        if consumer.break_hint().is_break() {
+        if consumer.max_afford(1) == 0 {
             consumer.into_collector().finish()
         } else if splitter.try_split(len, migrated) {
             let mid = len / 2;

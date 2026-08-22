@@ -1,5 +1,3 @@
-use std::ops::ControlFlow;
-
 use komadori::prelude::*;
 
 pub trait DefineLocal<'a, Binder = &'a mut Self> {
@@ -9,8 +7,8 @@ pub trait DefineLocal<'a, Binder = &'a mut Self> {
 pub trait SplittableLocal: for<'a> DefineLocal<'a> {
     // Some do have a way to hint early. Two of them are `nest_serial()` and `try_fold_local()`.
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Continue(())
+    fn max_afford(&self, request: usize) -> usize {
+        request
     }
 
     fn anchor<'a>(&'a mut self) -> impl Anchor<Inner = <Self as DefineLocal<'a>>::Local>;
@@ -27,7 +25,7 @@ pub trait Anchor: Clone + Send {
     fn into_inner(self) -> Self::Inner;
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Continue(())
+    fn max_afford(&self, request: usize) -> usize {
+        request
     }
 }

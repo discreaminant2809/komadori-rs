@@ -51,38 +51,34 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.max_afford(request)
     }
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.collector.parts_unindexed();
-        unique::uniquify((len, consumer, commit))
+        unique::uniquify(self.collector.parts_unindexed())
     }
 
     fn take_parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        let (consumer, commit) = self.collector.take_parts_unindexed();
-        unique::take_uniquify((len, consumer, commit))
+        unique::take_uniquify(self.collector.take_parts_unindexed())
     }
 }
 

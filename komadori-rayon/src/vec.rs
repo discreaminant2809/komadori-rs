@@ -105,7 +105,6 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -125,7 +124,6 @@ where
         let mut this = NonNull::from_mut(&mut self.0);
 
         unique::uniquify((
-            len,
             unsafe { in_place_write::Consumer::new(being_written, len) },
             move |write_proof| {
                 in_place_write::commit(write_proof, being_written, len);
@@ -198,7 +196,6 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -226,7 +223,6 @@ where
         let mut this = NonNull::from_mut(this);
 
         unique::uniquify((
-            len,
             unsafe { in_place_write::Consumer::new(being_written, len) },
             move |write_proof| {
                 in_place_write::commit(write_proof, being_written, len);
@@ -391,7 +387,7 @@ mod miri_tests {
         let mut nums = vec![1, 2, 3];
         let mut collector = nums.par_collector_mut();
 
-        let (_, consumer, commit) = collector.take_parts(3);
+        let (consumer, commit) = collector.take_parts(3);
         let output = consumer.into_collector().collect_then_finish([4, 5, 6]);
         commit(output);
 

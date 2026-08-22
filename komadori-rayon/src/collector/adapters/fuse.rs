@@ -19,7 +19,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Fuse<C> {
     collector: C,
-    break_hint: ControlFlow<()>,
+    stopped: bool,
 }
 
 impl<C> Fuse<C>
@@ -28,7 +28,7 @@ where
 {
     pub(in crate::collector) fn new(collector: C) -> Self {
         Self {
-            break_hint: collector.break_hint(),
+            stopped: collector.max_afford(1) == 0,
             collector,
         }
     }
@@ -64,50 +64,43 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.break_hint
+    fn max_afford(&self, request: usize) -> usize {
+        if self.stopped {
+            0
+        } else {
+            self.collector.max_afford(request)
+        }
     }
 
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl crate::collector::plumbing::Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        let (actual_len, consumer, commit) = self.collector.parts(len);
-        unique::uniquify((
-            actual_len,
-            consumer::Consumer::new(consumer, self.break_hint),
-            |output| {
-                let cf = commit(output);
-                if cf.is_break() {
-                    self.break_hint = cf;
-                }
-                self.break_hint
-            },
-        ))
+        let (consumer, commit) = self.collector.parts(len);
+        unique::uniquify((consumer::Consumer::new(consumer, self.stopped), |output| {
+            set_stopped_and_ret_bh(&mut self.stopped, commit(output))
+        }))
     }
 
     fn take_parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl crate::collector::plumbing::Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        let (actual_len, consumer, commit) = self.collector.take_parts(len);
+        let (consumer, commit) = self.collector.take_parts(len);
         unique::take_uniquify((
-            actual_len,
-            consumer::Consumer::new(consumer, self.break_hint),
+            consumer::Consumer::new(consumer, self.stopped),
             // We can't set the flag if we cannot obtain the signal from
             // the committer.
             commit,
@@ -131,12 +124,8 @@ where
         ) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique_unindexed::uniquify((consumer::Consumer::new(consumer, self.break_hint), |output| {
-            let cf = commit(output);
-            if cf.is_break() {
-                self.break_hint = cf;
-            }
-            self.break_hint
+        unique_unindexed::uniquify((consumer::Consumer::new(consumer, self.stopped), |output| {
+            set_stopped_and_ret_bh(&mut self.stopped, commit(output))
         }))
     }
 
@@ -150,12 +139,21 @@ where
         impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        unique_unindexed::take_uniquify((consumer::Consumer::new(consumer, self.break_hint), commit))
+        unique_unindexed::take_uniquify((consumer::Consumer::new(consumer, self.stopped), commit))
+    }
+}
+
+fn set_stopped_and_ret_bh(stopped: &mut bool, cf: ControlFlow<()>) -> ControlFlow<()> {
+    if *stopped {
+        ControlFlow::Break(())
+    } else {
+        *stopped = cf.is_break();
+        cf
     }
 }
 
 mod consumer {
-    use std::{cell::Cell, ops::ControlFlow};
+    use std::ops::ControlFlow;
 
     use komadori::prelude::*;
 
@@ -163,8 +161,8 @@ mod consumer {
 
     #[allow(missing_debug_implementations)]
     pub struct Consumer<C> {
-        pub(super) consumer: C,
-        pub(super) break_hint: Cell<ControlFlow<()>>,
+        consumer: C,
+        stopped: bool,
     }
 
     // We have to roll out our own Fuse because we
@@ -172,14 +170,17 @@ mod consumer {
     #[allow(missing_debug_implementations)]
     pub struct Serial<C> {
         collector: C,
-        break_hint: ControlFlow<()>,
+        stopped: bool,
     }
 
-    impl<C> Consumer<C> {
-        pub(super) fn new(consumer: C, break_hint: ControlFlow<()>) -> Self {
+    impl<C> Consumer<C>
+    where
+        C: plumbing::Consumer,
+    {
+        pub(super) fn new(consumer: C, stopped: bool) -> Self {
             Self {
+                stopped: stopped || consumer.max_afford(1) == 0,
                 consumer,
-                break_hint: break_hint.into(),
             }
         }
     }
@@ -195,7 +196,7 @@ mod consumer {
         fn into_collector(self) -> Self::IntoCollector {
             Serial {
                 collector: self.consumer.into_collector(),
-                break_hint: self.break_hint.get(),
+                stopped: self.stopped,
             }
         }
     }
@@ -209,30 +210,16 @@ mod consumer {
         #[inline]
         fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
             let (consumer, combiner) = self.consumer.split_off_left_at(index);
-
-            let break_hint = (|| {
-                self.break_hint.get()?;
-                // Don't forget to re-assess the break hint of self!
-                self.break_hint.set(self.consumer.break_hint());
-                consumer.break_hint()
-            })();
-
-            (
-                Self {
-                    break_hint: break_hint.into(),
-                    consumer,
-                },
-                combiner,
-            )
+            (Self::new(consumer, self.stopped), combiner)
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            if self.break_hint.get().is_continue() {
-                self.break_hint.set(self.consumer.break_hint());
+        fn max_afford(&self, request: usize) -> usize {
+            if self.stopped {
+                0
+            } else {
+                self.consumer.max_afford(request)
             }
-
-            self.break_hint.get()
         }
     }
 
@@ -243,18 +230,7 @@ mod consumer {
         #[inline]
         fn split_off_left(&self) -> Self {
             let consumer = self.consumer.split_off_left();
-
-            let break_hint = (|| {
-                self.break_hint.get()?;
-                // Don't forget to re-assess the break hint of self!
-                self.break_hint.set(self.consumer.break_hint());
-                consumer.break_hint()
-            })();
-
-            Self {
-                break_hint: break_hint.into(),
-                consumer,
-            }
+            Self::new(consumer, self.stopped)
         }
 
         #[inline]
@@ -266,9 +242,14 @@ mod consumer {
     impl<C> Serial<C> {
         #[inline]
         fn collect_impl(&mut self, f: impl FnOnce(&mut C) -> ControlFlow<()>) -> ControlFlow<()> {
-            self.break_hint?;
-            self.break_hint = f(&mut self.collector);
-            self.break_hint
+            if self.stopped {
+                ControlFlow::Break(())
+            } else if f(&mut self.collector).is_continue() {
+                ControlFlow::Continue(())
+            } else {
+                self.stopped = true;
+                ControlFlow::Break(())
+            }
         }
     }
 
@@ -283,9 +264,22 @@ mod consumer {
             self.collector.finish()
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.break_hint
+        fn reserve(&mut self, additional: usize) {
+            if !self.stopped {
+                self.collector.reserve(additional);
+            }
+        }
+
+        #[inline]
+        fn max_afford(&self, amount: usize) -> usize {
+            if self.stopped {
+                0
+            } else {
+                self.collector.max_afford(amount)
+            }
         }
     }
 
@@ -305,11 +299,19 @@ mod consumer {
 
         #[inline]
         fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
-            if self.break_hint.is_break() {
+            if self.stopped {
                 self.finish()
             } else {
                 self.collector.collect_then_finish(items)
             }
+        }
+
+        #[inline]
+        unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+            self.collect_impl(|collector| unsafe {
+                // SAFETY: We've reserved for at least one item.
+                collector.assume_reserved_collect(item)
+            })
         }
     }
 }

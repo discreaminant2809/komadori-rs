@@ -9,7 +9,7 @@ use komadori::prelude::*;
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{DefineSerial, DefineUnindexedSerial},
+        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
     },
     helpers::{unique, unique_unindexed},
 };
@@ -61,32 +61,29 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        if self.remaining.load(Ordering::Relaxed) == 0 {
-            ControlFlow::Break(())
-        } else {
-            self.collector.break_hint()
-        }
+    fn max_afford(&self, request: usize) -> usize {
+        max_afford(&self.remaining, self.collector.max_afford(request))
     }
 
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
-        impl crate::collector::plumbing::Consumer<
+        impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
         let remaining = self.remaining.get_mut();
+
         let max_len = if *remaining < len {
             std::mem::take(remaining)
         } else {
             *remaining -= len;
             len
         };
+
         let break_hint = if *remaining == 0 {
             ControlFlow::Break(())
         } else {
@@ -95,34 +92,28 @@ where
 
         // We "lie" to the underlying parallel collector that
         // we only have this amount left.
-        let (inner_max_len, consumer, commit) = self.collector.parts(max_len);
-        // Only meaningful when we have "nested take()."
-        // In this case we can choose a new len of the underlying
-        // if appropriate.
-        let max_len = inner_max_len.min(max_len);
+        let (consumer, commit) = self.collector.parts(max_len);
 
-        unique::uniquify((
-            max_len,
-            indexed::Consumer::new(consumer, max_len),
-            move |output| {
-                commit(output)?;
-                break_hint
-            },
-        ))
+        unique::uniquify((indexed::Consumer::new(consumer, max_len), move |output| {
+            // Don't forget to commit the output first,
+            // which means not to put the `break_hint` before this.
+            commit(output)?;
+            break_hint
+        }))
     }
 
     fn take_parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
-        impl crate::collector::plumbing::Consumer<
+        impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
         let remaining = self.remaining.get_mut();
+
         let max_len = if *remaining < len {
             std::mem::take(remaining)
         } else {
@@ -132,13 +123,9 @@ where
 
         // We "lie" to the underlying parallel collector that
         // we only have this amount left.
-        let (inner_max_len, consumer, commit) = self.collector.take_parts(max_len);
-        // Only meaningful when we have "nested take()."
-        // In this case we can choose a new len of the underlying
-        // if appropriate.
-        let max_len = inner_max_len.min(max_len);
+        let (consumer, commit) = self.collector.take_parts(max_len);
 
-        unique::take_uniquify((max_len, indexed::Consumer::new(consumer, max_len), commit))
+        unique::take_uniquify((indexed::Consumer::new(consumer, max_len), commit))
     }
 }
 
@@ -149,7 +136,7 @@ where
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        impl crate::collector::plumbing::UnindexedConsumer<
+        impl UnindexedConsumer<
             IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
             Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         >,
@@ -171,7 +158,7 @@ where
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
-        impl crate::collector::plumbing::UnindexedConsumer<
+        impl UnindexedConsumer<
             IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
             Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         >,
@@ -200,10 +187,17 @@ where
     }
 }
 
+// We can potentially avoid an atomic operation.
+fn max_afford(remaining: &AtomicUsize, max_afford: usize) -> usize {
+    if max_afford == 0 {
+        0
+    } else {
+        remaining.load(Ordering::Relaxed).min(max_afford)
+    }
+}
+
 #[allow(missing_debug_implementations)]
 mod indexed {
-    use std::ops::ControlFlow;
-
     use komadori::prelude::*;
 
     use crate::collector::plumbing;
@@ -253,12 +247,9 @@ mod indexed {
             (Self { consumer, n: index }, combiner)
         }
 
-        fn break_hint(&self) -> ControlFlow<()> {
-            if self.n == 0 {
-                ControlFlow::Break(())
-            } else {
-                self.consumer.break_hint()
-            }
+        #[inline]
+        fn max_afford(&self, request: usize) -> usize {
+            self.consumer.max_afford(request).min(self.n)
         }
     }
 }
@@ -319,11 +310,14 @@ mod unindexed {
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            if self.remaining.load(Ordering::Relaxed) == 0 {
-                ControlFlow::Break(())
+        fn max_afford(&self, request: usize) -> usize {
+            let max_afford = self.consumer.max_afford(request);
+
+            // We can potentially avoid an atomic operation.
+            if max_afford == 0 {
+                0
             } else {
-                self.consumer.break_hint()
+                self.remaining.load(Ordering::Relaxed).min(max_afford)
             }
         }
     }
@@ -357,13 +351,11 @@ mod unindexed {
             self.collector.finish()
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            if self.remaining.load(Ordering::Relaxed) == 0 {
-                ControlFlow::Break(())
-            } else {
-                self.collector.break_hint()
-            }
+        fn max_afford(&self, request: usize) -> usize {
+            self.remaining.load(Ordering::Relaxed).min(request)
         }
     }
 

@@ -66,16 +66,18 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.splittable_local.break_hint()?;
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        if self.collector.max_afford(1) == 0 || self.splittable_local.max_afford(1) == 0 {
+            0
+        } else {
+            request
+        }
     }
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -84,7 +86,6 @@ where
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         unique::uniquify((
-            len,
             consumer::Consumer::new(consumer, self.splittable_local.anchor()),
             commit,
         ))
@@ -92,9 +93,8 @@ where
 
     fn take_parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -103,7 +103,6 @@ where
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique::take_uniquify((
-            len,
             consumer::Consumer::new(consumer, self.splittable_local.anchor()),
             commit,
         ))
@@ -208,9 +207,12 @@ mod consumer {
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.consumer.break_hint()?;
-            self.anchor.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            if self.consumer.max_afford(1) == 0 {
+                0
+            } else {
+                self.anchor.max_afford(request)
+            }
         }
     }
 
@@ -247,10 +249,25 @@ mod consumer {
             self.outer.finish()
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.inner.break_hint()?;
-            self.outer.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            if self.outer.max_afford(1) == 0 {
+                0
+            } else {
+                self.inner.max_afford(request)
+            }
+        }
+
+        // Practically we use `vec![]` most of the time for `nest_local`
+        // and probably `nest_local_with`, so we can make leaf reduction faster
+        // for most cases.
+        // If the callers dislike this behavior, they can always use `fold_local`
+        // instead.
+        #[inline]
+        fn reserve(&mut self, additional: usize) {
+            self.inner.reserve(additional);
         }
     }
 
@@ -262,9 +279,21 @@ mod consumer {
         #[inline]
         fn collect(&mut self, item: T) -> ControlFlow<()> {
             self.inner.collect(item)?;
-            self.outer.break_hint()
+            plumbing::break_hint(&self.outer)
         }
 
-        // No meaningful overrides for the other two methods.
+        #[inline]
+        unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+            unsafe {
+                self.inner.assume_reserved_collect(item)?;
+            }
+
+            plumbing::break_hint(&self.outer)
+        }
+
+        #[inline]
+        fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+            plumbing::advanced_collect_many_default_impl(self, items)
+        }
     }
 }

@@ -105,16 +105,15 @@ where
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        unique::uniquify((len, consumer::Consumer::new(), |mut output| {
+        unique::uniquify((consumer::Consumer::new(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         }))
@@ -170,16 +169,15 @@ where
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        unique::uniquify((len, consumer::Consumer::new(), |mut output| {
+        unique::uniquify((consumer::Consumer::new(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         }))

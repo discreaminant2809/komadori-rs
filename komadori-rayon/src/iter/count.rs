@@ -59,16 +59,15 @@ impl ParallelCollectorBase for ParCount {
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        unique::uniquify((len, consumer::Consumer::new(), |count| {
+        unique::uniquify((consumer::Consumer::new(), |count| {
             self.count += count;
             ControlFlow::Continue(())
         }))

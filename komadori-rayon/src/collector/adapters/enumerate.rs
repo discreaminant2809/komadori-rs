@@ -46,60 +46,44 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.max_afford(request)
     }
 
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        let (actual_len, consumer, commit) = self.collector.parts(len);
-        let start = self.idx;
+        let (consumer, commit) = self.collector.parts(len);
+        let idx = &mut self.idx;
 
-        // We try to panic (in debug) if we can't even afford the actual length.
-        std::hint::black_box(self.idx + actual_len);
-        // Otherwise, we only add up to usize::MAX.
-        self.idx = self.idx.saturating_add(len);
-        // But why we even add to `len` and not `actual_len`?
-        // Because based on the specifications, we don't know whether it stops
-        // even if `actual_len` < `len`. So we must add `len`.
-        // The remaining `len - actual_len` are gonna be skipped anyway!
-
-        unique::uniquify((actual_len, consumer::Consumer::new(consumer, start), commit))
+        unique::uniquify((consumer::Consumer::new(consumer, *idx), move |output| {
+            // If we stop early, there's no point to update the index
+            // to cause an unnecessary and even incorrect panic in debug.
+            commit(output)?;
+            *idx += len;
+            ControlFlow::Continue(())
+        }))
     }
 
     fn take_parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        let (actual_len, consumer, commit) = self.collector.take_parts(len);
-        let start = self.idx;
-
-        // We try to panic (in debug) if we can't even afford the actual length.
-        std::hint::black_box(self.idx + actual_len);
-        // Otherwise, we only add up to usize::MAX.
-        self.idx = self.idx.saturating_add(len);
-        // But why we even add to `len` and not `actual_len`?
-        // Because based on the specifications, we don't know whether it stops
-        // even if `actual_len` < `len`. So we must add `len`.
-        // The remaining `len - actual_len` are gonna be skipped anyway!
-
-        unique::take_uniquify((actual_len, consumer::Consumer::new(consumer, start), commit))
+        let (consumer, commit) = self.collector.take_parts(len);
+        unique::take_uniquify((consumer::Consumer::new(consumer, self.idx), commit))
     }
 }
 
@@ -153,19 +137,16 @@ mod consumer {
         fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
             let (consumer, combiner) = self.consumer.split_off_left_at(index);
             let start = self.start;
-            // The runtime is permitted to split pass we can hold.
-            // Due to the "lie" we do in `parts()` and `take_parts()`,
-            // we may overflow here if (prior to creating a consumer)
-            // `self.idx <= usize::MAX < self.idx + len`
-            // (`self` here means the parallel collector, not this consumer)
-            self.start = self.start.saturating_add(index);
+            // The runtime is permitted to split pass we can hold,
+            // so even in the debug build, we shouldn't panic!
+            self.start = self.start.wrapping_add(index);
 
             (Self { consumer, start }, combiner)
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.consumer.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            self.consumer.max_afford(request)
         }
     }
 
@@ -180,9 +161,16 @@ mod consumer {
             self.collector.finish()
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.collector.break_hint()
+        fn reserve(&mut self, additional: usize) {
+            self.collector.reserve(additional);
+        }
+
+        #[inline]
+        fn max_afford(&self, request: usize) -> usize {
+            self.collector.max_afford(request)
         }
     }
 
@@ -196,6 +184,17 @@ mod consumer {
             // we should still be able to collect it and exit early
             // instead of panicking (in debug build).
             self.collector.collect((self.idx, item))?;
+            self.idx += 1;
+            ControlFlow::Continue(())
+        }
+
+        #[inline]
+        unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+            unsafe {
+                // SAFETY: The caller reserved for at least 1 item.
+                self.collector.assume_reserved_collect((self.idx, item))?;
+            }
+
             self.idx += 1;
             ControlFlow::Continue(())
         }

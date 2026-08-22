@@ -61,7 +61,7 @@ mod t_binder {
 }
 
 pub(super) trait Teer<T>: Clone + Send + for<'this> DefinePassDown<'this, T> {
-    const ITEM_IS_COPY: bool = false;
+    const TEE_CHEAP: bool = false;
 
     fn pass_down<'a>(&mut self, item: &'a mut T) -> <Self as DefinePassDown<'a, T>>::PassDown;
 
@@ -75,26 +75,14 @@ pub(super) trait Teer<T>: Clone + Send + for<'this> DefinePassDown<'this, T> {
         collector.collect(self.pass_down(&mut item))
     }
 
-    fn no_tee_collect_many(
+    #[inline]
+    unsafe fn no_tee_assume_reserved_collect(
         &mut self,
-        items: impl IntoIterator<Item = T>,
         collector: &mut impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown>,
+        item: T,
     ) -> ControlFlow<()> {
-        items
-            .into_iter()
-            .try_for_each(|mut item| collector.collect(self.pass_down(&mut item)))
-    }
-
-    fn no_tee_collect_then_finish<O>(
-        &mut self,
-        items: impl IntoIterator<Item = T>,
-        collector: impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown, Output = O>,
-    ) -> O {
-        let mut collector = collector;
-        let _ = items
-            .into_iter()
-            .try_for_each(|mut item| collector.collect(self.pass_down(&mut item)));
-        collector.finish()
+        let mut item = item;
+        unsafe { collector.assume_reserved_collect(self.pass_down(&mut item)) }
     }
 }
 
@@ -146,30 +134,27 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        if self.collector1.break_hint().is_break() && self.collector2.break_hint().is_break() {
-            ControlFlow::Break(())
-        } else {
-            ControlFlow::Continue(())
-        }
+    fn max_afford(&self, request: usize) -> usize {
+        Ord::max(
+            self.collector1.max_afford(request),
+            self.collector2.max_afford(request),
+        )
     }
 
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        let (actual_len1, consumer1, commit1) = self.collector1.parts(len);
-        let (actual_len2, consumer2, commit2) = self.collector2.parts(len);
+        let (consumer1, commit1) = self.collector1.parts(len);
+        let (consumer2, commit2) = self.collector2.parts(len);
 
         unique::uniquify((
-            actual_len1.max(actual_len2),
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| and_cf_breaks(commit1(o1), commit2(o2)),
         ))
@@ -179,18 +164,16 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        let (actual_len1, consumer1, commit1) = self.collector1.take_parts(len);
-        let (actual_len2, consumer2, commit2) = self.collector2.take_parts(len);
+        let (consumer1, commit1) = self.collector1.take_parts(len);
+        let (consumer2, commit2) = self.collector2.take_parts(len);
 
         unique::take_uniquify((
-            actual_len1.max(actual_len2),
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
             |(o1, o2)| {
                 commit1(o1);
@@ -340,12 +323,11 @@ mod consumer {
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            if self.consumer1.break_hint().is_break() && self.consumer2.break_hint().is_break() {
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
+        fn max_afford(&self, request: usize) -> usize {
+            Ord::max(
+                self.consumer1.max_afford(request),
+                self.consumer2.max_afford(request),
+            )
         }
     }
 
@@ -397,13 +379,14 @@ mod consumer {
             (self.collector1.finish(), self.collector2.finish())
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            if self.collector1.break_hint().is_break() && self.collector2.break_hint().is_break() {
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
+        fn max_afford(&self, request: usize) -> usize {
+            Ord::max(
+                self.collector1.max_afford(request),
+                self.collector2.max_afford(request),
+            )
         }
     }
 
@@ -415,107 +398,48 @@ mod consumer {
     {
         #[inline]
         fn collect(&mut self, mut item: T) -> ControlFlow<()> {
-            if TF::ITEM_IS_COPY {
-                let _ = self.collector1.collect(self.teer.pass_down(&mut item));
-                let _ = self.collector2.collect(item);
-                self.break_hint()
-            } else if self.collector2.break_hint().is_break() {
+            if TF::TEE_CHEAP {
+                let cf1 = self.collector1.collect(self.teer.pass_down(&mut item));
+                let cf2 = self.collector2.collect(item);
+                plumbing::and_break(cf1, cf2)
+            } else if self.collector2.max_afford(1) == 0 {
                 self.teer.no_tee_collect(&mut self.collector1, item)
-            } else if self.collector1.break_hint().is_break() {
+            } else if self.collector1.max_afford(1) == 0 {
                 self.collector2.collect(item)
             } else {
-                let _ = self.collector1.collect(self.teer.pass_down(&mut item));
-                let _ = self.collector2.collect(item);
-                self.break_hint()
+                let cf1 = self.collector1.collect(self.teer.pass_down(&mut item));
+                let cf2 = self.collector2.collect(item);
+                plumbing::and_break(cf1, cf2)
+            }
+        }
+
+        #[inline]
+        unsafe fn assume_reserved_collect(&mut self, mut item: T) -> ControlFlow<()> {
+            unsafe {
+                if TF::TEE_CHEAP {
+                    let cf1 = self
+                        .collector1
+                        .assume_reserved_collect(self.teer.pass_down(&mut item));
+                    let cf2 = self.collector2.assume_reserved_collect(item);
+                    plumbing::and_break(cf1, cf2)
+                } else if self.collector2.max_afford(1) == 0 {
+                    self.teer
+                        .no_tee_assume_reserved_collect(&mut self.collector1, item)
+                } else if self.collector1.max_afford(1) == 0 {
+                    self.collector2.assume_reserved_collect(item)
+                } else {
+                    let cf1 = self
+                        .collector1
+                        .assume_reserved_collect(self.teer.pass_down(&mut item));
+                    let cf2 = self.collector2.assume_reserved_collect(item);
+                    plumbing::and_break(cf1, cf2)
+                }
             }
         }
 
         #[inline]
         fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-            match (
-                self.collector1.break_hint().is_break(),
-                self.collector2.break_hint().is_break(),
-            ) {
-                (true, true) => return ControlFlow::Break(()),
-                (false, true) => return self.teer.no_tee_collect_many(items, &mut self.collector1),
-                (true, false) => return self.collector2.collect_many(items),
-                (false, false) => {}
-            }
-
-            let mut items = items.into_iter();
-
-            match items.try_for_each(|mut item| {
-                if self.collector1.collect(self.teer.pass_down(&mut item)).is_break() {
-                    ControlFlow::Break(Which::First(item))
-                } else if self.collector2.collect(item).is_break() {
-                    ControlFlow::Break(Which::Second)
-                } else {
-                    ControlFlow::Continue(())
-                }
-            }) {
-                ControlFlow::Continue(_) => ControlFlow::Continue(()),
-                ControlFlow::Break(Which::First(item)) => {
-                    self.collector2.collect(item)?;
-                    self.collector2.collect_many(items)
-                }
-                ControlFlow::Break(Which::Second) => {
-                    self.teer.no_tee_collect_many(items, &mut self.collector1)
-                }
-            }
+            plumbing::advanced_collect_many_default_impl(self, items)
         }
-
-        #[inline]
-        fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
-            match (
-                self.collector1.break_hint().is_break(),
-                self.collector2.break_hint().is_break(),
-            ) {
-                (true, true) => return self.finish(),
-                (false, true) => {
-                    return (
-                        self.teer.no_tee_collect_then_finish(items, self.collector1),
-                        self.collector2.finish(),
-                    );
-                }
-                (true, false) => {
-                    return (
-                        self.collector1.finish(),
-                        self.collector2.collect_then_finish(items),
-                    );
-                }
-                (false, false) => {}
-            }
-
-            let mut items = items.into_iter();
-
-            match items.try_for_each(|mut item| {
-                if self.collector1.collect(self.teer.pass_down(&mut item)).is_break() {
-                    ControlFlow::Break(Which::First(item))
-                } else if self.collector2.collect(item).is_break() {
-                    ControlFlow::Break(Which::Second)
-                } else {
-                    ControlFlow::Continue(())
-                }
-            }) {
-                ControlFlow::Continue(_) => self.finish(),
-                ControlFlow::Break(Which::First(item)) => {
-                    // It's fused. We don't care.
-                    let _ = self.collector2.collect(item);
-                    (
-                        self.collector1.finish(),
-                        self.collector2.collect_then_finish(items),
-                    )
-                }
-                ControlFlow::Break(Which::Second) => (
-                    self.teer.no_tee_collect_then_finish(items, self.collector1),
-                    self.collector2.finish(),
-                ),
-            }
-        }
-    }
-
-    enum Which<T> {
-        First(T),
-        Second,
     }
 }

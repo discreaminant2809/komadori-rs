@@ -176,6 +176,13 @@ impl<'a, T> CollectorBase for WriteProof<'a, T> {
     fn finish(self) -> Self::Output {
         self
     }
+
+    plumbing::finish_boxed_impl! {}
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        request.min(self.len - self.init_len)
+    }
 }
 
 impl<'a, T> Collector<T> for WriteProof<'a, T> {

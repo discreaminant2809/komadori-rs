@@ -1,5 +1,3 @@
-use std::ops::ControlFlow;
-
 use komadori::prelude::*;
 
 use super::{DefineLocal, NestLocalBase, SplittableLocal};
@@ -49,8 +47,8 @@ where
     C: CollectorBase + Clone + Send,
 {
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.as_ref().unwrap().break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.as_ref().expect(TAKEN_ERR_MSG).max_afford(request)
     }
 
     #[inline]
@@ -80,8 +78,8 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.collector.max_afford(request)
     }
 }
 

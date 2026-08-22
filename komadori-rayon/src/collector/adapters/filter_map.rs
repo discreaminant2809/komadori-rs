@@ -87,16 +87,19 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        if self.collector.max_afford(1) == 0 {
+            0
+        } else {
+            request
+        }
     }
 
     #[inline]
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -105,7 +108,6 @@ where
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         unique::uniquify((
-            len,
             consumer::Consumer::new(consumer, self.pred.callable_mut()),
             commit,
         ))
@@ -114,9 +116,8 @@ where
     #[inline]
     fn take_parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -125,7 +126,6 @@ where
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique::take_uniquify((
-            len,
             consumer::Consumer::new(consumer, self.pred.take_callable_mut()),
             commit,
         ))
@@ -232,8 +232,12 @@ mod consumer {
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.consumer.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            if self.consumer.max_afford(1) == 0 {
+                0
+            } else {
+                request
+            }
         }
     }
 
@@ -267,9 +271,15 @@ mod consumer {
             self.collector.finish()
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.collector.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            if self.collector.max_afford(1) == 0 {
+                0
+            } else {
+                request
+            }
         }
     }
 
@@ -283,7 +293,7 @@ mod consumer {
             if let Some(item) = self.pred.call_mut((item,)) {
                 self.collector.collect(item)
             } else {
-                self.collector.break_hint()
+                plumbing::break_hint(&self.collector)
             }
         }
 

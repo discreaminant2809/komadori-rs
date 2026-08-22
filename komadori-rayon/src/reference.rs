@@ -65,7 +65,6 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -79,7 +78,6 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -88,8 +86,8 @@ where
     ) {
         // Explicitly override it to strengthen the invariant in the doc,
         // and to shield from the change in the default implementation.
-        let (len, consumer, commit) = C::parts(self, len);
-        unique::take_uniquify((len, consumer, |output| {
+        let (consumer, commit) = C::parts(self, len);
+        unique::take_uniquify((consumer, |output| {
             let _ = commit(output);
         }))
     }

@@ -111,16 +111,15 @@ macro_rules! prim_sum_impl {
 
             fn parts<'a>(
                 &'a mut self,
-                len: usize,
+                _len: usize,
             ) -> (
-                usize,
                 impl Consumer<
                     IntoCollector = <Self as DefineSerial<'a>>::Serial,
                     Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
                 >,
                 impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
             ) {
-                unique::uniquify((len, sum::Consumer::new(), |count| {
+                unique::uniquify((sum::Consumer::new(), |count| {
                     self.0 += count;
                     ControlFlow::Continue(())
                 }))
@@ -188,16 +187,15 @@ macro_rules! prim_product_impl {
 
             fn parts<'a>(
                 &'a mut self,
-                len: usize,
+                _len: usize,
             ) -> (
-                usize,
                 impl Consumer<
                     IntoCollector = <Self as DefineSerial<'a>>::Serial,
                     Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
                 >,
                 impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
             ) {
-                unique::uniquify((len, product::Consumer::new(), |count| {
+                unique::uniquify((product::Consumer::new(), |count| {
                     self.0 *= count;
                     ControlFlow::Continue(())
                 }))

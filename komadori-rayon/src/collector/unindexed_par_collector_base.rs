@@ -16,7 +16,6 @@ pub trait UnindexedParallelCollectorBase:
 {
     /// Prepares a space to accept *any* amount of items landing on anywhere,
     /// and returns "parts" needed to drive this parallel collector.
-    #[allow(clippy::type_complexity)]
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
@@ -50,7 +49,6 @@ pub trait UnindexedParallelCollectorBase:
     /// The signature is similar to [`parts_unindexed()`](Self::parts_unindexed),
     /// except the returning function which does not return
     /// a [`ControlFlow`].
-    #[allow(clippy::type_complexity)]
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (

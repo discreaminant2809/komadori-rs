@@ -129,32 +129,30 @@ where
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        unique::uniquify((len, consumer::Consumer::new(self.f.callable_mut()), |_| {
+        unique::uniquify((consumer::Consumer::new(self.f.callable_mut()), |_| {
             ControlFlow::Continue(())
         }))
     }
 
     fn take_parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        unique::take_uniquify((len, consumer::Consumer::new(self.f.take_callable_mut()), |_| {}))
+        unique::take_uniquify((consumer::Consumer::new(self.f.take_callable_mut()), |_| {}))
     }
 }
 
@@ -198,7 +196,7 @@ mod consumer {
     use komadori::prelude::*;
 
     use crate::{
-        collector::plumbing::{self, UnindexedConsumer},
+        collector::plumbing::{self, UnindexedConsumer, finish_boxed_impl},
         ops::CallMut,
     };
 
@@ -272,6 +270,8 @@ mod consumer {
 
         #[inline]
         fn finish(self) -> Self::Output {}
+
+        finish_boxed_impl! {}
     }
 
     impl<F, T> Collector<T> for Serial<F>

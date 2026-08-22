@@ -187,68 +187,15 @@ pub trait Consumer: IntoCollectorBase<Output: Send> + Send + Sized {
     /// using that combiner.
     fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner);
 
-    /// Returns whether th serial collector stops accumulating
-    /// after being converted into.
+    /// Queries the maximum amount of items this consumer can afford
+    /// given the requested amount of items.
     ///
-    /// Note that even if this method returns [`Break(())`](ControlFlow::Break),
-    /// the consumer can still be split freely.
     /// It is a hint used for the driver to stop splitting further,
     /// but adapters may still ignore the hint and split anyway.
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Continue(())
+    fn max_afford(&self, request: usize) -> usize {
+        request
     }
-
-    // fn map_collector<F, C>(self, f: F, g: G) -> impl Consumer<IntoCollector = C>
-    // where
-    //     F: FnOnce(Self::IntoCollector) -> C + Clone,
-    //     C: CollectorBase,
-    // {
-    //     struct ConsumerAdapter<C, F> {
-    //         consumer: C,
-    //         f: F,
-    //     }
-
-    //     struct CombinerAdapter<C> {
-    //         combiner: C,
-    //     }
-
-    //     impl<C, F, SC> IntoCollectorBase for ConsumerAdapter<C, F>
-    //     where
-    //         C: IntoCollectorBase,
-    //         F: FnOnce(C::IntoCollector) -> SC,
-    //         SC: CollectorBase,
-    //     {
-    //         type Output = SC::Output;
-
-    //         type IntoCollector = SC;
-
-    //         #[inline]
-    //         fn into_collector(self) -> Self::IntoCollector {
-    //             (self.f)(self.consumer.into_collector())
-    //         }
-    //     }
-
-    //     impl<C, F, SC> Consumer for ConsumerAdapter<C, F>
-    //     where
-    //         C: Consumer,
-    //         F: FnOnce(C::IntoCollector) -> SC + Clone + Send,
-    //         SC: CollectorBase<Output: Send>,
-    //     {
-    //         type Combiner = CombinerAdapter<C::Combiner>;
-
-    //         fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-    //             let (consumer, combiner) = self.consumer.split_off_left_at(index);
-    //             (
-    //                 Self {
-    //                     consumer,
-    //                     f: self.f.clone(),
-    //                 },
-    //                 CombinerAdapter { combiner },
-    //             )
-    //         }
-    //     }
-    // }
 }
 
 /// An unindexed consumer that can be split freely without an index.
@@ -333,21 +280,18 @@ macro_rules! uniquify_serial {
             #[inline]
             pub fn uniquify<'a, This: 'a, C: CollectorBase>(
                 parts: (
-                    usize,
                     impl plumbing::Consumer<IntoCollector = C, Output = C::Output> + 'a,
                     impl FnOnce(C::Output) -> ControlFlow<()> + 'a,
                 ),
             ) -> (
-                usize,
                 impl plumbing::Consumer<
                     IntoCollector = Serial<'a, This, C>,
                     Output = Output<'a, This, C::Output>,
                 > + 'a,
                 impl FnOnce(Output<'a, This, C::Output>) -> ControlFlow<()> + 'a,
             ) {
-                let (len, consumer, commit) = parts;
+                let (consumer, commit) = parts;
                 (
-                    len,
                     Consumer {
                         consumer,
                         _marker: PhantomData,
@@ -359,21 +303,18 @@ macro_rules! uniquify_serial {
             #[inline]
             pub fn take_uniquify<'a, This: 'a, C: CollectorBase>(
                 parts: (
-                    usize,
                     impl plumbing::Consumer<IntoCollector = C, Output = C::Output> + 'a,
                     impl FnOnce(C::Output) + 'a,
                 ),
             ) -> (
-                usize,
                 impl plumbing::Consumer<
                     IntoCollector = Serial<'a, This, C>,
                     Output = Output<'a, This, C::Output>,
                 > + 'a,
                 impl FnOnce(Output<'a, This, C::Output>) + 'a,
             ) {
-                let (len, consumer, commit) = parts;
+                let (consumer, commit) = parts;
                 (
-                    len,
                     Consumer {
                         consumer,
                         _marker: PhantomData,
@@ -421,8 +362,8 @@ macro_rules! uniquify_serial {
                 }
 
                 #[inline]
-                fn break_hint(&self) -> ControlFlow<()> {
-                    plumbing::Consumer::break_hint(&self.consumer)
+                fn max_afford(&self, request: usize) -> usize {
+                    plumbing::Consumer::max_afford(&self.consumer, request)
                 }
             }
 
@@ -451,8 +392,13 @@ macro_rules! uniquify_serial {
                 }
 
                 #[inline]
-                fn break_hint(&self) -> ControlFlow<()> {
-                    CollectorBase::break_hint(&self.collector)
+                fn finish_boxed(self: ::std::boxed::Box<Self>) -> Self::Output {
+                    CollectorBase::finish(*self)
+                }
+
+                #[inline]
+                fn max_afford(&self, request: usize) -> usize {
+                    CollectorBase::max_afford(&self.collector, request)
                 }
             }
 
@@ -594,8 +540,8 @@ macro_rules! uniquify_serial {
                 }
 
                 #[inline]
-                fn break_hint(&self) -> ControlFlow<()> {
-                    plumbing::Consumer::break_hint(&self.consumer)
+                fn max_afford(&self, request: usize) -> usize {
+                    plumbing::Consumer::max_afford(&self.consumer, request)
                 }
             }
 
@@ -642,8 +588,13 @@ macro_rules! uniquify_serial {
                 }
 
                 #[inline]
-                fn break_hint(&self) -> ControlFlow<()> {
-                    CollectorBase::break_hint(&self.collector)
+                fn finish_boxed(self: ::std::boxed::Box<Self>) -> Self::Output {
+                    CollectorBase::finish(*self)
+                }
+
+                #[inline]
+                fn max_afford(&self, request: usize) -> usize {
+                    CollectorBase::max_afford(&self.collector, request)
                 }
             }
 
@@ -675,4 +626,65 @@ macro_rules! uniquify_serial {
     ($mod_name:ident) => {
         $crate::uniquify_serial!($mod_name, unindexed = false);
     };
+}
+
+/// The canonical, must-be, implementation is just to forward to `finish()`.
+///
+/// Syntax: `finish_boxed_impl! {}`
+macro_rules! finish_boxed_impl {
+    () => {
+        #[inline]
+        fn finish_boxed(self: Box<Self>) -> Self::Output {
+            (*self).finish()
+        }
+    };
+}
+pub(crate) use finish_boxed_impl;
+
+#[inline]
+pub(crate) fn break_hint(collector: &(impl CollectorBase + ?Sized)) -> ControlFlow<()> {
+    if collector.max_afford(1) > 0 {
+        ControlFlow::Continue(())
+    } else {
+        ControlFlow::Break(())
+    }
+}
+
+#[inline]
+pub(crate) fn advanced_collect_many_default_impl<T>(
+    collector: &mut impl Collector<T>,
+    items: impl IntoIterator<Item = T>,
+) -> ControlFlow<()> {
+    break_hint(collector)?;
+
+    let mut items = items.into_iter();
+    let (lower, upper) = items.size_hint();
+
+    collector.reserve(lower);
+
+    if Some(lower) == upper {
+        // We can get rid of `by_ref()`, potentially enabling better codegen.
+        return items
+            // The iterator may report the size hint wrong.
+            // That's safe, but `assume_reserved_collect()` isn't!
+            .take(lower)
+            .try_for_each(|item| unsafe { collector.assume_reserved_collect(item) });
+    }
+
+    items
+        .by_ref()
+        .take(lower)
+        .try_for_each(|item| unsafe { collector.assume_reserved_collect(item) })?;
+
+    items.try_for_each(|item| collector.collect(item))
+}
+
+// This is different from `cf1?; cf2`.
+#[inline]
+pub(crate) fn and_break(cf1: ControlFlow<()>, cf2: ControlFlow<()>) -> ControlFlow<()> {
+    if cf1.is_break() && cf2.is_break() {
+        ControlFlow::Break(())
+    } else {
+        ControlFlow::Continue(())
+    }
 }

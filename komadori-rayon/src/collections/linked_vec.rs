@@ -173,6 +173,8 @@ where
             },
         }
     }
+
+    plumbing::finish_boxed_impl! {}
 }
 
 impl<C, T> Collector<T> for Serial<'_, C, T>

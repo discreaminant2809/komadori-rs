@@ -22,18 +22,53 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
 
     /// Reserves for `len` items and returns "parts" needed
     /// to drive this parallel collector.
-    #[allow(clippy::type_complexity)]
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     );
+
+    /// Reserves for `len` items and returns "parts" needed
+    /// to drive this parallel collector.
+    ///
+    /// This method effectively "consumes" the collector.
+    /// After calling this method, the collector is counted
+    /// to have returned [`Break(())`](ControlFlow::Break)
+    /// and the only valid method to call is [`finish()`](Self::finish).
+    /// The behavior is unspecified if you call other methods than that method,
+    /// including panicking or incorrect results.
+    /// You can leverage it by "consuming" some states instead of cloning them
+    /// for more efficiency.
+    ///
+    /// Most parallel collectors do not care whether they can
+    /// optimize anything by consuming some states
+    /// (and hence this method is not required to override),
+    /// but if it is the case or you are implementing an adapter,
+    /// you should override this method.
+    ///
+    /// The signature is similar to [`parts()`](Self::parts),
+    /// except the returning function which does not return
+    /// a [`ControlFlow`].
+    fn take_parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        impl Consumer<
+            IntoCollector = <Self as DefineSerial<'a>>::Serial,
+            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
+        >,
+        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+    ) {
+        let (consumer, commit) = self.parts(len);
+        (consumer, |output| {
+            let _ = commit(output);
+        })
+    }
 
     /// Returns a hint whether this parallel collector has stopped accumulating.
     ///
@@ -64,47 +99,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// [`filter()`]: super::UnindexedParallelCollectorBase::filter
     /// [`take_any_while()`]: super::UnindexedParallelCollectorBase::take_any_while
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Continue(())
-    }
-
-    /// Reserves for `len` items and returns "parts" needed
-    /// to drive this parallel collector.
-    ///
-    /// This method effectively "consumes" the collector.
-    /// After calling this method, the collector is counted
-    /// to have returned [`Break(())`](ControlFlow::Break)
-    /// and the only valid method to call is [`finish()`](Self::finish).
-    /// The behavior is unspecified if you call other methods than that method,
-    /// including panicking or incorrect results.
-    /// You can leverage it by "consuming" some states instead of cloning them
-    /// for more efficiency.
-    ///
-    /// Most parallel collectors do not care whether they can
-    /// optimize anything by consuming some states
-    /// (and hence this method is not required to override),
-    /// but if it is the case or you are implementing an adapter,
-    /// you should override this method.
-    ///
-    /// The signature is similar to [`parts()`](Self::parts),
-    /// except the returning function which does not return
-    /// a [`ControlFlow`].
-    #[allow(clippy::type_complexity)]
-    fn take_parts<'a>(
-        &'a mut self,
-        len: usize,
-    ) -> (
-        usize,
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
-    ) {
-        let (actual_len, consumer, commit) = self.parts(len);
-        (actual_len, consumer, |output| {
-            let _ = commit(output);
-        })
+    fn max_afford(&self, request: usize) -> usize {
+        request
     }
 
     /// Create a parallel collector that can "safely" collect even after

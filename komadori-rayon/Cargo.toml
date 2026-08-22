@@ -12,7 +12,7 @@ keywords = ["rayon", "parallelism", "collector", "fold", "multi-reduction"]
 exclude = ["DESIGN_NOTES.md"] # Not worth including anyway.
 
 [dependencies]
-komadori = { version = "0.7.0" }
+komadori = { version = "0.9.0" }
 rayon = { version = "1.12.0", default-features = false, optional = true }
 
 [dev-dependencies]

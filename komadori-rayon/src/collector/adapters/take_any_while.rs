@@ -96,11 +96,26 @@ impl<P> TakePred<P> {
     }
 
     #[inline]
+    fn is_stopped(&self) -> bool {
+        self.stopped.load(Ordering::Relaxed)
+    }
+
+    #[inline]
     fn break_hint(&self) -> ControlFlow<()> {
-        if self.stopped.load(Ordering::Relaxed) {
+        if self.is_stopped() {
             ControlFlow::Break(())
         } else {
             ControlFlow::Continue(())
+        }
+    }
+
+    // We can potentially avoid an atomic operation.
+    #[inline]
+    fn max_afford_with(&self, max_afford: usize) -> usize {
+        if max_afford == 0 || self.is_stopped() {
+            0
+        } else {
+            max_afford
         }
     }
 }
@@ -135,16 +150,14 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.take_pred.break_hint()?;
-        self.collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.take_pred.max_afford_with(self.collector.max_afford(request))
     }
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -153,19 +166,16 @@ where
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         let take_pred = &self.take_pred;
-        unique::uniquify(
-            (len, consumer::Consumer::new(consumer, take_pred), move |output| {
-                commit(output)?;
-                take_pred.break_hint()
-            }),
-        )
+        unique::uniquify((consumer::Consumer::new(consumer, take_pred), move |output| {
+            commit(output)?;
+            take_pred.break_hint()
+        }))
     }
 
     fn take_parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -173,7 +183,7 @@ where
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        unique::take_uniquify((len, consumer::Consumer::new(consumer, &self.take_pred), commit))
+        unique::take_uniquify((consumer::Consumer::new(consumer, &self.take_pred), commit))
     }
 }
 
@@ -272,9 +282,8 @@ mod consumer {
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.take_pred.break_hint()?;
-            self.consumer.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            self.take_pred.max_afford_with(self.consumer.max_afford(request))
         }
     }
 
@@ -308,10 +317,11 @@ mod consumer {
             self.collector.finish()
         }
 
+        plumbing::finish_boxed_impl! {}
+
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            self.take_pred.break_hint()?;
-            self.collector.break_hint()
+        fn max_afford(&self, request: usize) -> usize {
+            self.take_pred.max_afford_with(self.collector.max_afford(request))
         }
     }
 
@@ -325,7 +335,7 @@ mod consumer {
             if self.take_pred.should_take(&item) {
                 self.collector.collect(item)
             } else {
-                self.collector.break_hint()
+                plumbing::break_hint(&self.collector)
             }
         }
 

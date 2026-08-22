@@ -64,22 +64,21 @@ impl ParallelCollectorBase for ParCollector {
     fn finish(self) -> Self::Output {}
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        ControlFlow::Break(())
+    fn max_afford(&self, _request: usize) -> usize {
+        0
     }
 
     fn parts<'a>(
         &'a mut self,
-        len: usize,
+        _len: usize,
     ) -> (
-        usize,
         impl plumbing::Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        unique::uniquify((len, consumer::Consumer, |_| ControlFlow::Break(())))
+        unique::uniquify((consumer::Consumer, |_| ControlFlow::Break(())))
     }
 }
 
@@ -100,8 +99,6 @@ impl UnindexedParallelCollectorBase for ParCollector {
 }
 
 mod consumer {
-    use std::ops::ControlFlow;
-
     use komadori::prelude::*;
 
     use crate::collector::plumbing;
@@ -132,8 +129,8 @@ mod consumer {
         }
 
         #[inline]
-        fn break_hint(&self) -> ControlFlow<()> {
-            ControlFlow::Break(())
+        fn max_afford(&self, _request: usize) -> usize {
+            0
         }
     }
 

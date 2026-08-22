@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use crate::collector::{ParallelCollector, ParallelCollectorBase};
+use crate::collector::{ParallelCollector, ParallelCollectorBase, plumbing::finish_boxed_impl};
 
 /// A (serial) collector created from a parallel collector.
 ///
@@ -30,9 +30,11 @@ where
         self.par_collector.finish()
     }
 
+    finish_boxed_impl! {}
+
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        self.par_collector.break_hint()
+    fn max_afford(&self, request: usize) -> usize {
+        self.par_collector.max_afford(request)
     }
 }
 
@@ -42,7 +44,7 @@ where
 {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        let (_, consumer, commit) = self.par_collector.parts(1);
+        let (consumer, commit) = self.par_collector.parts(1);
         let mut collector = consumer.into_collector();
         let _ = collector.collect(item);
         commit(collector.finish())
@@ -58,7 +60,7 @@ where
         let (lower_sh, _) = items.size_hint();
 
         // We can guarantee this amount of items till the lower size hint.
-        let (_, consumer, commit) = self.par_collector.parts(lower_sh);
+        let (consumer, commit) = self.par_collector.parts(lower_sh);
         let collector = consumer.into_collector();
         let output = collector.collect_then_finish(items.by_ref().take(lower_sh));
         commit(output)?;
@@ -73,14 +75,14 @@ where
 
         if Some(lower_sh) == upper_sh {
             // The iterator's size is exact. We can use `take_parts()` and done!
-            let (_, consumer, commit) = self.par_collector.take_parts(lower_sh);
+            let (consumer, commit) = self.par_collector.take_parts(lower_sh);
             let collector = consumer.into_collector();
             let output = collector.collect_then_finish(items.take(lower_sh));
             commit(output);
             return self.finish();
         }
 
-        let (_, consumer, commit) = self.par_collector.parts(lower_sh);
+        let (consumer, commit) = self.par_collector.parts(lower_sh);
         let collector = consumer.into_collector();
         let output = collector.collect_then_finish(items.by_ref().take(lower_sh));
         if commit(output).is_continue() {

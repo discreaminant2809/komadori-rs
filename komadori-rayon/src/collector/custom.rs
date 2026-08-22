@@ -25,13 +25,13 @@ use super::{
 /// ```
 /// use rayon::prelude::*;
 /// use komadori_rayon::{prelude::*, collector::Custom};
-/// use std::{collections::HashSet, ops::ControlFlow, hash::Hash};
+/// use std::{collections::HashSet, hash::Hash};
 ///
 /// fn hash_set_par_collector<T: Hash + Eq + Send>(
 /// ) -> impl UnindexedParallelCollector<T, Output = HashSet<T>> {
 ///     Custom::new(
 ///         HashSet::new(),
-///         |_| ControlFlow::Continue(()),
+///         |_, request| request,
 ///         |_| vec![],
 ///         |set, items| set.extend(items),
 ///     )
@@ -47,9 +47,9 @@ use super::{
 /// assert_eq!(set, HashSet::from([1, 2, 3, 4, 5]));
 /// ```
 #[derive(Clone)]
-pub struct Custom<S, BH, I, IF, IC> {
+pub struct Custom<S, MA, I, IF, IC> {
     state: S,
-    break_hint: BH,
+    max_afford: MA,
     indexed: Option<I>,
     indexed_f: IF,
     indexed_commit: IC,
@@ -111,9 +111,9 @@ pub struct Custom<S, BH, I, IF, IC> {
 /// assert_eq!(set, HashSet::from([1, 2, 3, 4, 5]));
 /// ```
 #[derive(Clone)]
-pub struct CustomAlsoUnindexed<S, BH, I, IF, IC, U, UF, UC> {
+pub struct CustomAlsoUnindexed<S, MA, I, IF, IC, U, UF, UC> {
     state: S,
-    break_hint: BH,
+    max_afford: MA,
     indexed: Option<I>,
     indexed_f: IF,
     indexed_commit: IC,
@@ -122,9 +122,9 @@ pub struct CustomAlsoUnindexed<S, BH, I, IF, IC, U, UF, UC> {
     unindexed_commit: UC,
 }
 
-impl<S, BH, I, IF, IC> Custom<S, BH, I::IntoParCollector, IF, IC>
+impl<S, MA, I, IF, IC> Custom<S, MA, I::IntoParCollector, IF, IC>
 where
-    BH: Fn(&S) -> ControlFlow<()>,
+    MA: Fn(&S, usize) -> usize,
     I: IntoParallelCollectorBase,
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
@@ -133,10 +133,10 @@ where
     /// a closure that determines whether to stop,
     /// a closure that provides an existing parallel collector,
     /// and a closure that commits its output back to the state.
-    pub fn new(state: S, break_hint: BH, indexed_f: IF, indexed_commit: IC) -> Self {
+    pub fn new(state: S, max_afford: MA, indexed_f: IF, indexed_commit: IC) -> Self {
         Self {
             state,
-            break_hint,
+            max_afford,
             indexed: None,
             indexed_f,
             indexed_commit,
@@ -150,7 +150,7 @@ where
         self,
         unindexed_f: UF,
         unindexed_commit: UC,
-    ) -> CustomAlsoUnindexed<S, BH, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
+    ) -> CustomAlsoUnindexed<S, MA, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
     where
         U: IntoUnindexedParallelCollectorBase,
         UF: FnMut(&mut S) -> U,
@@ -158,7 +158,7 @@ where
     {
         CustomAlsoUnindexed {
             state: self.state,
-            break_hint: self.break_hint,
+            max_afford: self.max_afford,
             indexed: self.indexed,
             indexed_f: self.indexed_f,
             indexed_commit: self.indexed_commit,
@@ -176,10 +176,10 @@ where
     }
 }
 
-impl<S, BH, I, IF, IC, U, UF, UC>
-    CustomAlsoUnindexed<S, BH, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
+impl<S, MA, I, IF, IC, U, UF, UC>
+    CustomAlsoUnindexed<S, MA, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
 where
-    BH: Fn(&S) -> ControlFlow<()>,
+    MA: Fn(&S, usize) -> usize,
     I: IntoParallelCollectorBase,
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
@@ -206,7 +206,7 @@ where
     }
 }
 
-impl<S, BH, I, IF, IC> Debug for Custom<S, BH, I, IF, IC>
+impl<S, MA, I, IF, IC> Debug for Custom<S, MA, I, IF, IC>
 where
     S: Debug,
     I: Debug,
@@ -214,7 +214,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Custom")
             .field("state", &self.state)
-            .field("break_hint", &type_name::<BH>())
+            .field("max_afford", &type_name::<MA>())
             .field("indexed", &self.indexed)
             .field("indexed_f", &type_name::<IF>())
             .field("indexed_commit", &type_name::<IC>())
@@ -222,7 +222,7 @@ where
     }
 }
 
-impl<S, BH, I, IF, IC, U, UF, UC> Debug for CustomAlsoUnindexed<S, BH, I, IF, IC, U, UF, UC>
+impl<S, MA, I, IF, IC, U, UF, UC> Debug for CustomAlsoUnindexed<S, MA, I, IF, IC, U, UF, UC>
 where
     S: Debug,
     I: Debug,
@@ -231,7 +231,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CustomAlsoUnindexed")
             .field("state", &self.state)
-            .field("break_hint", &type_name::<BH>())
+            .field("max_afford", &type_name::<MA>())
             .field("indexed", &self.indexed)
             .field("indexed_f", &type_name::<IF>())
             .field("indexed_commit", &type_name::<IC>())
@@ -242,23 +242,23 @@ where
     }
 }
 
-impl<'a, S, BH, I, IF, IC> DefineSerial<'a> for Custom<S, BH, I, IF, IC>
+impl<'a, S, MA, I, IF, IC> DefineSerial<'a> for Custom<S, MA, I, IF, IC>
 where
     I: DefineSerial<'a>,
 {
     type Serial = unique::Serial<'a, Self, I::Serial>;
 }
 
-impl<'a, S, BH, I, IF, IC> DefineUnindexedSerial<'a> for Custom<S, BH, I, IF, IC>
+impl<'a, S, MA, I, IF, IC> DefineUnindexedSerial<'a> for Custom<S, MA, I, IF, IC>
 where
     I: DefineUnindexedSerial<'a>,
 {
     type UnindexedSerial = unique_unindexed::Serial<'a, Self, I::UnindexedSerial>;
 }
 
-impl<S, BH, I, IF, IC> ParallelCollectorBase for Custom<S, BH, I::IntoParCollector, IF, IC>
+impl<S, MA, I, IF, IC> ParallelCollectorBase for Custom<S, MA, I::IntoParCollector, IF, IC>
 where
-    BH: Fn(&S) -> ControlFlow<()>,
+    MA: Fn(&S, usize) -> usize,
     I: IntoParallelCollectorBase,
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
@@ -273,15 +273,14 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        (self.break_hint)(&self.state)
+    fn max_afford(&self, request: usize) -> usize {
+        (self.max_afford)(&self.state, request)
     }
 
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -294,11 +293,15 @@ where
         let indexed = self
             .indexed
             .insert((self.indexed_f)(&mut self.state).into_par_collector());
-        let (len, consumer, commit) = indexed.take_parts(len);
+        let (consumer, commit) = indexed.take_parts(len);
 
-        unique::uniquify((len, consumer, |output| {
+        unique::uniquify((consumer, |output| {
             commit(output);
-            (self.break_hint)(&self.state)
+            if (self.max_afford)(&self.state, 1) > 0 {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
         }))
     }
 
@@ -306,7 +309,6 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -324,9 +326,9 @@ where
     }
 }
 
-impl<S, BH, I, IF, IC> UnindexedParallelCollectorBase for Custom<S, BH, I::IntoParCollector, IF, IC>
+impl<S, MA, I, IF, IC> UnindexedParallelCollectorBase for Custom<S, MA, I::IntoParCollector, IF, IC>
 where
-    BH: Fn(&S) -> ControlFlow<()>,
+    MA: Fn(&S, usize) -> usize,
     I: IntoUnindexedParallelCollectorBase,
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
@@ -352,7 +354,11 @@ where
 
         unique_unindexed::uniquify((consumer, |output| {
             commit(output);
-            (self.break_hint)(&self.state)
+            if (self.max_afford)(&self.state, 1) > 0 {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
         }))
     }
 
@@ -376,25 +382,25 @@ where
     }
 }
 
-impl<'a, S, BH, I, IF, IC, U, UF, UC> DefineSerial<'a> for CustomAlsoUnindexed<S, BH, I, IF, IC, U, UF, UC>
+impl<'a, S, MA, I, IF, IC, U, UF, UC> DefineSerial<'a> for CustomAlsoUnindexed<S, MA, I, IF, IC, U, UF, UC>
 where
     I: DefineSerial<'a>,
 {
     type Serial = unique::Serial<'a, Self, I::Serial>;
 }
 
-impl<'a, S, BH, I, IF, IC, U, UF, UC> DefineUnindexedSerial<'a>
-    for CustomAlsoUnindexed<S, BH, I, IF, IC, U, UF, UC>
+impl<'a, S, MA, I, IF, IC, U, UF, UC> DefineUnindexedSerial<'a>
+    for CustomAlsoUnindexed<S, MA, I, IF, IC, U, UF, UC>
 where
     U: DefineUnindexedSerial<'a>,
 {
     type UnindexedSerial = unique_unindexed::Serial<'a, Self, U::UnindexedSerial>;
 }
 
-impl<S, BH, I, IF, IC, U, UF, UC> ParallelCollectorBase
-    for CustomAlsoUnindexed<S, BH, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
+impl<S, MA, I, IF, IC, U, UF, UC> ParallelCollectorBase
+    for CustomAlsoUnindexed<S, MA, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
 where
-    BH: Fn(&S) -> ControlFlow<()>,
+    MA: Fn(&S, usize) -> usize,
     I: IntoParallelCollectorBase,
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
@@ -411,15 +417,14 @@ where
     }
 
     #[inline]
-    fn break_hint(&self) -> ControlFlow<()> {
-        (self.break_hint)(&self.state)
+    fn max_afford(&self, request: usize) -> usize {
+        (self.max_afford)(&self.state, request)
     }
 
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -432,11 +437,15 @@ where
         let indexed = self
             .indexed
             .insert((self.indexed_f)(&mut self.state).into_par_collector());
-        let (len, consumer, commit) = indexed.take_parts(len);
+        let (consumer, commit) = indexed.take_parts(len);
 
-        unique::uniquify((len, consumer, |output| {
+        unique::uniquify((consumer, |output| {
             commit(output);
-            (self.break_hint)(&self.state)
+            if (self.max_afford)(&self.state, 1) > 0 {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
         }))
     }
 
@@ -444,7 +453,6 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        usize,
         impl Consumer<
             IntoCollector = <Self as DefineSerial<'a>>::Serial,
             Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
@@ -462,10 +470,10 @@ where
     }
 }
 
-impl<S, BH, I, IF, IC, U, UF, UC> UnindexedParallelCollectorBase
-    for CustomAlsoUnindexed<S, BH, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
+impl<S, MA, I, IF, IC, U, UF, UC> UnindexedParallelCollectorBase
+    for CustomAlsoUnindexed<S, MA, I::IntoParCollector, IF, IC, U::IntoParCollector, UF, UC>
 where
-    BH: Fn(&S) -> ControlFlow<()>,
+    MA: Fn(&S, usize) -> usize,
     I: IntoParallelCollectorBase,
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
@@ -494,7 +502,11 @@ where
 
         unique_unindexed::uniquify((consumer, |output| {
             commit(output);
-            (self.break_hint)(&self.state)
+            if (self.max_afford)(&self.state, 1) > 0 {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
         }))
     }
 

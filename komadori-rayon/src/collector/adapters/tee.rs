@@ -35,7 +35,7 @@ impl<T> Teer<T> for CopyTeer
 where
     T: Copy,
 {
-    const ITEM_IS_COPY: bool = true;
+    const TEE_CHEAP: bool = true;
 
     #[inline]
     fn pass_down(&mut self, item: &mut T) -> T {
@@ -48,21 +48,12 @@ where
     }
 
     #[inline]
-    fn no_tee_collect_many(
+    unsafe fn no_tee_assume_reserved_collect(
         &mut self,
-        items: impl IntoIterator<Item = T>,
-        collector: &mut impl Collector<T>,
+        collector: &mut impl for<'a> Collector<<Self as DefinePassDown<'a, T>>::PassDown>,
+        item: T,
     ) -> ControlFlow<()> {
-        collector.collect_many(items)
-    }
-
-    #[inline]
-    fn no_tee_collect_then_finish<O>(
-        &mut self,
-        items: impl IntoIterator<Item = T>,
-        collector: impl Collector<T, Output = O>,
-    ) -> O {
-        collector.collect_then_finish(items)
+        unsafe { collector.assume_reserved_collect(item) }
     }
 }
 
