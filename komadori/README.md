@@ -197,7 +197,7 @@ let collector_way = socket_stream()
     .feed_into((
         String::new()
             .into_concat()
-            .map(clb_mut!(|s: &mut String| -> &str { &s[..] })),
+            .map(clb_mut!(|s: &mut String| -> &str { s })),
         HashSet::new(),
     ));
 
@@ -216,11 +216,13 @@ the source.
 Consider this example:
 
 ```rust
-fn stats<'a>(records: impl IntoIterator<Item = &'a Record>) -> Stats {
+use std::borrow::Borrow;
+
+fn stats<T: Borrow<Record>>(records: impl IntoIterator<Item = T>) -> Stats {
     // Implementations
 }
 
-fn checksum<'a>(records: impl IntoIterator<Item = &'a Record>) -> u64 {
+fn checksum<T: Borrow<Record>>(records: impl IntoIterator<Item = T>) -> u64 {
     // Implementations
 }
 ```
@@ -255,11 +257,11 @@ let (stats, checksum) = records.feed_into((
 ## Crate stucture
 
 Modules in this crate mirror those in the standard library, because this crate
-extends many types there. There is also `collector` which
+extends many types there. There is also [`collector`][collector_module] which
 contains collector functionalities that work behind [`feed_into()`],
-and `prelude` which re-exports commons items for easier use.
+and [`prelude`] which re-exports commons items for easier use.
 
-It is recommended to read the documentation of `collector` next
+It is recommended to read the documentation of [`collector`][collector_module] next
 if you want to delve into how collectors work.
 
 ## Features
@@ -277,8 +279,10 @@ if you want to delve into how collectors work.
   Items gated behind this feature do **not** follow normal semver guarantees
   and may change or be removed at any time.
 
-[`Collector`]: https://docs.rs/komadori/latest/komadori/collector/trait.Collector.html
-[`feed_into()`]: https://docs.rs/komadori/latest/komadori/iter/trait.IteratorExt.html#method.feed_into
+[`Collector`]: https://docs.rs/komadori/0.9.1/komadori/collector/trait.Collector.html
+[collector_module]: https://docs.rs/komadori/0.9.1/komadori/collector/index.html
+[`prelude`]: https://docs.rs/komadori/0.9.1/komadori/prelude/index.html
+[`feed_into()`]: https://docs.rs/komadori/0.9.1/komadori/iter/trait.IteratorExt.html#method.feed_into
 [`Iterator`]: https://doc.rust-lang.org/std/iter/trait.Iterator.html
 [`Iterator::fold()`]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.fold
 [`Iterator::inspect()`]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.inspect
