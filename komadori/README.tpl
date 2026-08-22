@@ -2,8 +2,10 @@
 
 {{readme}}
 
-[`Collector`]: https://docs.rs/{{crate}}/latest/{{crate}}/collector/trait.Collector.html
-[`feed_into()`]: https://docs.rs/{{crate}}/latest/{{crate}}/iter/trait.IteratorExt.html#method.feed_into
+[`Collector`]: https://docs.rs/{{crate}}/{{version}}/{{crate}}/collector/trait.Collector.html
+[collector_module]: https://docs.rs/{{crate}}/{{version}}/{{crate}}/collector/index.html
+[`prelude`]: https://docs.rs/{{crate}}/{{version}}/{{crate}}/prelude/index.html
+[`feed_into()`]: https://docs.rs/{{crate}}/{{version}}/{{crate}}/iter/trait.IteratorExt.html#method.feed_into
 [`Iterator`]: https://doc.rust-lang.org/std/iter/trait.Iterator.html
 [`Iterator::fold()`]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.fold
 [`Iterator::inspect()`]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.inspect
