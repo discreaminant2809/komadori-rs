@@ -16,6 +16,16 @@ use either::map_both;
 use crate::collector::{IntoCollectorBase, assert_collector_base};
 
 /// Extension trait for [`Either`] with collector-related methods.
+///
+/// # Semver guarantee
+///
+/// Since this is an extension trait and not intended to be implemented
+/// outside of the crate, if you accidentally can implement this trait,
+/// it is considered a bug and please report that!
+///
+/// The ability to implement this trait and its dyn-compatibility are **not**
+/// server-compatible and can be revoked at any time.
+/// However, its methods are still guaranteed to be server-compatible.
 #[expect(private_bounds)]
 pub trait EitherExt<L, R>: Sealed {
     /// Converts the inner value to a collector.
@@ -140,5 +150,5 @@ impl<L, R> EitherExt<L, R> for Either<L, R> {
     }
 }
 
-trait Sealed {}
+trait Sealed: Sized {}
 impl<L, R> Sealed for Either<L, R> {}

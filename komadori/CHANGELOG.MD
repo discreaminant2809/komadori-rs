@@ -2,6 +2,10 @@
 
 ## 0.9.1
 
+### Fixed
+
+- `crate::either::EitherExt` should not be dyn-compatible.
+
 ## 0.9.0
 
 ### Added
