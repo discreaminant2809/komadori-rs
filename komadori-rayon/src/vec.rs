@@ -6,13 +6,14 @@
 use std::mem::MaybeUninit;
 use std::{collections::LinkedList, ops::ControlFlow, ptr::NonNull};
 
-use komadori::prelude::*;
-
 use crate::{
     collections::linked_vec::{self, Collection},
     collector::{
         IntoParallelCollectorBase, ParallelCollectorBase, assert_unindexed_par_collector,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
     prelude::UnindexedParallelCollectorBase,
@@ -87,7 +88,8 @@ impl<'this, T> DefineUnindexedSerial<'this> for IntoParCollector<T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
+    type UnindexedSerial =
+        unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -105,11 +107,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         self.0.reserve(len);
 
@@ -153,12 +152,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(&mut self.0), |output| {
             debug_assert!(output.is_left_most());
@@ -178,7 +175,8 @@ impl<'v, 'this, T> DefineUnindexedSerial<'this> for ParCollectorMut<'v, T>
 where
     T: Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
+    type UnindexedSerial =
+        unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
 }
 
 impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
@@ -196,11 +194,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         // NOTE: from outside, the lifetime of `parts` is still bounded to
         // the collector, but here, the mutable reference to the collector is
@@ -252,12 +247,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(self.0), |output| {
             debug_assert!(output.is_left_most());
@@ -404,7 +397,9 @@ mod miri_tests {
         let left_consumer = right_consumer.split_off_left();
         let combiner = right_consumer.to_combiner();
 
-        let right_output = right_consumer.into_collector().collect_then_finish([6, 7, 8]);
+        let right_output = right_consumer
+            .into_collector()
+            .collect_then_finish([6, 7, 8]);
         let mut left_output = left_consumer.into_collector().collect_then_finish([4, 5]);
         combiner.combine(&mut left_output, right_output);
         let output = left_output;

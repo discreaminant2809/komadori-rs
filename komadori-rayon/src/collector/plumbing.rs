@@ -169,6 +169,22 @@ mod self_binder {
     impl<'a, T: ?Sized> Sealed for Binder<'a, T> {}
 }
 
+/// Type alias helper to help retrieving the serial collector
+/// of the (indexed) parallel collector `C`.
+pub type SerialOf<'a, C> = <C as DefineSerial<'a>>::Serial;
+
+/// Type alias helper to help retrieving the output of the serial collector
+/// of the (indexed) parallel collector `C`.
+pub type SerialOutputOf<'a, C> = <SerialOf<'a, C> as CollectorBase>::Output;
+
+/// Type alias helper to help retrieving the serial collector
+/// of the unindexed parallel collector `C`.
+pub type UnindexedSerialOf<'a, C> = <C as DefineUnindexedSerial<'a>>::UnindexedSerial;
+
+/// Type alias helper to help retrieving the output of the serial collector
+/// of the unindexed parallel collector `C`.
+pub type UnindexedSerialOutputOf<'a, C> = <UnindexedSerialOf<'a, C> as CollectorBase>::Output;
+
 /// An (indexed) consumer that can be split at a given index.
 ///
 /// A consumer is able to convert into a serial collector, hence

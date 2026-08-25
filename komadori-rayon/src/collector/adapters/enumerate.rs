@@ -1,11 +1,9 @@
 use std::ops::ControlFlow;
 
-use komadori::prelude::*;
-
 use crate::{
     collector::{
         ParallelCollectorBase,
-        plumbing::{Consumer, DefineSerial},
+        plumbing::{Consumer, DefineSerial, SerialOf, SerialOutputOf},
     },
     helpers::unique,
 };
@@ -54,11 +52,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts(len);
         let idx = &mut self.idx;
@@ -76,11 +71,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts(len);
         unique::take_uniquify((consumer::Consumer::new(consumer, self.idx), commit))

@@ -1,11 +1,12 @@
 use std::ops::ControlFlow;
 
-use komadori::prelude::*;
-
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
     ops::{BasicParClosure, DefineCallMut, ParallelFnMutBase, WithLocalParClosure},
@@ -58,8 +59,11 @@ where
     C: DefineUnindexedSerial<'a>,
     P: ParallelFnMutBase,
 {
-    type Serial =
-        unique::Serial<'a, Self, consumer::Serial<C::UnindexedSerial, <P as DefineCallMut<'a>>::CallMut>>;
+    type Serial = unique::Serial<
+        'a,
+        Self,
+        consumer::Serial<C::UnindexedSerial, <P as DefineCallMut<'a>>::CallMut>,
+    >;
 }
 
 impl<'a, C, P> DefineUnindexedSerial<'a> for FilterMapBase<C, P>
@@ -100,11 +104,8 @@ where
         &'a mut self,
         _len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         unique::uniquify((
@@ -118,11 +119,8 @@ where
         &'a mut self,
         _len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique::take_uniquify((
@@ -141,12 +139,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         unique_unindexed::uniquify((
@@ -159,10 +155,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique_unindexed::take_uniquify((
@@ -197,7 +193,10 @@ mod consumer {
     impl<C, P> Consumer<C, P> {
         #[inline]
         pub(super) fn new(consumer: C, into_pred: P) -> Self {
-            Self { consumer, into_pred }
+            Self {
+                consumer,
+                into_pred,
+            }
         }
     }
 
@@ -332,7 +331,8 @@ mod proptests {
                 },
             )
         },
-        output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
+        output_pred: |actual, expected| actual.len() <= nums.len().min(n)
+            && is_subsequence(actual, expected),
         state_pred: state_is_irrelevant(),
     });
 
@@ -359,7 +359,8 @@ mod proptests {
                 },
             )
         },
-        output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
+        output_pred: |actual, expected| actual.len() <= nums.len().min(n)
+            && is_subsequence(actual, expected),
         state_pred: state_is_irrelevant(),
     });
 

@@ -2,6 +2,13 @@
 
 ## 0.2.0
 
+### Added
+
+- `crate::collector::plumbing::SerialOf`.
+- `crate::collector::plumbing::SerialOutputOf`.
+- `crate::collector::plumbing::UnindexedSerialOf`.
+- `crate::collector::plumbing::UnindexedSerialOutputOf`.
+
 ### Changed
 
 - Reworked parallel collector traits.

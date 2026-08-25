@@ -1,11 +1,12 @@
 use std::ops::ControlFlow;
 
-use komadori::prelude::*;
-
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
 };
@@ -65,11 +66,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique::uniquify(C::parts(self, len))
     }
@@ -78,11 +76,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         // Explicitly override it to strengthen the invariant in the doc,
         // and to shield from the change in the default implementation.
@@ -101,12 +96,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify(C::parts_unindexed(self))
     }
@@ -115,10 +108,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         // Explicitly override it to strengthen the invariant in the doc,
         // and to shield from the change in the default implementation.

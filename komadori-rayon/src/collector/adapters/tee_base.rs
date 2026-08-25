@@ -5,7 +5,10 @@ use komadori::prelude::*;
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
 };
@@ -46,7 +49,12 @@ where
     }
 }
 
-pub(super) trait DefinePassDown<'this, T: ?Sized, Binder: t_binder::Sealed = t_binder::Binder<'this, T>> {
+pub(super) trait DefinePassDown<
+    'this,
+    T: ?Sized,
+    Binder: t_binder::Sealed = t_binder::Binder<'this, T>,
+>
+{
     type PassDown;
 }
 
@@ -86,37 +94,29 @@ pub(super) trait Teer<T>: Clone + Send + for<'this> DefinePassDown<'this, T> {
     }
 }
 
-impl<'this, C1, C2, TF> DefineSerial<'this> for TeeBase<C1, C2, TF>
+impl<'a, C1, C2, TF> DefineSerial<'a> for TeeBase<C1, C2, TF>
 where
-    C1: DefineSerial<'this>,
-    C2: DefineSerial<'this>,
+    C1: DefineSerial<'a>,
+    C2: DefineSerial<'a>,
     TF: Send + Clone,
 {
     type Serial = unique::Serial<
-        'this,
+        'a,
         Self,
-        consumer::Serial<
-            <Fuse<C1> as DefineSerial<'this>>::Serial,
-            <Fuse<C2> as DefineSerial<'this>>::Serial,
-            TF,
-        >,
+        consumer::Serial<SerialOf<'a, Fuse<C1>>, SerialOf<'a, Fuse<C2>>, TF>,
     >;
 }
 
-impl<'this, C1, C2, TF> DefineUnindexedSerial<'this> for TeeBase<C1, C2, TF>
+impl<'a, C1, C2, TF> DefineUnindexedSerial<'a> for TeeBase<C1, C2, TF>
 where
-    C1: DefineUnindexedSerial<'this>,
-    C2: DefineUnindexedSerial<'this>,
+    C1: DefineUnindexedSerial<'a>,
+    C2: DefineUnindexedSerial<'a>,
     TF: Send + Clone,
 {
     type UnindexedSerial = unique_unindexed::Serial<
-        'this,
+        'a,
         Self,
-        consumer::Serial<
-            <Fuse<C1> as DefineUnindexedSerial<'this>>::UnindexedSerial,
-            <Fuse<C2> as DefineUnindexedSerial<'this>>::UnindexedSerial,
-            TF,
-        >,
+        consumer::Serial<UnindexedSerialOf<'a, Fuse<C1>>, UnindexedSerialOf<'a, Fuse<C2>>, TF>,
     >;
 }
 
@@ -145,11 +145,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer1, commit1) = self.collector1.parts(len);
         let (consumer2, commit2) = self.collector2.parts(len);
@@ -164,11 +161,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer1, commit1) = self.collector1.take_parts(len);
         let (consumer2, commit2) = self.collector2.take_parts(len);
@@ -193,12 +187,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer1, commit1) = self.collector1.parts_unindexed();
         let (consumer2, commit2) = self.collector2.parts_unindexed();
@@ -213,10 +205,10 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer1, commit1) = self.collector1.take_parts_unindexed();
         let (consumer2, commit2) = self.collector2.take_parts_unindexed();
@@ -318,7 +310,10 @@ mod consumer {
                     consumer2,
                     teer: self.teer.clone(),
                 },
-                Combiner { combiner1, combiner2 },
+                Combiner {
+                    combiner1,
+                    combiner2,
+                },
             )
         }
 

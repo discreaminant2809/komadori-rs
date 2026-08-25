@@ -2,11 +2,13 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
+use crate::collector::plumbing::{SerialOf, SerialOutputOf};
+
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Cloning, Copying, Enumerate, Fuse, IndexedOnly, IntoCollector, IntoParallelCollectorBase, Map, MapOutput,
-    MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector, assert_par_collector_base, tee,
-    tee_clone, tee_funnel, tee_mut,
+    Cloning, Copying, Enumerate, Fuse, IndexedOnly, IntoCollector, IntoParallelCollectorBase, Map,
+    MapOutput, MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector,
+    assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -22,16 +24,12 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
 
     /// Reserves for `len` items and returns "parts" needed
     /// to drive this parallel collector.
-    #[expect(clippy::type_complexity)]
     fn parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     );
 
     /// Reserves for `len` items and returns "parts" needed
@@ -55,16 +53,12 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// The signature is similar to [`parts()`](Self::parts),
     /// except the returning function which does not return
     /// a [`ControlFlow`].
-    #[expect(clippy::type_complexity)]
     fn take_parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.parts(len);
         (consumer, |output| {
@@ -493,7 +487,12 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// assert_eq!(sum, 2_004_003_001);
     /// ```
     #[inline]
-    fn map_with<L1, FL2, L2, F, T, U>(self, local1: L1, local2_f: FL2, f: F) -> MapWith<Self, L1, FL2, F>
+    fn map_with<L1, FL2, L2, F, T, U>(
+        self,
+        local1: L1,
+        local2_f: FL2,
+        f: F,
+    ) -> MapWith<Self, L1, FL2, F>
     where
         Self: ParallelCollector<T> + Sized,
         L1: Clone + Send,

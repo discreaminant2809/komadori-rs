@@ -1,11 +1,12 @@
 use std::ops::ControlFlow;
 
-use komadori::prelude::*;
-
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
     ops::{BasicParClosure, DefineCallMut, ParallelFnMutBase, WithLocalParClosure},
@@ -59,7 +60,8 @@ where
     C: DefineSerial<'a>,
     F: ParallelFnMutBase,
 {
-    type Serial = unique::Serial<'a, Self, consumer::Serial<C::Serial, <F as DefineCallMut<'a>>::CallMut>>;
+    type Serial =
+        unique::Serial<'a, Self, consumer::Serial<C::Serial, <F as DefineCallMut<'a>>::CallMut>>;
 }
 
 impl<'a, C, F> DefineUnindexedSerial<'a> for MapBase<C, F>
@@ -95,25 +97,22 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts(len);
-        unique::uniquify((consumer::Consumer::new(consumer, self.f.callable_mut()), commit))
+        unique::uniquify((
+            consumer::Consumer::new(consumer, self.f.callable_mut()),
+            commit,
+        ))
     }
 
     fn take_parts<'a>(
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts(len);
         unique::take_uniquify((
@@ -132,25 +131,26 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique_unindexed::uniquify((consumer::Consumer::new(consumer, self.f.callable_mut()), commit))
+        unique_unindexed::uniquify((
+            consumer::Consumer::new(consumer, self.f.callable_mut()),
+            commit,
+        ))
     }
 
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique_unindexed::take_uniquify((
@@ -286,7 +286,8 @@ mod consumer {
         unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
             unsafe {
                 // SAFETY: The caller reserved for at least 1 item.
-                self.collector.assume_reserved_collect(self.f.call_mut((item,)))
+                self.collector
+                    .assume_reserved_collect(self.f.call_mut((item,)))
             }
         }
 
@@ -354,7 +355,8 @@ mod proptests {
                 },
             )
         },
-        output_pred: |actual, expected| actual.len() == nums.len().min(n) && is_subsequence(actual, expected),
+        output_pred: |actual, expected| actual.len() == nums.len().min(n)
+            && is_subsequence(actual, expected),
         state_pred: state_is_irrelevant(),
     });
 

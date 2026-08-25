@@ -7,12 +7,13 @@
 
 use std::{num::Wrapping, ops::ControlFlow};
 
-use komadori::prelude::*;
-
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
     ops,
@@ -113,11 +114,8 @@ macro_rules! prim_sum_impl {
                 &'a mut self,
                 _len: usize,
             ) -> (
-                impl Consumer<
-                    IntoCollector = <Self as DefineSerial<'a>>::Serial,
-                    Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-                >,
-                impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+                impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+                impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
                 unique::uniquify((sum::Consumer::new(), |count| {
                     self.0 += count;
@@ -131,12 +129,10 @@ macro_rules! prim_sum_impl {
                 &'a mut self,
             ) -> (
                 impl UnindexedConsumer<
-                    IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-                    Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+                    IntoCollector = UnindexedSerialOf<'a, Self>,
+                    Output = UnindexedSerialOutputOf<'a, Self>,
                 >,
-                impl FnOnce(
-                    <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-                ) -> ControlFlow<()>,
+                impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
                 unique_unindexed::uniquify((sum::Consumer::new(), |count| {
                     self.0 += count;
@@ -189,11 +185,8 @@ macro_rules! prim_product_impl {
                 &'a mut self,
                 _len: usize,
             ) -> (
-                impl Consumer<
-                    IntoCollector = <Self as DefineSerial<'a>>::Serial,
-                    Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-                >,
-                impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+                impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+                impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
                 unique::uniquify((product::Consumer::new(), |count| {
                     self.0 *= count;
@@ -207,12 +200,10 @@ macro_rules! prim_product_impl {
                 &'a mut self,
             ) -> (
                 impl UnindexedConsumer<
-                    IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-                    Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+                    IntoCollector = UnindexedSerialOf<'a, Self>,
+                    Output = UnindexedSerialOutputOf<'a, Self>,
                 >,
-                impl FnOnce(
-                    <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-                ) -> ControlFlow<()>,
+                impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
                 unique_unindexed::uniquify((product::Consumer::new(), |count| {
                     self.0 *= count;
@@ -442,7 +433,10 @@ mod proptests {
         iter: nums.par_iter().cloned(),
         collector: starting_num.into_par_product(),
         starting_ma_f: |request| request,
-        expected_f: |iter, _, request| (starting_num * iter.product::<i64>(), Continue(((), request))),
+        expected_f: |iter, _, request| (
+            starting_num * iter.product::<i64>(),
+            Continue(((), request))
+        ),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });
@@ -457,7 +451,10 @@ mod proptests {
         iter: nums.par_iter().cloned(),
         collector: starting_num.into_par_product(),
         starting_ma_f: |request| request,
-        expected_f: |iter, _, request| (starting_num * iter.product::<i64>(), Continue(((), request))),
+        expected_f: |iter, _, request| (
+            starting_num * iter.product::<i64>(),
+            Continue(((), request))
+        ),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });

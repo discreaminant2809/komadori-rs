@@ -4,12 +4,13 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use komadori::prelude::*;
-
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
 };
@@ -69,11 +70,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let remaining = self.remaining.get_mut();
 
@@ -106,11 +104,8 @@ where
         &'a mut self,
         len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let remaining = self.remaining.get_mut();
 
@@ -137,35 +132,39 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
-        unique_unindexed::uniquify((unindexed::Consumer::new(consumer, &self.remaining), |output| {
-            commit(output)?;
-            if self.remaining.load(Ordering::Relaxed) == 0 {
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
-        }))
+        unique_unindexed::uniquify((
+            unindexed::Consumer::new(consumer, &self.remaining),
+            |output| {
+                commit(output)?;
+                if self.remaining.load(Ordering::Relaxed) == 0 {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            },
+        ))
     }
 
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        unique_unindexed::take_uniquify((unindexed::Consumer::new(consumer, &self.remaining), commit))
+        unique_unindexed::take_uniquify((
+            unindexed::Consumer::new(consumer, &self.remaining),
+            commit,
+        ))
     }
 }
 
@@ -278,7 +277,10 @@ mod unindexed {
     impl<'a, C> Consumer<'a, C> {
         #[inline]
         pub(super) fn new(consumer: C, remaining: &'a AtomicUsize) -> Self {
-            Self { consumer, remaining }
+            Self {
+                consumer,
+                remaining,
+            }
         }
     }
 
@@ -438,7 +440,8 @@ mod proptests {
             )
         },
         output_pred: PartialEq::eq,
-        state_pred: |collector, &remaining| collector.remaining.load(Ordering::Relaxed) == remaining,
+        state_pred: |collector, &remaining| collector.remaining.load(Ordering::Relaxed)
+            == remaining,
     });
 
     unindexed_par_collector_test!(unindexed {
@@ -471,6 +474,7 @@ mod proptests {
         },
         output_pred: |actual, expected| actual.len() == expected.len().min(m).min(n)
             && is_subsequence(actual, expected),
-        state_pred: |collector, &remaining| collector.remaining.load(Ordering::Relaxed) == remaining,
+        state_pred: |collector, &remaining| collector.remaining.load(Ordering::Relaxed)
+            == remaining,
     });
 }

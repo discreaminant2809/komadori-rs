@@ -4,12 +4,13 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use komadori::prelude::*;
-
 use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
-        plumbing::{Consumer, DefineSerial, DefineUnindexedSerial, UnindexedConsumer},
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
     },
     helpers::{unique, unique_unindexed},
 };
@@ -151,36 +152,34 @@ where
 
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
-        self.take_pred.max_afford_with(self.collector.max_afford(request))
+        self.take_pred
+            .max_afford_with(self.collector.max_afford(request))
     }
 
     fn parts<'a>(
         &'a mut self,
         _len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         let take_pred = &self.take_pred;
-        unique::uniquify((consumer::Consumer::new(consumer, take_pred), move |output| {
-            commit(output)?;
-            take_pred.break_hint()
-        }))
+        unique::uniquify((
+            consumer::Consumer::new(consumer, take_pred),
+            move |output| {
+                commit(output)?;
+                take_pred.break_hint()
+            },
+        ))
     }
 
     fn take_parts<'a>(
         &'a mut self,
         _len: usize,
     ) -> (
-        impl Consumer<
-            IntoCollector = <Self as DefineSerial<'a>>::Serial,
-            Output = <<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output,
-        >,
-        impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique::take_uniquify((consumer::Consumer::new(consumer, &self.take_pred), commit))
@@ -196,32 +195,36 @@ where
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         let take_pred = &self.take_pred;
-        unique_unindexed::uniquify((consumer::Consumer::new(consumer, take_pred), move |output| {
-            commit(output)?;
-            take_pred.break_hint()
-        }))
+        unique_unindexed::uniquify((
+            consumer::Consumer::new(consumer, take_pred),
+            move |output| {
+                commit(output)?;
+                take_pred.break_hint()
+            },
+        ))
     }
 
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
-        unique_unindexed::take_uniquify((consumer::Consumer::new(consumer, &self.take_pred), commit))
+        unique_unindexed::take_uniquify((
+            consumer::Consumer::new(consumer, &self.take_pred),
+            commit,
+        ))
     }
 }
 
@@ -248,7 +251,10 @@ mod consumer {
     impl<'a, C, P> Consumer<'a, C, P> {
         #[inline]
         pub(super) fn new(consumer: C, take_pred: &'a TakePred<P>) -> Self {
-            Self { consumer, take_pred }
+            Self {
+                consumer,
+                take_pred,
+            }
         }
     }
 
@@ -283,7 +289,8 @@ mod consumer {
 
         #[inline]
         fn max_afford(&self, request: usize) -> usize {
-            self.take_pred.max_afford_with(self.consumer.max_afford(request))
+            self.take_pred
+                .max_afford_with(self.consumer.max_afford(request))
         }
     }
 
@@ -321,7 +328,8 @@ mod consumer {
 
         #[inline]
         fn max_afford(&self, request: usize) -> usize {
-            self.take_pred.max_afford_with(self.collector.max_afford(request))
+            self.take_pred
+                .max_afford_with(self.collector.max_afford(request))
         }
     }
 
@@ -391,7 +399,8 @@ mod proptests {
                 },
             )
         },
-        output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
+        output_pred: |actual, expected| actual.len() <= nums.len().min(n)
+            && is_subsequence(actual, expected),
         state_pred: state_is_irrelevant(),
     });
 
@@ -418,7 +427,8 @@ mod proptests {
                 },
             )
         },
-        output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
+        output_pred: |actual, expected| actual.len() <= nums.len().min(n)
+            && is_subsequence(actual, expected),
         // Technically if `collector.take_pred.stopped` is `false`,
         // the collector has stopped, hence we don't have a right to fetch the state.
         state_pred: |collector, &_: &()| !collector.take_pred.stopped.load(Ordering::Relaxed),

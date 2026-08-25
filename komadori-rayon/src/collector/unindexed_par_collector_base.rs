@@ -2,7 +2,10 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use crate::collector::assert_unindexed_par_collector_base;
+use crate::collector::{
+    assert_unindexed_par_collector_base,
+    plumbing::{UnindexedSerialOf, UnindexedSerialOutputOf},
+};
 
 use super::{
     Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith, ParallelCollectorBase,
@@ -16,17 +19,14 @@ pub trait UnindexedParallelCollectorBase:
 {
     /// Prepares a space to accept *any* amount of items landing on anywhere,
     /// and returns "parts" needed to drive this parallel collector.
-    #[expect(clippy::type_complexity)]
     fn parts_unindexed<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(
-            <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
-        ) -> ControlFlow<()>,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     );
 
     /// Prepares a space to accept *any* amount of items landing on anywhere,
@@ -50,15 +50,14 @@ pub trait UnindexedParallelCollectorBase:
     /// The signature is similar to [`parts_unindexed()`](Self::parts_unindexed),
     /// except the returning function which does not return
     /// a [`ControlFlow`].
-    #[expect(clippy::type_complexity)]
     fn take_parts_unindexed<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
-            IntoCollector = <Self as DefineUnindexedSerial<'a>>::UnindexedSerial,
-            Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
         >,
-        impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.parts_unindexed();
         (consumer, |output| {
