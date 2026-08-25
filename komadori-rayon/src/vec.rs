@@ -427,11 +427,11 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_nums.into_par_collector(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| {
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
             let mut res = starting_nums.clone();
             res.extend(iter);
-            (res, Continue(()))
+            (res, Continue(((), request)))
         },
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
@@ -446,11 +446,11 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_nums.into_par_collector(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| {
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
             let mut res = starting_nums.clone();
             res.extend(iter);
-            (res, Continue(()))
+            (res, Continue(((), request)))
         },
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
@@ -465,11 +465,11 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_nums.par_collector_mut(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| {
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
             let mut res = starting_nums.clone();
             res.extend(iter);
-            (res, Continue(()))
+            (res, Continue(((), request)))
         },
         output_pred: |actual, expected| *actual == expected,
         state_pred: state_is_irrelevant(),
@@ -484,11 +484,11 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_nums.par_collector_mut(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| {
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
             let mut res = starting_nums.clone();
             res.extend(iter);
-            (res, Continue(()))
+            (res, Continue(((), request)))
         },
         output_pred: |actual, expected| *actual == expected,
         state_pred: state_is_irrelevant(),

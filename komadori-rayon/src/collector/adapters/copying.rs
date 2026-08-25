@@ -198,10 +198,17 @@ mod proptests {
         },
         iter: nums.par_iter(),
         collector: vec![].into_par_collector().take(n).copying(),
-        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, count| {
+        starting_ma_f: |request| n.min(request),
+        expected_f: |iter, count, request| {
             let res: Vec<_> = iter.copied().take(n).collect();
-            (res, if count < n { Continue(()) } else { Break(()) })
+            (
+                res,
+                if let remaining @ 1.. = n.saturating_sub(count) {
+                    Continue(((), remaining.min(request)))
+                } else {
+                    Break(())
+                },
+            )
         },
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
@@ -216,10 +223,17 @@ mod proptests {
         },
         iter: nums.par_iter(),
         collector: vec![].into_par_collector().take(n).copying(),
-        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, count| {
+        starting_ma_f: |request| n.min(request),
+        expected_f: |iter, count, request| {
             let res: Vec<_> = iter.copied().collect();
-            (res, if count < n { Continue(()) } else { Break(()) })
+            (
+                res,
+                if let remaining @ 1.. = n.saturating_sub(count) {
+                    Continue(((), remaining.min(request)))
+                } else {
+                    Break(())
+                },
+            )
         },
         output_pred: |actual, expected| actual.len() == nums.len().min(n) && is_subsequence(actual, expected),
         state_pred: state_is_irrelevant(),

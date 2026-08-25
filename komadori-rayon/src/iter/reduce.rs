@@ -245,8 +245,8 @@ mod proptests {
         other_data: {},
         iter: nums.par_iter().cloned(),
         collector: ParReduce::new(|a, b| *a += b),
-        starting_bh: Continue(()),
-        expected_f: |iter, _| (iter.reduce(|a, b| a + b), Continue(())),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (iter.reduce(|a, b| a + b), Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });
@@ -258,11 +258,8 @@ mod proptests {
         other_data: {},
         iter: nums.par_iter().cloned(),
         collector: ParReduce::new(|a, b| *a += b),
-        starting_bh: Continue(()),
-        expected_f: |iter, _| {
-            let res = iter.reduce(|a, b| a + b);
-            (res, Continue(()))
-        },
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (iter.reduce(|a, b| a + b), Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });

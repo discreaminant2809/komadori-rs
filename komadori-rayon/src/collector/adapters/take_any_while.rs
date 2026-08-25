@@ -377,15 +377,15 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: vec![].into_par_collector().take(n).take_any_while(pred),
-        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, count| {
+        starting_ma_f: |request| n.min(request),
+        expected_f: |iter, count, request| {
             let mut all_satisfied = true;
             let res: Vec<_> = iter.filter(track_satisfied(&mut all_satisfied)).collect();
 
             (
                 res,
-                if count < n && all_satisfied {
-                    Continue(())
+                if all_satisfied && let remaining @ 1.. = n.saturating_sub(count) {
+                    Continue(((), remaining.min(request)))
                 } else {
                     Break(())
                 },
@@ -404,15 +404,15 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: vec![].into_par_collector().take(n).take_any_while(pred),
-        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, count| {
+        starting_ma_f: |request| n.min(request),
+        expected_f: |iter, count, request| {
             let mut all_satisfied = true;
             let res: Vec<_> = iter.filter(track_satisfied(&mut all_satisfied)).collect();
 
             (
                 res,
-                if count < n && all_satisfied {
-                    Continue(())
+                if all_satisfied && let remaining @ 1.. = n.saturating_sub(count) {
+                    Continue(((), remaining.min(request)))
                 } else {
                     Break(())
                 },

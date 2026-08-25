@@ -74,8 +74,8 @@ mod proptests {
             .into_par_collector()
             .take(n1)
             .tee(vec![].into_par_collector().take(n2)),
-        starting_bh: if n1.max(n2) > 0 { Continue(()) } else { Break(()) },
-        expected_f: |mut iter, count| {
+        starting_ma_f: |request| n1.max(n2).min(request),
+        expected_f: |mut iter, count, request| {
             let max_n = n1.max(n2);
             let min_n = n1.min(n2);
 
@@ -90,8 +90,8 @@ mod proptests {
 
             (
                 (first, second),
-                if count < n1.max(n2) {
-                    Continue(())
+                if let n @ 1.. = n1.max(n2).saturating_sub(count) {
+                    Continue(((), n.min(request)))
                 } else {
                     Break(())
                 },
@@ -118,11 +118,11 @@ mod proptests {
             .into_par_collector()
             .take(n1)
             .tee(vec![].into_par_collector().take(n2)),
-        starting_bh: if n1.max(n2) > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, count| (
+        starting_ma_f: |request| n1.max(n2).min(request),
+        expected_f: |iter, count, request| (
             iter.collect::<Vec<_>>(),
-            if count < n1.max(n2) {
-                Continue(())
+            if let n @ 1.. = n1.max(n2).saturating_sub(count) {
+                Continue(((), n.min(request)))
             } else {
                 Break(())
             },

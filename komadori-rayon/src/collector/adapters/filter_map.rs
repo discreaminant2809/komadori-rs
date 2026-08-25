@@ -318,11 +318,19 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: vec![].into_par_collector().take(n).filter_map(f),
-        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, _| {
+        starting_ma_f: |request| if n > 0 { request } else { 0 },
+        expected_f: |iter, _, request| {
             let res: Vec<_> = iter.filter_map(f).collect();
             let res_len = res.len();
-            (res, if res_len < n { Continue(()) } else { Break(()) })
+
+            (
+                res,
+                if res_len < n {
+                    Continue(((), request))
+                } else {
+                    Break(())
+                },
+            )
         },
         output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
         state_pred: state_is_irrelevant(),
@@ -337,11 +345,19 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: vec![].into_par_collector().take(n).filter_map(f),
-        starting_bh: if n > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, _| {
+        starting_ma_f: |request| if n > 0 { request } else { 0 },
+        expected_f: |iter, _, request| {
             let res: Vec<_> = iter.filter_map(f).collect();
             let res_len = res.len();
-            (res, if res_len < n { Continue(()) } else { Break(()) })
+
+            (
+                res,
+                if res_len < n {
+                    Continue(((), request))
+                } else {
+                    Break(())
+                },
+            )
         },
         output_pred: |actual, expected| actual.len() <= nums.len().min(n) && is_subsequence(actual, expected),
         state_pred: state_is_irrelevant(),

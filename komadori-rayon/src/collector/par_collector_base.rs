@@ -22,6 +22,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
 
     /// Reserves for `len` items and returns "parts" needed
     /// to drive this parallel collector.
+    #[expect(clippy::type_complexity)]
     fn parts<'a>(
         &'a mut self,
         len: usize,
@@ -54,6 +55,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// The signature is similar to [`parts()`](Self::parts),
     /// except the returning function which does not return
     /// a [`ControlFlow`].
+    #[expect(clippy::type_complexity)]
     fn take_parts<'a>(
         &'a mut self,
         len: usize,

@@ -169,8 +169,8 @@ mod proptests {
         other_data: {},
         iter: vec![0; n].into_par_iter(),
         collector: ParCount::new(),
-        starting_bh: Continue(()),
-        expected_f: |_, count| (count, Continue(())),
+        starting_ma_f: |request| request,
+        expected_f: |_, count, request| (count, Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });
@@ -182,8 +182,8 @@ mod proptests {
         other_data: {},
         iter: vec![0; n].into_par_iter(),
         collector: ParCount::new(),
-        starting_bh: Continue(()),
-        expected_f: |_, count| (count, Continue(())),
+        starting_ma_f: |request| request,
+        expected_f: |_, count, request| (count, Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });

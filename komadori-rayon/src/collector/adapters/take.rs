@@ -423,15 +423,15 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: vec![].into_par_collector().take(m).take(n),
-        starting_bh: if m.min(n) > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, count| {
+        starting_ma_f: |request| m.min(n).min(request),
+        expected_f: |iter, count, request| {
             let res: Vec<_> = iter.take(m.min(n)).collect();
             let res_len = res.len();
 
             (
                 res,
-                if count < m.min(n) {
-                    Continue(n - res_len)
+                if let remaining @ 1.. = m.min(n).saturating_sub(count) {
+                    Continue((n - res_len, remaining.min(request)))
                 } else {
                     Break(())
                 },
@@ -455,15 +455,15 @@ mod proptests {
             .chain(nums2.par_iter().filter(|&&num| num >= 0))
             .cloned(),
         collector: vec![].into_par_collector().take(m).take(n),
-        starting_bh: if m.min(n) > 0 { Continue(()) } else { Break(()) },
-        expected_f: |iter, count| {
+        starting_ma_f: |request| m.min(n).min(request),
+        expected_f: |iter, count, request| {
             let res: Vec<_> = iter.collect();
             let res_len = res.len();
 
             (
                 res,
-                if count < m.min(n) {
-                    Continue(n - res_len)
+                if let remaining @ 1.. = m.min(n).saturating_sub(count) {
+                    Continue((n - res_len, remaining.min(request)))
                 } else {
                     Break(())
                 },

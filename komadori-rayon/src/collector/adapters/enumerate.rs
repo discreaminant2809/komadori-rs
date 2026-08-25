@@ -225,12 +225,8 @@ mod proptests {
             collector.idx = start;
             collector
         },
-        starting_bh: if n_and_start.0 > 0 {
-            Continue(())
-        } else {
-            Break(())
-        },
-        expected_f: |iter, count| {
+        starting_ma_f: |request| n_and_start.0.min(request),
+        expected_f: |iter, count, request| {
             let (n, start) = n_and_start;
             let mut idx = start;
 
@@ -244,7 +240,14 @@ mod proptests {
                 .take(n)
                 .collect();
 
-            (res, if count < n { Continue(idx) } else { Break(()) })
+            (
+                res,
+                if let remaining @ 1.. = n.saturating_sub(count) {
+                    Continue((idx, remaining.min(request)))
+                } else {
+                    Break(())
+                },
+            )
         },
         output_pred: PartialEq::eq,
         state_pred: |collector, &idx| collector.idx == idx,

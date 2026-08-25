@@ -17,20 +17,19 @@ pub trait ParIterParallelIteratorExt: ParallelIterator {
         C: IntoUnindexedParallelCollector<Self::Item>,
     {
         let mut collector = collector.into_par_collector();
-        if collector.break_hint().is_break() {
-            return collector.finish();
-        }
 
         match self.opt_len() {
+            None if collector.max_afford(1) == 0 => collector.finish(),
             None => {
                 let (consumer, commit) = collector.take_parts_unindexed();
                 commit(unindexed_slow_path(self, consumer));
                 collector.finish()
             }
+
+            // We early exit also if the iterator is empty.
+            Some(len) if collector.max_afford(len) == 0 => collector.finish(),
             Some(len) => {
-                // Sadly, we can't do anything usefully with the actual len
-                // for unindexed parallel iterator.
-                let (_, consumer, commit) = collector.take_parts(len);
+                let (consumer, commit) = collector.take_parts(len);
                 commit(unindexed_fast_path(self, consumer));
                 collector.finish()
             }
@@ -43,12 +42,13 @@ pub trait ParIterParallelIteratorExt: ParallelIterator {
         C: IntoParallelCollector<Self::Item>,
     {
         let mut collector = collector.into_par_collector();
-        if collector.break_hint().is_break() {
+        // We early exit also if the iterator is empty.
+        if collector.max_afford(self.len()) == 0 {
             return collector.finish();
         }
 
-        let (actual_len, consumer, commit) = collector.take_parts(self.len());
-        commit(indexed_path(self, consumer, actual_len));
+        let (consumer, commit) = collector.take_parts(self.len());
+        commit(indexed_path(self, consumer));
         collector.finish()
     }
 }
@@ -85,7 +85,7 @@ macro_rules! define_consumer_adapter_and_impl_consumer {
 
             #[inline]
             fn full(&self) -> bool {
-                self.consumer.break_hint().is_break()
+                self.consumer.max_afford(1) == 0
             }
         }
     };
@@ -143,18 +143,14 @@ where
     items.drive_unindexed(ConsumerAdapter { consumer })
 }
 
-fn indexed_path<C, I>(items: I, consumer: C, actual_len: usize) -> C::Output
+fn indexed_path<C, I>(items: I, consumer: C) -> C::Output
 where
     I: IndexedParallelIterator,
     C: Consumer<IntoCollector: Collector<I::Item>>,
 {
     define_consumer_adapter_and_impl_consumer!();
 
-    if actual_len < items.len() {
-        items.take(actual_len).drive(ConsumerAdapter { consumer })
-    } else {
-        items.drive(ConsumerAdapter { consumer })
-    }
+    items.drive(ConsumerAdapter { consumer })
 }
 
 struct FolderAdapter<C> {
@@ -184,7 +180,7 @@ where
 
     #[inline]
     fn full(&self) -> bool {
-        self.collector.break_hint().is_break()
+        self.collector.max_afford(1) == 0
     }
 
     #[inline]

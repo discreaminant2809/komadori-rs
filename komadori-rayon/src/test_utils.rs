@@ -55,8 +55,14 @@ macro_rules! par_collector_test {
 
             iter: $iter:expr,
             collector: $collector:expr,
-            starting_bh: $starting_bh:expr,
-            expected_f: |$iter_pat:pat_param, $count_pat:pat_param $(,)?| $expected:expr,
+            starting_ma_f: $starting_ma_f:expr,
+            // Manual closure because we face a type inference issue regarding the iterator input.
+            // It demands giving the iterator a type, which's impossible!
+            expected_f: |
+                $iter_pat:pat_param,
+                $count_pat:pat_param,
+                $ending_request_pat:pat_param $(,)?
+            | $expected:expr,
             output_pred: $output_pred:expr,
             state_pred: $state_pred:expr $(,)?
         }
@@ -84,18 +90,29 @@ macro_rules! par_collector_test {
                             IndexedSplitStrategy::new(count, DEFAULT_MAX_DEPTH),
                         )
                     }),
+                starting_request in ::proptest::prop_oneof![
+                    ..=5_usize,
+                    ::core::primitive::usize::MAX - 5..,
+                ],
+                ending_request in ::proptest::prop_oneof![
+                    ..=5_usize,
+                    ::core::primitive::usize::MAX - 5..,
+                ],
                 $($other_data_ident in $other_data_strat,)*
             ) {
                 $(#[allow(unused_mut)] let mut $iter_data_ident = $iter_data_ident;)*
-                let starting_bh = $starting_bh;
+                let starting_ma = $starting_ma_f(starting_request);
 
-                let (expected_output, ending) = (
-                    |$iter_pat: ::core::iter::Fuse<_>, $count_pat: usize| $expected
-                )(
+                let (expected_output, ending) = (|
+                    $iter_pat: ::core::iter::Fuse<_>,
+                    $count_pat: usize,
+                    $ending_request_pat: usize,
+                | $expected)(
                     ::core::iter::Iterator::fuse(
                         $crate::test_utils::ParallelIterator::take_iter(&mut $iter)
                     ),
-                    count
+                    count,
+                    ending_request,
                 );
 
                 {
@@ -111,7 +128,10 @@ macro_rules! par_collector_test {
                         $collector,
                         &expected_output,
                         $output_pred,
-                        starting_bh,
+
+                        starting_request,
+                        starting_ma,
+                        ending_request,
                         &ending,
                         $state_pred,
                     )?;
@@ -127,7 +147,8 @@ macro_rules! par_collector_test {
                         $collector,
                         &expected_output,
                         $output_pred,
-                        starting_bh,
+                        starting_request,
+                        starting_ma,
                     )?;
                 }
             }
@@ -144,8 +165,14 @@ macro_rules! unindexed_par_collector_test {
 
             iter: $iter:expr,
             collector: $collector:expr,
-            starting_bh: $starting_bh:expr,
-            expected_f: |$iter_pat:pat_param, $count_pat:pat_param $(,)?| $expected:expr,
+            starting_ma_f: $starting_ma_f:expr,
+            // Manual closure because we face a type inference issue regarding the iterator input.
+            // It demands giving the iterator a type, which's impossible!
+            expected_f: |
+                $iter_pat:pat_param,
+                $count_pat:pat_param,
+                $ending_request_pat:pat_param $(,)?
+            | $expected:expr,
             output_pred: $output_pred:expr,
             state_pred: $state_pred:expr $(,)?
         }
@@ -173,18 +200,29 @@ macro_rules! unindexed_par_collector_test {
                             UnindexedSplitStrategy::new(DEFAULT_MAX_DEPTH),
                         )
                     }),
+                starting_request in ::proptest::prop_oneof![
+                    ..=5_usize,
+                    ::core::primitive::usize::MAX - 5..,
+                ],
+                ending_request in ::proptest::prop_oneof![
+                    ..=5_usize,
+                    ::core::primitive::usize::MAX - 5..,
+                ],
                 $($other_data_ident in $other_data_strat,)*
             ) {
                 $(#[allow(unused_mut)] let mut $iter_data_ident = $iter_data_ident;)*
-                let starting_bh = $starting_bh;
+                let starting_ma = $starting_ma_f(starting_request);
 
-                let (expected_output, ending) = (
-                    |$iter_pat: ::core::iter::Fuse<_>, $count_pat: ::core::primitive::usize| $expected
-                )(
+                let (expected_output, ending) = (|
+                    $iter_pat: ::core::iter::Fuse<_>,
+                    $count_pat: usize,
+                    $ending_request_pat: usize,
+                | $expected)(
                     ::core::iter::Iterator::fuse(
                         $crate::test_utils::ParallelIterator::take_iter(&mut $iter)
                     ),
-                    count
+                    count,
+                    ending_request,
                 );
 
                 {
@@ -200,7 +238,10 @@ macro_rules! unindexed_par_collector_test {
                         $collector,
                         &expected_output,
                         $output_pred,
-                        starting_bh,
+
+                        starting_request,
+                        starting_ma,
+                        ending_request,
                         &ending,
                         $state_pred,
                     )?;
@@ -216,7 +257,8 @@ macro_rules! unindexed_par_collector_test {
                         $collector,
                         &expected_output,
                         $output_pred,
-                        starting_bh,
+                        starting_request,
+                        starting_ma,
                     )?;
                 }
             }

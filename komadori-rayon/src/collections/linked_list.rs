@@ -286,14 +286,14 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_nums.into_par_collector(),
-        starting_bh: Continue(()),
-        expected_f: |iter, _| (
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (
             {
                 let mut ret = starting_nums.clone();
                 ret.extend(iter);
                 ret
             },
-            Continue(())
+            Continue(((), request))
         ),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
@@ -308,14 +308,14 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_nums.into_par_collector(),
-        starting_bh: Continue(()),
-        expected_f: |iter, _| (
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (
             {
                 let mut ret = starting_nums.clone();
                 ret.extend(iter);
                 ret
             },
-            Continue(())
+            Continue(((), request))
         ),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),

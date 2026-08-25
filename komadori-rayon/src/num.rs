@@ -411,8 +411,8 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_num.into_par_sum(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| (starting_num + iter.sum::<i64>(), Continue(())),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (starting_num + iter.sum::<i64>(), Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });
@@ -426,8 +426,8 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_num.into_par_sum(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| (starting_num + iter.sum::<i64>(), Continue(())),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (starting_num + iter.sum::<i64>(), Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });
@@ -441,8 +441,8 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_num.into_par_product(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| (starting_num * iter.product::<i64>(), Continue(())),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (starting_num * iter.product::<i64>(), Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });
@@ -456,8 +456,8 @@ mod proptests {
         },
         iter: nums.par_iter().cloned(),
         collector: starting_num.into_par_product(),
-        starting_bh: ControlFlow::Continue(()),
-        expected_f: |iter, _| (starting_num * iter.product::<i64>(), Continue(())),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| (starting_num * iter.product::<i64>(), Continue(((), request))),
         output_pred: PartialEq::eq,
         state_pred: state_is_irrelevant(),
     });
