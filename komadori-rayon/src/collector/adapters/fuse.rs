@@ -80,7 +80,8 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.collector.parts(len);
+        let (consumer, commit) = self.collector.parts(if self.stopped { 0 } else { len });
+
         unique::uniquify((consumer::Consumer::new(consumer, self.stopped), |output| {
             set_stopped_and_ret_bh(&mut self.stopped, commit(output))
         }))
@@ -93,7 +94,10 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
-        let (consumer, commit) = self.collector.take_parts(len);
+        let (consumer, commit) = self
+            .collector
+            .take_parts(if self.stopped { 0 } else { len });
+
         unique::take_uniquify((
             consumer::Consumer::new(consumer, self.stopped),
             // We can't set the flag if we cannot obtain the signal from
@@ -202,7 +206,10 @@ mod consumer {
 
         #[inline]
         fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let (consumer, combiner) = self.consumer.split_off_left_at(index);
+            let (consumer, combiner) =
+                self.consumer
+                    .split_off_left_at(if self.stopped { 0 } else { index });
+
             (Self::new(consumer, self.stopped), combiner)
         }
 
