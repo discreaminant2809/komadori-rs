@@ -154,7 +154,11 @@ pub trait DefineSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<
 ///
 /// [limitation]: (https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
 /// [workaround]: (https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
-pub trait DefineUnindexedSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<'this, Self>> {
+pub trait DefineUnindexedSerial<
+    'this,
+    Binder: self_binder::Sealed = self_binder::Binder<'this, Self>,
+>
+{
     /// Which serial collector being produced in the unindexed path?
     type UnindexedSerial: CollectorBase<Output: Send>;
 }
@@ -364,9 +368,8 @@ macro_rules! uniquify_serial {
 
                 #[inline]
                 fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-                    let (consumer, combiner) = plumbing::Consumer::split_off_left_at(
-                        &mut self.consumer, index
-                    );
+                    let (consumer, combiner) =
+                        plumbing::Consumer::split_off_left_at(&mut self.consumer, index);
 
                     (
                         Self {
@@ -444,7 +447,7 @@ macro_rules! uniquify_serial {
     };
 
     ($mod_name:ident, unindexed = true) => {
-        #[allow(missing_debug_implementations, )]
+        #[allow(missing_debug_implementations)]
         mod $mod_name {
             use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
 
@@ -545,7 +548,8 @@ macro_rules! uniquify_serial {
 
                 #[inline]
                 fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-                    let (consumer, combiner) = plumbing::Consumer::split_off_left_at(&mut self.consumer, index);
+                    let (consumer, combiner) =
+                        plumbing::Consumer::split_off_left_at(&mut self.consumer, index);
                     (
                         Self {
                             consumer,

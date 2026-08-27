@@ -8,7 +8,9 @@ mod unindexed_split_strategy;
 pub use coroutine_pool::*;
 pub use fuzzy_exec::*;
 pub use indexed_split_strategy::*;
-pub use par_iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator, ParallelIteratorByRef};
+pub use par_iter::{
+    IndexedParallelIterator, IntoParallelIterator, ParallelIterator, ParallelIteratorByRef,
+};
 pub use producer::*;
 pub use unindexed_split_strategy::*;
 
@@ -27,8 +29,8 @@ pub mod prelude {
 
     pub use crate::{
         collector::{
-            IntoParallelCollectorBase, ParallelCollectorBase, ParallelCollectorByMut, ParallelCollectorByRef,
-            UnindexedParallelCollectorBase,
+            IntoParallelCollectorBase, ParallelCollectorBase, ParallelCollectorByMut,
+            ParallelCollectorByRef, UnindexedParallelCollectorBase,
         },
         test_utils::{IntoParallelIterator, ParallelIterator, ParallelIteratorByRef},
     };

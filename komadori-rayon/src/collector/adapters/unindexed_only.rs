@@ -96,7 +96,7 @@ where
         impl FnOnce(
             <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
-    ) {
+    ){
         unique_unindexed::uniquify(self.collector.parts_unindexed())
     }
 
@@ -108,7 +108,7 @@ where
             Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
-    ) {
+    ){
         unique_unindexed::take_uniquify(self.collector.take_parts_unindexed())
     }
 }

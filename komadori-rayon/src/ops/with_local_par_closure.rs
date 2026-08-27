@@ -155,7 +155,8 @@ mod call_mut {
         type Output = R;
 
         fn call_once(mut self, args: Args) -> Self::Output {
-            self.f.call(args.push_front2(&mut self.local1, &mut self.local2))
+            self.f
+                .call(args.push_front2(&mut self.local1, &mut self.local2))
         }
     }
 
@@ -165,7 +166,8 @@ mod call_mut {
         F: for<'l1, 'l2> Call<Args::PushFront2<&'l1 mut L1, &'l2 mut L2>, Output = R>,
     {
         fn call_mut(&mut self, args: Args) -> Self::Output {
-            self.f.call(args.push_front2(&mut self.local1, &mut self.local2))
+            self.f
+                .call(args.push_front2(&mut self.local1, &mut self.local2))
         }
     }
 }

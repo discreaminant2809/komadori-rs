@@ -108,7 +108,9 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// `fuse()` ensures that once a collector has stopped, subsequent items
     /// are guaranteed to **not** be accumulated. This means that at that point:
     ///
-    /// - [`break_hint()`](Self::break_hint) is guaranteed to return [`Break(())`].
+    /// - the committer of [`parts()`](Self::parts) and
+    ///   [`parts_unindexed()`](super::UnindexedParallelCollectorBase::parts_unindexed)
+    ///   returns [`Break(())`].
     ///
     /// - Collectors obtained from consumers are fused.
     ///   (See [`CollectorBase::fuse()`] for more information)
@@ -681,7 +683,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     ///     .into_collector();
     ///
     /// // Use as a normal (serial) collector!
-    /// assert!(collector.break_hint().is_continue());
+    /// assert_eq!(collector.max_afford(5), 3);
     /// assert!(collector.collect(1).is_continue());
     /// assert!(collector.collect(2).is_continue());
     /// assert!(collector.collect(3).is_break());

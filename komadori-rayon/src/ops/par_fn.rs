@@ -38,8 +38,9 @@ where
 }
 
 pub trait ParallelFnMutBase: ParallelFnOnceBase + for<'a> DefineCallMut<'a> {
-    fn callable_mut<'a>(&'a mut self)
-    -> impl FnOnce() -> <Self as DefineCallMut<'a>>::CallMut + Clone + Send;
+    fn callable_mut<'a>(
+        &'a mut self,
+    ) -> impl FnOnce() -> <Self as DefineCallMut<'a>>::CallMut + Clone + Send;
 
     #[inline]
     fn take_callable_mut<'a>(
@@ -57,7 +58,9 @@ pub trait ParallelFnMut<Args: Tuple>:
 impl<F, Args> ParallelFnMut<Args> for F
 where
     Args: Tuple,
-    F: ParallelFnOnce<Args> + ParallelFnMutBase<CallMut: CallMut<Args, Output = Self::Output>> + ?Sized,
+    F: ParallelFnOnce<Args>
+        + ParallelFnMutBase<CallMut: CallMut<Args, Output = Self::Output>>
+        + ?Sized,
 {
 }
 

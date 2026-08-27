@@ -276,8 +276,14 @@ where
 
             let (left_work, right_work) = {
                 let mut state = state.borrow_mut();
-                let left_work = state.spawn(bridge_task(state_left, producer_left, consumer_left, left));
-                let right_work = state.spawn(bridge_task(state_right, producer_right, consumer_right, right));
+                let left_work =
+                    state.spawn(bridge_task(state_left, producer_left, consumer_left, left));
+                let right_work = state.spawn(bridge_task(
+                    state_right,
+                    producer_right,
+                    consumer_right,
+                    right,
+                ));
 
                 (left_work, right_work)
             };
@@ -358,7 +364,8 @@ where
         IndexedSplitDecision::Split { left, right, at } => {
             let at = *at;
             let (producer_left, producer_right) = (producer.split_off_left_at(at), producer);
-            let ((consumer_left, combiner), consumer_right) = (consumer.split_off_left_at(at), consumer);
+            let ((consumer_left, combiner), consumer_right) =
+                (consumer.split_off_left_at(at), consumer);
             let state_left = Rc::clone(&state);
             let state_right = Rc::clone(&state);
             yield_now().await;

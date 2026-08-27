@@ -48,7 +48,9 @@ where
 {
     /// Creates a parallel collector from a shared reference of a value.
     #[inline]
-    fn par_collector_mut(&mut self) -> <&'_ mut Self as IntoParallelCollectorBase>::IntoParCollector {
+    fn par_collector_mut(
+        &mut self,
+    ) -> <&'_ mut Self as IntoParallelCollectorBase>::IntoParCollector {
         self.into_par_collector()
     }
 }

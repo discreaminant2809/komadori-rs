@@ -76,7 +76,9 @@ where
     }
 
     #[inline]
-    fn take_anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
+    fn take_anchor<'a>(
+        &'a mut self,
+    ) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
         Anchor {
             local1: self.local1.take().expect(TAKEN_ERR_MSG),
             local2_f: &self.local2_f,

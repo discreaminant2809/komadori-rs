@@ -48,7 +48,10 @@ where
 {
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
-        self.collector.as_ref().expect(TAKEN_ERR_MSG).max_afford(request)
+        self.collector
+            .as_ref()
+            .expect(TAKEN_ERR_MSG)
+            .max_afford(request)
     }
 
     #[inline]
@@ -59,7 +62,9 @@ where
     }
 
     #[inline]
-    fn take_anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
+    fn take_anchor<'a>(
+        &'a mut self,
+    ) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
         Anchor {
             collector: self.collector.take().expect(TAKEN_ERR_MSG),
         }

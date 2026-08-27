@@ -50,9 +50,12 @@ criterion_main!(benches);
 
 #[unsafe(no_mangle)]
 fn serial_direct(nums: &[i32]) -> (Vec<i32>, i32) {
-    nums.iter()
-        .copied()
-        .feed_into(vec![].into_collector().filter(filter_pred).tee(0.into_sum()))
+    nums.iter().copied().feed_into(
+        vec![]
+            .into_collector()
+            .filter(filter_pred)
+            .tee(0.into_sum()),
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -76,7 +79,8 @@ fn rayon_extend(nums: &[i32]) -> (Vec<i32>, i32) {
         where
             I: IntoParallelIterator<Item = i32>,
         {
-            self.0.par_extend(par_iter.into_par_iter().filter(filter_pred));
+            self.0
+                .par_extend(par_iter.into_par_iter().filter(filter_pred));
         }
     }
 

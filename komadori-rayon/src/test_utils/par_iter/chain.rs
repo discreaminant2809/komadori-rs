@@ -69,7 +69,10 @@ where
             Self::Invalid => unreachable!("invalid state"),
             Self::FirstOnly(producer1) => (Some(producer1), None),
             Self::SecondOnly(producer2) => (None, Some(producer2)),
-            Self::Both { producer1, producer2 } => (Some(producer1), Some(producer2)),
+            Self::Both {
+                producer1,
+                producer2,
+            } => (Some(producer1), Some(producer2)),
         };
 
         producer1
@@ -82,7 +85,11 @@ where
         match self {
             Self::Invalid => unreachable!("invalid state"),
             Self::Both { .. } => {
-                let Self::Both { producer1, producer2 } = std::mem::replace(self, Self::Invalid) else {
+                let Self::Both {
+                    producer1,
+                    producer2,
+                } = std::mem::replace(self, Self::Invalid)
+                else {
                     unreachable!("invalid state")
                 };
                 *self = Self::SecondOnly(producer2);
@@ -106,13 +113,20 @@ where
             Self::Invalid => unreachable!("invalid state"),
             Self::FirstOnly(producer1) => (Some(producer1), None),
             Self::SecondOnly(producer2) => (None, Some(producer2)),
-            Self::Both { producer1, producer2 } => (Some(producer1), Some(producer2)),
+            Self::Both {
+                producer1,
+                producer2,
+            } => (Some(producer1), Some(producer2)),
         };
 
         producer1
             .into_iter()
             .flat_map(super::IndexedProducer::into_iter)
-            .chain(producer2.into_iter().flat_map(super::IndexedProducer::into_iter))
+            .chain(
+                producer2
+                    .into_iter()
+                    .flat_map(super::IndexedProducer::into_iter),
+            )
     }
 
     fn len(&self) -> usize {
@@ -122,7 +136,10 @@ where
             Self::SecondOnly(producer2) => producer2.len(),
             // It may overflow, but for our use cases we don't produce
             // billions of items anyway.
-            Self::Both { producer1, producer2 } => producer1.len() + producer2.len(),
+            Self::Both {
+                producer1,
+                producer2,
+            } => producer1.len() + producer2.len(),
         }
     }
 
@@ -140,7 +157,10 @@ where
 
                 if index < producer1.len() {
                     let left_producer1 = producer1.split_off_left_at(index);
-                    *self = Self::Both { producer1, producer2 };
+                    *self = Self::Both {
+                        producer1,
+                        producer2,
+                    };
                     Self::FirstOnly(left_producer1)
                 } else if index == producer1.len() {
                     *self = Self::SecondOnly(producer2);

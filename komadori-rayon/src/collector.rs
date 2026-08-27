@@ -76,9 +76,9 @@
 //! # Unspecified behaviors
 //!
 //! Unless stated otherwise by the parallel collector’s implementation,
-//! after [`break_hint()`] or the committer from [`parts()`] or [`parts_unindexed()`]
+//! after the committer of [`parts()`] or [`parts_unindexed()`]
 //! have returned [`Break(())`] once,
-//! behaviors of subsequent calls to [`break_hint()`] are unspecified.
+//! behaviors of subsequent calls to [`max_afford()`][par_max_afford] are unspecified.
 //! You can still call [`parts()`], [`parts_unindexed()`],
 //! [`take_parts()`] and [`take_parts_unindexed()`] and use the resulting consumers,
 //! but the converted serial collectors are counted to have returned [`Break(())`] before
@@ -93,7 +93,7 @@
 //!
 //! Additionally, after calling [`take_parts()`] and [`take_parts_unindexed()`],
 //! a parallel collector is counted to have been "taken," and behaviors of
-//! subsequent calls to [`break_hint()`], [`parts()`], [`parts_unindexed()`],
+//! subsequent calls to [`max_afford()`][par_max_afford], [`parts()`], [`parts_unindexed()`],
 //! [`take_parts()`] and [`take_parts_unindexed()`] are also unspecified.
 //! In this case, caller should generally call [`finish()`](ParallelCollectorBase::finish)
 //! afterwards. Unlike the previous one, [`fuse()`](ParallelCollectorBase::fuse)
@@ -136,11 +136,11 @@
 //! [`ControlFlow`]: std::ops::ControlFlow
 //! [`Break(())`]: std::ops::ControlFlow::Break
 //! [`Continue(())`]: std::ops::ControlFlow::Continue
-//! [`break_hint()`]: ParallelCollectorBase::break_hint
 //! [`collect()`]: komadori::collector::Collector::collect
 //! [`collect_many()`]: komadori::collector::Collector::collect_many
 //! [`collect_then_finish()`]: komadori::collector::Collector::collect_then_finish
 //! [`parts()`]: ParallelCollectorBase::parts
+//! [par_max_afford]: ParallelCollectorBase::max_afford
 //! [`take_parts()`]: ParallelCollectorBase::take_parts
 //! [`parts_unindexed()`]: UnindexedParallelCollectorBase::parts_unindexed
 //! [`take_parts_unindexed()`]: UnindexedParallelCollectorBase::take_parts_unindexed

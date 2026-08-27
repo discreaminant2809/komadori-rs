@@ -36,7 +36,9 @@ pub trait Collection<T> {
     #[inline]
     fn push_back_linked_vec(&mut self, chunks: LinkedList<Vec<T>>, len: usize) {
         let _ = len;
-        chunks.into_iter().for_each(|chunk| self.push_back_iter(chunk));
+        chunks
+            .into_iter()
+            .for_each(|chunk| self.push_back_iter(chunk));
     }
 }
 
@@ -52,7 +54,10 @@ pub enum Serial<'a, C, T> {
 
 pub enum Output<'a, C, T> {
     LeftMost(&'a mut C),
-    Right { chunks: LinkedList<Vec<T>>, len: usize },
+    Right {
+        chunks: LinkedList<Vec<T>>,
+        len: usize,
+    },
 }
 
 pub struct Combiner(());
@@ -145,7 +150,9 @@ where
         };
 
         match left {
-            Output::LeftMost(collection) => collection.push_back_linked_vec(right_chunks, right_len),
+            Output::LeftMost(collection) => {
+                collection.push_back_linked_vec(right_chunks, right_len)
+            }
             Output::Right { chunks, len } => {
                 chunks.append(&mut right_chunks);
                 *len += right_len;

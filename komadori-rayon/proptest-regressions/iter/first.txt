@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 2320b46967e51833853e9bf4120078d3b7f1625d894d435359cb21cac2698c29 # shrinks to pool = CoroutinePool { seed: 9348236577048638910, rng: Xoshiro128PlusPlus { s: [4107639059, 3170621140, 658413521, 3879813531] } }, (nums, count, split_decision) = ([207641032, -996665230, -45449145, 1203664112], 4, Split { left: Split { left: Split { left: Split { left: Stay, right: Stay }, right: Split { left: Stay, right: Stay } }, right: Split { left: Stay, right: Stay } }, right: Split { left: Split { left: Stay, right: Stay }, right: Stay } }), starting_request = 18446744073709551611, ending_request = 0
+cc 11b819ac3d6a9b2c0930350f3c87121b558ae1806098e27eae7633e003c9dcac # shrinks to pool = CoroutinePool { seed: 12734779120623262544, rng: Xoshiro128PlusPlus { s: [1069017381, 2188670582, 2581370890, 832021122] } }, (nums, count, split_decision) = ([18082425], 1, Split { at: 0, left: Split { at: 0, left: Stay, right: Split { at: 0, left: Stay, right: Stay } }, right: Split { at: 0, left: Stay, right: Split { at: 0, left: Stay, right: Stay } } }), starting_request = 5, ending_request = 18446744073709551614

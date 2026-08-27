@@ -5,7 +5,8 @@ use proptest::test_runner::{TestCaseError, TestCaseResult};
 use crate::collector::{ParallelCollector, UnindexedParallelCollector};
 
 use super::{
-    CoroutinePool, IndexedParallelIterator, IndexedSplitDecision, ParallelIterator, UnindexedSplitDecision,
+    CoroutinePool, IndexedParallelIterator, IndexedSplitDecision, ParallelIterator,
+    UnindexedSplitDecision,
 };
 
 #[expect(clippy::too_many_arguments)]
@@ -52,7 +53,12 @@ where
         )?;
     }
 
-    assert_output(&collector.finish(), expected_output, output_pred, METHOD_NAME)
+    assert_output(
+        &collector.finish(),
+        expected_output,
+        output_pred,
+        METHOD_NAME,
+    )
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -85,7 +91,12 @@ where
     let output = pool.bridge(iter.take_indexed_producer(), consumer, split_decision);
     commit(output);
 
-    assert_output(&collector.finish(), expected_output, output_pred, METHOD_NAME)
+    assert_output(
+        &collector.finish(),
+        expected_output,
+        output_pred,
+        METHOD_NAME,
+    )
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -132,7 +143,12 @@ where
         )?;
     }
 
-    assert_output(&collector.finish(), expected_output, output_pred, METHOD_NAME)
+    assert_output(
+        &collector.finish(),
+        expected_output,
+        output_pred,
+        METHOD_NAME,
+    )
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -165,7 +181,12 @@ where
     let output = pool.bridge_unindexed(iter.take_producer(), consumer, split_decision);
     commit(output);
 
-    assert_output(&collector.finish(), expected_output, output_pred, METHOD_NAME)
+    assert_output(
+        &collector.finish(),
+        expected_output,
+        output_pred,
+        METHOD_NAME,
+    )
 }
 
 fn assert_starting_ma(request: usize, actual: usize, expected: usize) -> TestCaseResult {
@@ -178,7 +199,12 @@ fn assert_starting_ma(request: usize, actual: usize, expected: usize) -> TestCas
     }
 }
 
-fn assert_ending_ma(request: usize, actual: usize, expected: usize, method_name: &str) -> TestCaseResult {
+fn assert_ending_ma(
+    request: usize,
+    actual: usize,
+    expected: usize,
+    method_name: &str,
+) -> TestCaseResult {
     if actual == expected {
         Ok(())
     } else {
@@ -188,7 +214,11 @@ fn assert_ending_ma(request: usize, actual: usize, expected: usize, method_name:
     }
 }
 
-fn assert_ending_cf(actual: ControlFlow<()>, expected: ControlFlow<()>, method_name: &str) -> TestCaseResult {
+fn assert_ending_cf(
+    actual: ControlFlow<()>,
+    expected: ControlFlow<()>,
+    method_name: &str,
+) -> TestCaseResult {
     if actual == expected {
         Ok(())
     } else {

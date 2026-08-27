@@ -1,5 +1,6 @@
 use crate::test_utils::{
-    IndexedParallelIterator, IndexedProducer, IntoParallelIterator, ParallelIterator, Producer as IProducer,
+    IndexedParallelIterator, IndexedProducer, IntoParallelIterator, ParallelIterator,
+    Producer as IProducer,
 };
 
 pub struct ParIterMut<'a, T>(&'a mut [T]);

@@ -66,10 +66,19 @@ where
         } else if splitter.try_split(len, migrated) {
             let mid = len / 2;
             let (left_producer, right_producer) = producer.split_at(mid);
-            let ((left_consumer, combiner), right_consumer) = (consumer.split_off_left_at(mid), consumer);
+            let ((left_consumer, combiner), right_consumer) =
+                (consumer.split_off_left_at(mid), consumer);
 
             let (mut left_result, right_result) = join_context(
-                |context| helper(mid, context.migrated(), splitter, left_producer, left_consumer),
+                |context| {
+                    helper(
+                        mid,
+                        context.migrated(),
+                        splitter,
+                        left_producer,
+                        left_consumer,
+                    )
+                },
                 |context| {
                     helper(
                         len - mid,

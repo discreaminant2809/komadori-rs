@@ -73,7 +73,7 @@ pub struct Custom<S, MA, I, IF, IC> {
 /// ) -> impl UnindexedParallelCollector<T, Output = HashSet<T>> {
 ///     Custom::new(
 ///         HashSet::new(),
-///         |_| ControlFlow::Continue(()),
+///         |_, request| request,
 ///         |_| vec![],
 ///         |set, items| set.extend(items),
 ///     )
@@ -343,7 +343,7 @@ where
         impl FnOnce(
             <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
-    ) {
+    ){
         // Don't forget to clean up the previous `parts()` call!
         self.clean_up();
 
@@ -370,7 +370,7 @@ where
             Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
-    ) {
+    ){
         // Don't forget to clean up the previous `parts()` call!
         self.clean_up();
 
@@ -382,7 +382,8 @@ where
     }
 }
 
-impl<'a, S, MA, I, IF, IC, U, UF, UC> DefineSerial<'a> for CustomAlsoUnindexed<S, MA, I, IF, IC, U, UF, UC>
+impl<'a, S, MA, I, IF, IC, U, UF, UC> DefineSerial<'a>
+    for CustomAlsoUnindexed<S, MA, I, IF, IC, U, UF, UC>
 where
     I: DefineSerial<'a>,
 {
@@ -491,7 +492,7 @@ where
         impl FnOnce(
             <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
-    ) {
+    ){
         // Don't forget to clean up the previous `parts()` call!
         self.clean_up();
 
@@ -518,7 +519,7 @@ where
             Output = <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         >,
         impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
-    ) {
+    ){
         // Don't forget to clean up the previous `parts()` call!
         self.clean_up();
 

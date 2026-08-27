@@ -4,6 +4,7 @@
 
 ### Added
 
+- `crate::iter::ParFirst`.
 - `crate::collector::plumbing::SerialOf`.
 - `crate::collector::plumbing::SerialOutputOf`.
 - `crate::collector::plumbing::UnindexedSerialOf`.

@@ -19,8 +19,6 @@ pub enum IndexedSplitDecision {
 
 pub enum IndexedSplitTree {
     Stay {
-        // FIXME: used later for shrinking
-        #[allow(unused)]
         len: usize,
     },
     Split {
@@ -55,6 +53,15 @@ impl IndexedSplitStrategy {
                 max_depth: self.max_depth - 1,
             },
         )
+    }
+}
+
+impl IndexedSplitTree {
+    fn deepest_depth(&self) -> usize {
+        match self {
+            Self::Stay { .. } => 0,
+            Self::Split { left, right, .. } => 1 + left.deepest_depth().max(right.deepest_depth()),
+        }
     }
 }
 
@@ -96,34 +103,35 @@ impl ValueTree for IndexedSplitTree {
     }
 
     fn simplify(&mut self) -> bool {
-        // We don't implement simplification and complication for now, until needed.
+        match self {
+            // Already the most simplified.
+            Self::Stay { .. } => false,
 
-        false
-        // match self {
-        //     Self::Stay { .. } => false,
-        //     Self::Split { at, left, right } => {
-        //         match (&mut **left, &mut **right) {
-        //             // Time to shrink the split index
-        //             (Self::Stay { len: len_left }, Self::Stay { len: len_right }) => {
-        //                 let len = *len_left + *len_right;
-        //                 let mid = len.midpoint(0);
-        //                 if *at == mid {
-        //                     *self = Self::Stay { len };
-        //                 } else if *at < mid {
-        //                 }
-        //             }
+            Self::Split { left, right, .. } => {
+                let (left, right) = (&mut **left, &mut **right);
 
-        //             (left, Self::Stay { .. }) => {
-        //                 left.simplify();
-        //             }
-        //             (_, right) => {
-        //                 right.simplify();
-        //             }
-        //         }
+                match (left, right) {
+                    (Self::Stay { .. }, right @ Self::Split { .. }) => assert!(right.simplify()),
+                    (left @ Self::Split { .. }, Self::Stay { .. }) => assert!(left.simplify()),
+                    (Self::Stay { len: left_len }, Self::Stay { len: right_len }) => {
+                        *self = Self::Stay {
+                            len: *left_len + *right_len,
+                        }
+                    }
 
-        //         true
-        //     }
-        // }
+                    // We strive for a balance tree first.
+                    // O(max_depth^2)
+                    // But the max_depth isn't gonna be large (about <= 4) anyway.
+                    // The approach of caching the max_depth would be very complicated.
+                    (left, right) if left.deepest_depth() < right.deepest_depth() => {
+                        assert!(right.simplify())
+                    }
+                    (left, _right) => assert!(left.simplify()),
+                }
+
+                true
+            }
+        }
     }
 
     fn complicate(&mut self) -> bool {

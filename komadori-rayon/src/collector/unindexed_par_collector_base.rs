@@ -8,8 +8,8 @@ use crate::collector::{
 };
 
 use super::{
-    Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith, ParallelCollectorBase,
-    TakeAnyWhile, UnindexedOnly, assert_unindexed_par_collector,
+    Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith,
+    ParallelCollectorBase, TakeAnyWhile, UnindexedOnly, assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -429,7 +429,12 @@ pub trait UnindexedParallelCollectorBase:
     /// assert_eq!(sentence, "there are a noble and a singer");
     /// ```
     #[inline]
-    fn fold_local<L1, FL2, L2, F, T>(self, local1: L1, local2_f: FL2, f: F) -> FoldLocal<Self, L1, FL2, F>
+    fn fold_local<L1, FL2, L2, F, T>(
+        self,
+        local1: L1,
+        local2_f: FL2,
+        f: F,
+    ) -> FoldLocal<Self, L1, FL2, F>
     where
         Self: UnindexedParallelCollector<(L1, L2)> + Sized,
         L1: Clone + Send,
