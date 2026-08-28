@@ -40,7 +40,7 @@ where
     )?;
 
     let (consumer, commit) = collector.parts(iter.len());
-    let output = pool.bridge(iter.take_indexed_producer(), consumer, split_decision);
+    let output = pool.bridge(iter.take_indexed_producer(), consumer, split_decision)?;
     assert_ending_cf(commit(output), raw_cf(ending), METHOD_NAME)?;
 
     if let &ControlFlow::Continue((ref expected_state, ending_ma)) = ending {
@@ -88,7 +88,7 @@ where
     )?;
 
     let (consumer, commit) = collector.take_parts(iter.len());
-    let output = pool.bridge(iter.take_indexed_producer(), consumer, split_decision);
+    let output = pool.bridge(iter.take_indexed_producer(), consumer, split_decision)?;
     commit(output);
 
     assert_output(
@@ -130,7 +130,7 @@ where
     )?;
 
     let (consumer, commit) = collector.parts_unindexed();
-    let output = pool.bridge_unindexed(iter.take_producer(), consumer, split_decision);
+    let output = pool.bridge_unindexed(iter.take_producer(), consumer, split_decision)?;
     assert_ending_cf(commit(output), raw_cf(ending), METHOD_NAME)?;
 
     if let &ControlFlow::Continue((ref expected_state, ending_ma)) = ending {
@@ -178,7 +178,7 @@ where
     )?;
 
     let (consumer, commit) = collector.take_parts_unindexed();
-    let output = pool.bridge_unindexed(iter.take_producer(), consumer, split_decision);
+    let output = pool.bridge_unindexed(iter.take_producer(), consumer, split_decision)?;
     commit(output);
 
     assert_output(

@@ -16,6 +16,14 @@ use crate::{cell::CellOptRefMut, collector::plumbing};
 pub trait Collection<T> {
     fn push_back(&mut self, elem: T);
 
+    fn reserve(&mut self, additional: usize) {
+        let _ = additional;
+    }
+
+    unsafe fn assume_reserved_push_back(&mut self, elem: T) {
+        self.push_back(elem);
+    }
+
     #[inline]
     fn push_back_iter(&mut self, elems: impl IntoIterator<Item = T>) {
         elems.into_iter().for_each(|elem| self.push_back(elem));
@@ -182,6 +190,14 @@ where
     }
 
     plumbing::finish_boxed_impl! {}
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        match self {
+            Self::LeftMost(collection) => collection.reserve(additional),
+            Self::Right(chunk) => chunk.reserve(additional),
+        }
+    }
 }
 
 impl<C, T> Collector<T> for Serial<'_, C, T>
@@ -193,6 +209,18 @@ where
         match self {
             Self::LeftMost(collection) => collection.push_back(item),
             Self::Right(chunk) => chunk.push(item),
+        }
+
+        ControlFlow::Continue(())
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, item: T) -> ControlFlow<()> {
+        unsafe {
+            match self {
+                Self::LeftMost(collection) => collection.assume_reserved_push_back(item),
+                Self::Right(chunk) => crate::vec::push_unchecked(chunk, item),
+            }
         }
 
         ControlFlow::Continue(())
@@ -238,6 +266,11 @@ where
         Collector::<T>::collect(self, item)
     }
 
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, &item: &'i T) -> ControlFlow<()> {
+        unsafe { Collector::<T>::assume_reserved_collect(self, item) }
+    }
+
     fn collect_many(&mut self, items: impl IntoIterator<Item = &'i T>) -> ControlFlow<()> {
         match self {
             Self::LeftMost(collection) => collection.push_back_iter_ref(items),
@@ -276,6 +309,11 @@ where
     #[inline]
     fn collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
         Collector::<T>::collect(self, item)
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_collect(&mut self, &mut item: &'i mut T) -> ControlFlow<()> {
+        unsafe { Collector::<T>::assume_reserved_collect(self, item) }
     }
 
     fn collect_many(&mut self, items: impl IntoIterator<Item = &'i mut T>) -> ControlFlow<()> {

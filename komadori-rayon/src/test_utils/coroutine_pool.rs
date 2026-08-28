@@ -29,12 +29,20 @@ pub struct CoroutinePool {
     rng: Xoshiro128PlusPlus,
 }
 
-// pub enum Event {
-//     StartBridging,
-//     StayCreateSerialCollector,
-//     StayUsingSerialCollector,
-//     StayReturn,
-// }
+#[derive(Debug)]
+pub enum BridgeError {
+    OverreachedIter,
+}
+
+impl From<BridgeError> for TestCaseError {
+    fn from(value: BridgeError) -> Self {
+        match value {
+            BridgeError::OverreachedIter => {
+                TestCaseError::fail("one of iterators was used after yielding `None`")
+            }
+        }
+    }
+}
 
 type Work<'a> = Pin<Box<dyn Future<Output = ()> + 'a>>;
 type Queue<'a> = Vec<Work<'a>>;
@@ -43,8 +51,6 @@ type RcrcSharedState<'a> = Rc<RefCell<SharedState<'a>>>;
 struct SharedState<'a> {
     queue: Queue<'a>,
     rng: Xoshiro128PlusPlus,
-    // task_pick_log: Vec<usize>,
-    // event_log: Vec<Event>,
 }
 
 impl CoroutinePool {
@@ -68,7 +74,7 @@ impl CoroutinePool {
         producer: P,
         consumer: C,
         split_decision: &UnindexedSplitDecision,
-    ) -> C::Output
+    ) -> Result<C::Output, BridgeError>
     where
         P: Producer,
         C: UnindexedConsumer<IntoCollector: Collector<P::Item>>,
@@ -84,7 +90,7 @@ impl CoroutinePool {
             P: Producer,
             C: UnindexedConsumer<IntoCollector: Collector<P::Item>>,
         {
-            type Output = C::Output;
+            type Output = Result<C::Output, BridgeError>;
 
             fn execute<'a>(self, state: RcrcSharedState<'a>) -> impl Future<Output = Self::Output>
             where
@@ -106,7 +112,7 @@ impl CoroutinePool {
         producer: P,
         consumer: C,
         split_decision: &IndexedSplitDecision,
-    ) -> C::Output
+    ) -> Result<C::Output, BridgeError>
     where
         P: IndexedProducer,
         C: Consumer<IntoCollector: Collector<P::Item>>,
@@ -122,7 +128,7 @@ impl CoroutinePool {
             P: IndexedProducer,
             C: Consumer<IntoCollector: Collector<P::Item>>,
         {
-            type Output = C::Output;
+            type Output = Result<C::Output, BridgeError>;
 
             fn execute<'a>(self, state: RcrcSharedState<'a>) -> impl Future<Output = Self::Output>
             where
@@ -212,7 +218,7 @@ async fn bridge_task<'a, 'sd: 'a, P, C>(
     mut producer: P,
     consumer: C,
     split_decision: &'sd UnindexedSplitDecision,
-) -> C::Output
+) -> Result<C::Output, BridgeError>
 where
     P: Producer + 'a,
     C: UnindexedConsumer<IntoCollector: Collector<P::Item>> + 'a,
@@ -221,8 +227,8 @@ where
 
     match split_decision {
         UnindexedSplitDecision::Stay => {
-            let mut iter = producer.into_iter();
-            let mut collector = consumer.into_collector();
+            let iter = OverreachDetector::StillGoing(producer.into_iter());
+            let collector = consumer.into_collector();
             yield_now().await;
 
             // This is mostly an optimization hint.
@@ -232,37 +238,7 @@ where
             //     return collector.finish();
             // }
 
-            loop {
-                // Dp this cuz of the stupid `clippy::await_holding_refcell_ref` lint
-                // not understanding that we don't actually hold any `RefMut`
-                // across an `.await` point.
-                let method = {
-                    let mut state = state.borrow_mut();
-                    state.rng.sample(CollectDistribution)
-                };
-
-                match method {
-                    CollectMethod::Collect => {
-                        let Some(item) = iter.next() else {
-                            break delay_output(collector.finish()).await;
-                        };
-
-                        if collector.collect(item).is_break() {
-                            break delay_output(collector.finish()).await;
-                        }
-                    }
-                    CollectMethod::CollectThenFinish => {
-                        break delay_output(collector.collect_then_finish(iter)).await;
-                    }
-                    CollectMethod::CollectMany { n } => {
-                        if collector.collect_many(iter.by_ref().take(n)).is_break() {
-                            break delay_output(collector.finish()).await;
-                        }
-                    }
-                }
-
-                yield_now().await;
-            }
+            process_iter_collector(&state, iter, collector).await
         }
         UnindexedSplitDecision::Split { left, right } => {
             let producer_left = producer.split_off_left();
@@ -289,17 +265,17 @@ where
             };
             yield_now().await;
 
-            let left_output = left_work.await;
+            let left_output = left_work.await?;
             yield_now().await;
 
-            let right_output = right_work.await;
+            let right_output = right_work.await?;
             yield_now().await;
 
             let mut output = left_output;
             combiner.combine(&mut output, right_output);
             yield_now().await;
 
-            output
+            Ok(output)
         }
     }
 }
@@ -309,7 +285,7 @@ async fn bridge_task_indexed<'a, 'sd: 'a, P, C>(
     mut producer: P,
     mut consumer: C,
     split_decision: &'sd IndexedSplitDecision,
-) -> C::Output
+) -> Result<C::Output, BridgeError>
 where
     P: IndexedProducer + 'a,
     C: Consumer<IntoCollector: Collector<P::Item>> + 'a,
@@ -318,8 +294,8 @@ where
 
     match split_decision {
         IndexedSplitDecision::Stay => {
-            let mut iter = producer.into_iter();
-            let mut collector = consumer.into_collector();
+            let iter = OverreachDetector::StillGoing(producer.into_iter());
+            let collector = consumer.into_collector();
             yield_now().await;
 
             // This is mostly an optimization hint.
@@ -329,37 +305,7 @@ where
             //     return collector.finish();
             // }
 
-            loop {
-                // Dp this cuz of the stupid `clippy::await_holding_refcell_ref` lint
-                // not understanding that we don't actually hold any `RefMut`
-                // across an `.await` point.
-                let method = {
-                    let mut state = state.borrow_mut();
-                    state.rng.sample(CollectDistribution)
-                };
-
-                match method {
-                    CollectMethod::Collect => {
-                        let Some(item) = iter.next() else {
-                            break delay_output(collector.finish()).await;
-                        };
-
-                        if collector.collect(item).is_break() {
-                            break delay_output(collector.finish()).await;
-                        }
-                    }
-                    CollectMethod::CollectThenFinish => {
-                        break delay_output(collector.collect_then_finish(iter)).await;
-                    }
-                    CollectMethod::CollectMany { n } => {
-                        if collector.collect_many(iter.by_ref().take(n)).is_break() {
-                            break delay_output(collector.finish()).await;
-                        }
-                    }
-                }
-
-                yield_now().await;
-            }
+            process_iter_collector(&state, iter, collector).await
         }
         IndexedSplitDecision::Split { left, right, at } => {
             let at = *at;
@@ -389,19 +335,103 @@ where
             };
             yield_now().await;
 
-            let left_output = left_work.await;
+            let left_output = left_work.await?;
             yield_now().await;
 
-            let right_output = right_work.await;
+            let right_output = right_work.await?;
             yield_now().await;
 
             let mut output = left_output;
             combiner.combine(&mut output, right_output);
             yield_now().await;
 
-            output
+            Ok(output)
         }
     }
+}
+
+async fn process_iter_collector<T, O>(
+    state: &RcrcSharedState<'_>,
+    mut iter: OverreachDetector<impl Iterator<Item = T>>,
+    mut collector: impl Collector<T, Output = O>,
+) -> Result<O, BridgeError> {
+    // Track reservation according to the contract of the Reserve API.
+    let mut reservation = 0_usize;
+
+    Ok(loop {
+        // Dp this cuz of the stupid `clippy::await_holding_refcell_ref` lint
+        // not understanding that we don't actually hold any `RefMut`
+        // across an `.await` point.
+        let method = {
+            let mut state = state.borrow_mut();
+            state.rng.sample(CollectDistribution)
+        };
+
+        async fn delay_finish<C>(collector: C) -> C::Output
+        where
+            C: CollectorBase,
+        {
+            yield_now().await;
+            let output = collector.finish();
+            yield_now().await;
+            output
+        }
+
+        match method {
+            CollectMethod::Collect => {
+                reservation = reservation.saturating_sub(1);
+
+                let Some(item) = iter.next() else {
+                    break delay_finish(collector).await;
+                };
+
+                if collector.collect(item).is_break() {
+                    break delay_finish(collector).await;
+                }
+            }
+            CollectMethod::CollectThenFinish => {
+                let output = collector.collect_then_finish(&mut iter);
+                yield_now().await;
+                if iter.overreached() {
+                    return Err(BridgeError::OverreachedIter);
+                } else {
+                    break output;
+                }
+            }
+            CollectMethod::CollectMany { n } => {
+                reservation = 0;
+                let cf = collector.collect_many(iter.by_ref().take(n));
+                if cf.is_break() || iter.stopped_correctly() {
+                    break delay_finish(collector).await;
+                }
+            }
+            CollectMethod::Reserve { additional } => {
+                collector.reserve(additional);
+                reservation = additional;
+            }
+            CollectMethod::AssumeReservedCollect => {
+                if reservation == 0 {
+                    continue;
+                }
+                reservation -= 1;
+
+                let Some(item) = iter.next() else {
+                    break delay_finish(collector).await;
+                };
+
+                // SAFETY: We have 1 or more reservation left.
+                if unsafe { collector.assume_reserved_collect(item).is_break() } {
+                    break delay_finish(collector).await;
+                }
+            }
+        }
+
+        if iter.overreached() {
+            return Err(BridgeError::OverreachedIter);
+        }
+
+        yield_now().await;
+    })
 }
 
 async fn yield_now() {
@@ -418,11 +448,6 @@ async fn yield_now() {
     .await
 }
 
-async fn delay_output<O>(output: O) -> O {
-    yield_now().await;
-    output
-}
-
 trait Job {
     type Output;
 
@@ -436,22 +461,79 @@ enum CollectMethod {
     Collect,
     /// Use [`Collector::collect_then_finish()`] method.
     CollectThenFinish,
+    Reserve {
+        additional: usize,
+    },
+    AssumeReservedCollect,
     // FIXME: if we ever have to collect more than 10 items (very unlikely),
     // we restructure.
     /// Use [`Collector::collect_many()`] method for the maximum of `n` items.
-    CollectMany { n: usize },
+    CollectMany {
+        n: usize,
+    },
 }
 
 struct CollectDistribution;
 
 impl Distribution<CollectMethod> for CollectDistribution {
     fn sample<R: rand::prelude::Rng + ?Sized>(&self, rng: &mut R) -> CollectMethod {
-        match rng.random_range(0..3) {
+        match rng.random_range(0..=4) {
             0 => CollectMethod::Collect,
             1 => CollectMethod::CollectThenFinish,
+            2 => CollectMethod::Reserve {
+                additional: rng.random_range(0..=10),
+            },
+            3 => CollectMethod::AssumeReservedCollect,
             _ => CollectMethod::CollectMany {
                 n: rng.random_range(0..=10),
             },
+        }
+    }
+}
+
+#[derive(Debug)]
+enum OverreachDetector<I> {
+    StillGoing(I),
+    Stopped(bool),
+}
+
+impl<I> OverreachDetector<I> {
+    fn stopped_correctly(&self) -> bool {
+        matches!(self, Self::Stopped(false))
+    }
+
+    fn overreached(&self) -> bool {
+        matches!(self, Self::Stopped(true))
+    }
+}
+
+impl<I> Iterator for OverreachDetector<I>
+where
+    I: Iterator,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::StillGoing(iter) => {
+                if let Some(item) = iter.next() {
+                    Some(item)
+                } else {
+                    *self = Self::Stopped(false);
+                    None
+                }
+            }
+            Self::Stopped(overreached) => {
+                *overreached = true;
+                None
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::StillGoing(iter) => iter.size_hint(),
+            Self::Stopped(_) => (0, Some(0)),
         }
     }
 }

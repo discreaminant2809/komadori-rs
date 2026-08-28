@@ -275,6 +275,18 @@ impl<T> Collection<T> for Vec<T> {
         self.push(elem);
     }
 
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.reserve(additional);
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_push_back(&mut self, elem: T) {
+        unsafe {
+            push_unchecked(self, elem);
+        }
+    }
+
     fn push_back_iter(&mut self, elems: impl IntoIterator<Item = T>) {
         self.extend(elems);
     }
@@ -314,6 +326,30 @@ impl<T> Collection<T> for Vec<T> {
         for mut chunk in chunks {
             self.append(&mut chunk);
         }
+    }
+}
+
+/// # Safety
+///
+/// Must have reserved for at least one element via [`Vec::reserve()`] or similar methods.
+pub(crate) unsafe fn push_unchecked<T>(v: &mut Vec<T>, item: T) {
+    debug_assert!(
+        v.len() < v.capacity(),
+        "`assume_reserved_collect()` called without reservation"
+    );
+
+    let len = v.len();
+
+    unsafe {
+        v.as_mut_ptr()
+            // SAFETY: the allocated object is `sizeof(T) * len` big.
+            .add(len)
+            // SAFETY: We've reserved for at least one element.
+            .write(item);
+
+        // SAFETY: We've reserved for at least one element,
+        // and the element at index `len` is initialized.
+        v.set_len(len + 1);
     }
 }
 
