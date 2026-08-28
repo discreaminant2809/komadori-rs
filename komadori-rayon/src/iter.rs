@@ -14,6 +14,7 @@
 mod count;
 mod first;
 mod for_each;
+mod last;
 #[cfg(feature = "rayon")]
 mod rayon_par_iter_ext;
 mod reduce;
@@ -21,6 +22,7 @@ mod reduce;
 pub use count::*;
 pub use first::*;
 pub use for_each::*;
+pub use last::*;
 #[cfg(feature = "rayon")]
 pub use rayon_par_iter_ext::*;
 pub use reduce::*;
