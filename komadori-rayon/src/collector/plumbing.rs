@@ -661,6 +661,22 @@ macro_rules! finish_boxed_impl {
 }
 pub(crate) use finish_boxed_impl;
 
+/// Syntax: `impl_split_off_left_at_via_unindexed! {}`
+macro_rules! impl_split_off_left_at_via_unindexed {
+    () => {
+        #[inline]
+        fn split_off_left_at(&mut self, _index: usize) -> (Self, Self::Combiner) {
+            use $crate::collector::plumbing::UnindexedConsumer;
+
+            (
+                UnindexedConsumer::split_off_left(self),
+                UnindexedConsumer::to_combiner(self),
+            )
+        }
+    };
+}
+pub(crate) use impl_split_off_left_at_via_unindexed;
+
 #[inline]
 pub(crate) fn break_hint(collector: &(impl CollectorBase + ?Sized)) -> ControlFlow<()> {
     if collector.max_afford(1) > 0 {

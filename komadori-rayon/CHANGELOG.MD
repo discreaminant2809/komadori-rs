@@ -6,6 +6,7 @@
 
 - `crate::iter::ParFirst`.
 - `crate::iter::ParLast`.
+- `crate::iter::ParAny`.
 - `crate::collector::plumbing::SerialOf`.
 - `crate::collector::plumbing::SerialOutputOf`.
 - `crate::collector::plumbing::UnindexedSerialOf`.

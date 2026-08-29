@@ -11,6 +11,7 @@
 //! [`max()`]: Iterator::max
 //! [`sum()`]: Iterator::sum
 
+mod any;
 mod count;
 mod first;
 mod for_each;
@@ -19,6 +20,7 @@ mod last;
 mod rayon_par_iter_ext;
 mod reduce;
 
+pub use any::*;
 pub use count::*;
 pub use first::*;
 pub use for_each::*;
