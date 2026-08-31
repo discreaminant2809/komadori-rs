@@ -274,7 +274,7 @@ macro_rules! uniquify_serial {
             use ::core::{any::Any, marker::PhantomData, ops::ControlFlow, primitive::usize};
 
             type InvariantLtAndNoAutoTraits<'a, This> =
-                PhantomData<(fn(&'a mut This) -> &'a mut This, dyn Any)>;
+                PhantomData<(fn(&'a mut This) -> &'a mut This, This, dyn Any)>;
 
             struct Consumer<'a, This, C> {
                 consumer: C,
@@ -454,7 +454,7 @@ macro_rules! uniquify_serial {
             use ::core::{any::Any, marker::PhantomData, ops::ControlFlow, primitive::usize};
 
             type InvariantLtAndNoAutoTraits<'a, This> =
-                PhantomData<(fn(&'a mut This) -> &'a mut This, dyn Any)>;
+                PhantomData<(fn(&'a mut This) -> &'a mut This, This, dyn Any)>;
 
             struct Consumer<'a, This, C> {
                 consumer: C,
