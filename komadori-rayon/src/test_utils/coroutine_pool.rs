@@ -32,6 +32,7 @@ pub struct CoroutinePool {
 #[derive(Debug)]
 pub enum BridgeError {
     OverreachedIter,
+    MaxAffordGtRequest { request: usize, max_afford: usize },
 }
 
 impl From<BridgeError> for TestCaseError {
@@ -40,6 +41,12 @@ impl From<BridgeError> for TestCaseError {
             BridgeError::OverreachedIter => {
                 TestCaseError::fail("one of iterators was used after yielding `None`")
             }
+            BridgeError::MaxAffordGtRequest {
+                request,
+                max_afford,
+            } => TestCaseError::fail(format!(
+                "returned `max_afford` {max_afford} is greater than `request` {request}"
+            )),
         }
     }
 }
@@ -385,7 +392,9 @@ async fn process_iter_collector<T, O>(
                     break delay_finish(collector).await;
                 };
 
-                if collector.collect(item).is_break() {
+                let cf = collector.collect(item);
+
+                if cf.is_break() {
                     break delay_finish(collector).await;
                 }
             }
@@ -420,8 +429,24 @@ async fn process_iter_collector<T, O>(
                 };
 
                 // SAFETY: We have 1 or more reservation left.
-                if unsafe { collector.assume_reserved_collect(item).is_break() } {
+                let cf = unsafe { collector.assume_reserved_collect(item) };
+
+                if cf.is_break() {
                     break delay_finish(collector).await;
+                }
+            }
+            CollectMethod::MaxAfford { request } => {
+                let max_afford = collector.max_afford(request);
+
+                if max_afford > request {
+                    return Err(BridgeError::MaxAffordGtRequest {
+                        request,
+                        max_afford,
+                    });
+                }
+
+                if request > 0 && max_afford == 0 {
+                    return Ok(delay_finish(collector).await);
                 }
             }
         }
@@ -465,6 +490,9 @@ enum CollectMethod {
         additional: usize,
     },
     AssumeReservedCollect,
+    MaxAfford {
+        request: usize,
+    },
     // FIXME: if we ever have to collect more than 10 items (very unlikely),
     // we restructure.
     /// Use [`Collector::collect_many()`] method for the maximum of `n` items.
@@ -477,16 +505,27 @@ struct CollectDistribution;
 
 impl Distribution<CollectMethod> for CollectDistribution {
     fn sample<R: rand::prelude::Rng + ?Sized>(&self, rng: &mut R) -> CollectMethod {
-        match rng.random_range(0..=4) {
+        let random_range = 0..=5;
+        match rng.random_range(random_range.clone()) {
             0 => CollectMethod::Collect,
             1 => CollectMethod::CollectThenFinish,
             2 => CollectMethod::Reserve {
                 additional: rng.random_range(0..=10),
             },
             3 => CollectMethod::AssumeReservedCollect,
-            _ => CollectMethod::CollectMany {
+            4 => CollectMethod::MaxAfford {
+                request: {
+                    if rng.random_bool(0.5) {
+                        rng.random_range(..=5)
+                    } else {
+                        rng.random_range(usize::MAX - 4..=usize::MAX)
+                    }
+                },
+            },
+            5 => CollectMethod::CollectMany {
                 n: rng.random_range(0..=10),
             },
+            _ => unreachable!("invalid random number for range {random_range:?}"),
         }
     }
 }
