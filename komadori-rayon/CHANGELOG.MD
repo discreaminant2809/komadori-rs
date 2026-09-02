@@ -7,6 +7,7 @@
 - `crate::iter::ParFirst`.
 - `crate::iter::ParLast`.
 - `crate::iter::ParAny`.
+- `UnindexedParallelCollector::try_fold_local()`.
 - `crate::collector::plumbing::SerialOf`.
 - `crate::collector::plumbing::SerialOutputOf`.
 - `crate::collector::plumbing::UnindexedSerialOf`.

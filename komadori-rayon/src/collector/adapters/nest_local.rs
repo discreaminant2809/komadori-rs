@@ -3,10 +3,12 @@ mod fold_local;
 mod nest_local;
 mod nest_local_with;
 mod traits;
+mod try_fold_local;
 
 pub use fold_local::FoldLocal;
 pub use nest_local::NestLocal;
 pub use nest_local_with::NestLocalWith;
+pub use try_fold_local::TryFoldLocal;
 
 use std::ops::ControlFlow;
 

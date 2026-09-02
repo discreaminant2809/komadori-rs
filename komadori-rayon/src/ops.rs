@@ -7,6 +7,7 @@ mod call;
 mod par_fn;
 mod par_product;
 mod par_sum;
+mod tri;
 mod with_local_par_closure;
 
 pub(crate) use basic_par_closure::*;
@@ -14,4 +15,5 @@ pub(crate) use call::*;
 pub(crate) use par_fn::*;
 pub use par_product::*;
 pub use par_sum::*;
+pub(crate) use tri::*;
 pub(crate) use with_local_par_closure::*;

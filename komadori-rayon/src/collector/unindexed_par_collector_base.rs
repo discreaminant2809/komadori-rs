@@ -2,14 +2,18 @@ use std::ops::ControlFlow;
 
 use komadori::prelude::*;
 
-use crate::collector::{
-    assert_unindexed_par_collector_base,
-    plumbing::{UnindexedSerialOf, UnindexedSerialOutputOf},
+use crate::{
+    collector::{
+        assert_unindexed_par_collector_base,
+        plumbing::{UnindexedSerialOf, UnindexedSerialOutputOf},
+    },
+    ops::Try,
 };
 
 use super::{
     Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith,
-    ParallelCollectorBase, TakeAnyWhile, UnindexedOnly, assert_unindexed_par_collector,
+    ParallelCollectorBase, TakeAnyWhile, TryFoldLocal, UnindexedOnly,
+    assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -442,6 +446,35 @@ pub trait UnindexedParallelCollectorBase:
         F: Fn(&mut L1, &mut L2, T) + Sync,
     {
         assert_unindexed_par_collector::<_, T>(FoldLocal::new(self, local1, local2_f, f))
+    }
+
+    /// Creates a parallel collector that uses a closure and local states
+    /// to collect items in each local reduction, which an ability
+    /// to stop early.
+    ///
+    /// In one local reduction, if `f` or `init` returns a "failure" value,
+    /// that reduction will stop.
+    ///
+    /// # Examples
+    ///
+    /// *Coming soon!*
+    // TODO: Write an example after `TryReduce`.
+    #[inline]
+    fn try_fold_local<S, FA, A, F, T, R>(
+        self,
+        seed: S,
+        init: FA,
+        f: F,
+    ) -> TryFoldLocal<Self, S, FA, F>
+    where
+        Self: UnindexedParallelCollector<A> + Sized,
+        S: Clone + Send,
+        A: Try,
+        FA: Fn(S) -> A + Sync,
+        F: Fn(&mut A::Output, T) -> R + Sync,
+        R: Try<Output = (), Residual = A::Residual>,
+    {
+        assert_unindexed_par_collector::<_, T>(TryFoldLocal::new(self, seed, init, f))
     }
 
     /// Creates a parallel collector that restricts to the unindexed path only.
