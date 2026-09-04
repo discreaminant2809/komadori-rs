@@ -7,7 +7,7 @@ use crate::{
         assert_unindexed_par_collector_base,
         plumbing::{UnindexedSerialOf, UnindexedSerialOutputOf},
     },
-    ops::Try,
+    ops::{ChangeOutputType, Try},
 };
 
 use super::{
@@ -455,26 +455,27 @@ pub trait UnindexedParallelCollectorBase:
     /// In one local reduction, if `f` or `init` returns a "failure" value,
     /// that reduction will stop.
     ///
+    /// As of now, the permitted types for `A` is [`Option`], [`Result`],
+    /// and [`ControlFlow`].
+    ///
     /// # Examples
     ///
     /// *Coming soon!*
-    // TODO: Write an example after `TryReduce`.
+    // TODO: Write an example after `.trying()`.
     #[inline]
-    fn try_fold_local<S, FA, A, F, T, R>(
+    fn try_fold_local<S, A, Acc, FF, F, T, R>(
         self,
-        seed: S,
-        init: FA,
-        f: F,
-    ) -> TryFoldLocal<Self, S, FA, F>
+        shared_state: S,
+        consumer: FF,
+    ) -> TryFoldLocal<Self, S, FF>
     where
-        Self: UnindexedParallelCollector<A> + Sized,
-        S: Clone + Send,
-        A: Try,
-        FA: Fn(S) -> A + Sync,
-        F: Fn(&mut A::Output, T) -> R + Sync,
-        R: Try<Output = (), Residual = A::Residual>,
+        Self: UnindexedParallelCollector<ChangeOutputType<A, Acc>> + Sized,
+        S: Sync,
+        A: Try<Output = (Acc, F)>,
+        FF: FnOnce(&S) -> A + Clone + Send,
+        F: FnMut(&S, &mut Acc, T) -> ChangeOutputType<A, ()>,
     {
-        assert_unindexed_par_collector::<_, T>(TryFoldLocal::new(self, seed, init, f))
+        assert_unindexed_par_collector::<_, T>(TryFoldLocal::new(self, shared_state, consumer))
     }
 
     /// Creates a parallel collector that restricts to the unindexed path only.

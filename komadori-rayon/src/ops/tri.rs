@@ -1,17 +1,17 @@
-use core::{convert::Infallible, ops::ControlFlow, task::Poll};
+use core::{convert::Infallible, ops::ControlFlow};
 
 pub trait Try {
     type Output;
-    type Residual;
+    type Residual: Residual;
 
     fn from_output(output: Self::Output) -> Self;
     fn from_residual(residual: Self::Residual) -> Self;
     fn branch(self) -> ControlFlow<Self::Residual, Self::Output>;
 }
 
-// pub trait Residual<O>: Sized {
-//     type TryType: Try<Output = O, Residual = Self>;
-// }
+pub trait Residual: Sized {
+    type TryType<O>: Try<Output = O, Residual = Self>;
+}
 
 impl<B, C> Try for ControlFlow<B, C> {
     type Output = C;
@@ -89,70 +89,16 @@ impl<T, E> Try for Result<T, E> {
     }
 }
 
-impl<T, E> Try for Poll<Result<T, E>> {
-    type Output = Poll<T>;
-    type Residual = Result<Infallible, E>;
-
-    #[inline]
-    fn from_output(output: Self::Output) -> Self {
-        output.map(Ok)
-    }
-
-    #[inline]
-    fn from_residual(residual: Self::Residual) -> Self {
-        match residual {
-            Err(e) => Poll::Ready(Err(e)),
-        }
-    }
-
-    #[inline]
-    fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
-        match self {
-            Poll::Pending => ControlFlow::Continue(Poll::Pending),
-            Poll::Ready(Ok(c)) => ControlFlow::Continue(Poll::Ready(c)),
-            Poll::Ready(Err(e)) => ControlFlow::Break(Err(e)),
-        }
-    }
+impl<B> Residual for ControlFlow<B, Infallible> {
+    type TryType<C> = ControlFlow<B, C>;
 }
 
-impl<T, E> Try for Poll<Option<Result<T, E>>> {
-    type Output = Poll<Option<T>>;
-    type Residual = Result<Infallible, E>;
-
-    #[inline]
-    fn from_output(output: Self::Output) -> Self {
-        match output {
-            Poll::Ready(o) => Poll::Ready(o.map(Ok)),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-
-    #[inline]
-    fn from_residual(residual: Self::Residual) -> Self {
-        match residual {
-            Err(e) => Poll::Ready(Some(Err(e))),
-        }
-    }
-
-    #[inline]
-    fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
-        match self {
-            Poll::Pending => ControlFlow::Continue(Poll::Pending),
-            Poll::Ready(None) => ControlFlow::Continue(Poll::Ready(None)),
-            Poll::Ready(Some(Ok(c))) => ControlFlow::Continue(Poll::Ready(Some(c))),
-            Poll::Ready(Some(Err(e))) => ControlFlow::Break(Err(e)),
-        }
-    }
+impl Residual for Option<Infallible> {
+    type TryType<T> = Option<T>;
 }
 
-// impl<B, C> Residual<C> for ControlFlow<B, Infallible> {
-//     type TryType = ControlFlow<B, C>;
-// }
+impl<E> Residual for Result<Infallible, E> {
+    type TryType<T> = Result<T, E>;
+}
 
-// impl<T> Residual<T> for Option<Infallible> {
-//     type TryType = Option<T>;
-// }
-
-// impl<T, E> Residual<T> for Result<Infallible, E> {
-//     type TryType = Result<T, E>;
-// }
+pub type ChangeOutputType<T, O> = <<T as Try>::Residual as Residual>::TryType<O>;
