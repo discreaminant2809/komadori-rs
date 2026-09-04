@@ -151,6 +151,7 @@ pub(crate) mod cell;
 pub mod cmp;
 pub mod collections;
 pub mod collector;
+pub mod either;
 mod helpers;
 pub mod iter;
 pub mod num;

@@ -12,6 +12,7 @@
 - `crate::collector::plumbing::SerialOutputOf`.
 - `crate::collector::plumbing::UnindexedSerialOf`.
 - `crate::collector::plumbing::UnindexedSerialOutputOf`.
+- `Either` type re-export from `either` crate.
 
 ### Changed
 
