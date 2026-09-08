@@ -1,3 +1,7 @@
+mod trying;
+
+pub use trying::*;
+
 use core::{convert::Infallible, ops::ControlFlow};
 
 pub trait Try {

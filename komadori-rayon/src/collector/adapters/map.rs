@@ -20,7 +20,8 @@ mod inner {
         pub(super) f: F,
     }
 }
-use inner::MapBase;
+// `trying_results()` and similar collectors rely on this.
+pub(crate) use inner::MapBase;
 
 /// A parallel collector that uses a closure to determine whether
 /// an item should be accumulated.
@@ -36,6 +37,12 @@ pub type Map<C, F> = MapBase<C, BasicParClosure<F>>;
 /// [`ParallelCollectorBase::map_with()`].
 /// See its documentation for more.
 pub type MapWith<C, L1, FL2, F> = MapBase<C, WithLocalParClosure<L1, FL2, F>>;
+
+impl<C, F> MapBase<C, F> {
+    pub(crate) fn new_base(collector: C, f: F) -> Self {
+        Self { collector, f }
+    }
+}
 
 impl<C, F> Map<C, F> {
     pub(in crate::collector) fn new(collector: C, f: F) -> Self {

@@ -16,6 +16,7 @@ mod tee_base;
 mod tee_clone;
 mod tee_funnel;
 mod tee_mut;
+mod trying_results;
 mod unindexed_only;
 
 pub use cloning::*;
@@ -35,6 +36,7 @@ pub use tee::Tee;
 pub use tee_clone::TeeClone;
 pub use tee_funnel::TeeFunnel;
 pub use tee_mut::TeeMut;
+pub use trying_results::*;
 pub use unindexed_only::*;
 
 pub(super) use tee::tee;

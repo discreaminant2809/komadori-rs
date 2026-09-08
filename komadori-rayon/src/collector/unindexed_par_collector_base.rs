@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith,
-    ParallelCollectorBase, TakeAnyWhile, TryFoldLocal, UnindexedOnly,
+    ParallelCollectorBase, TakeAnyWhile, TryFoldLocal, TryingResults, UnindexedOnly,
     assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
@@ -476,6 +476,62 @@ pub trait UnindexedParallelCollectorBase:
         F: FnMut(&S, &mut Acc, T) -> ChangeOutputType<A, ()>,
     {
         assert_unindexed_par_collector::<_, T>(TryFoldLocal::new(self, shared_state, consumer))
+    }
+
+    /// Creates a parallel collector that sets the [`Output`] to [`Err(e)`](Err) when
+    /// an [`Err(e)`](Err) item is encountered *anywhere*,
+    /// else the underlying collector collects the `item` inside
+    /// [`Ok(item)`](Ok).
+    ///
+    /// This is analogous to when you collect an iterator of [`Result<T, E>`]
+    /// to a `Result<Collection<T>, E>`.
+    ///
+    /// If there are more than one errors encountered, it is unspecified
+    /// which one will be kept as an output.
+    ///
+    /// This adapter collects [`Result<T, E>`] if the
+    /// underlying paralllel collector collects `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let res = [Ok(1), Ok(2), Ok(3)]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .trying_results::<&str>()
+    ///     );
+    ///
+    /// assert_eq!(res, Ok(vec![1, 2, 3]));
+    /// ```
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let res = [Ok(1), Err("can't collect anymore"), Ok(3)]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .trying_results()
+    ///     );
+    ///
+    /// assert_eq!(res, Err("can't collect anymore"));
+    /// ```
+    ///
+    /// [`Output`]: ParallelCollectorBase::Output
+    #[inline]
+    fn trying_results<E>(self) -> TryingResults<Self, E>
+    where
+        Self: Sized,
+        E: Send,
+    {
+        assert_unindexed_par_collector_base(TryingResults::new(self))
     }
 
     /// Creates a parallel collector that restricts to the unindexed path only.
