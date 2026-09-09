@@ -4,7 +4,7 @@ use komadori::prelude::*;
 
 use crate::collector::plumbing::finish_boxed_impl;
 
-use super::{DefineLocal, NestLocalBase, SplittableLocal};
+use super::{DefineInner, NestLocalBase, SplittableInner};
 
 /// A parallel collector that uses a closure and local states
 /// to collect items in each serial reduction.
@@ -19,7 +19,7 @@ impl<C, L1, FL2, F> FoldLocal<C, L1, FL2, F> {
     pub(in crate::collector) fn new(collector: C, local1: L1, local2_f: FL2, f: F) -> Self {
         Self {
             collector,
-            splittable_local: FoldLocalSplittableInner {
+            splittable_inner: FoldLocalSplittableInner {
                 local1: Some(local1),
                 local2_f,
                 f,
@@ -45,32 +45,27 @@ mod private {
 }
 use private::*;
 
-struct Anchor<'a, L1, FL2, F> {
-    local1: L1,
-    local2_f: &'a FL2,
-    f: &'a F,
-}
-
-impl<'a, L1, FL2, L2, F> DefineLocal<'a> for FoldLocalSplittableInner<L1, FL2, F>
+impl<'a, L1, FL2, L2, F> DefineInner<'a> for FoldLocalSplittableInner<L1, FL2, F>
 where
     L1: Clone + Send,
     FL2: Fn() -> L2 + Sync,
     F: Sync,
 {
-    type Local = Inner<'a, L1, L2, F>;
+    type Inner = Inner<'a, L1, L2, F>;
 }
 
-impl<L1, FL2, L2, F> SplittableLocal for FoldLocalSplittableInner<L1, FL2, F>
+impl<L1, FL2, L2, F> SplittableInner for FoldLocalSplittableInner<L1, FL2, F>
 where
     L1: Clone + Send,
     FL2: Fn() -> L2 + Sync,
     F: Sync,
 {
     #[inline]
-    fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
-        Anchor {
-            local1: self.local1.as_ref().expect(TAKEN_ERR_MSG).clone(),
-            local2_f: &self.local2_f,
+    fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
+        let local1 = self.local1.clone().expect(TAKEN_ERR_MSG);
+        || Inner {
+            local1,
+            local2: (self.local2_f)(),
             f: &self.f,
         }
     }
@@ -78,50 +73,12 @@ where
     #[inline]
     fn take_anchor<'a>(
         &'a mut self,
-    ) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
-        Anchor {
-            local1: self.local1.take().expect(TAKEN_ERR_MSG),
-            local2_f: &self.local2_f,
-            f: &self.f,
-        }
-    }
-}
-
-impl<L1, FL2, F> Clone for Anchor<'_, L1, FL2, F>
-where
-    L1: Clone,
-{
-    #[inline]
-    fn clone(&self) -> Self {
-        Self {
-            local1: self.local1.clone(),
-            local2_f: self.local2_f,
-            f: self.f,
-        }
-    }
-
-    #[inline]
-    fn clone_from(&mut self, source: &Self) {
-        self.local1.clone_from(&source.local1);
-        self.local2_f = source.local2_f;
-        self.f = source.f;
-    }
-}
-
-impl<'a, L1, FL2, L2, F> super::Anchor for Anchor<'a, L1, FL2, F>
-where
-    L1: Clone + Send,
-    FL2: Fn() -> L2 + Sync,
-    F: Sync,
-{
-    type Inner = Inner<'a, L1, L2, F>;
-
-    #[inline]
-    fn into_inner(self) -> Self::Inner {
-        Inner {
-            local1: self.local1,
+    ) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
+        let local1 = self.local1.take().expect(TAKEN_ERR_MSG);
+        || Inner {
+            local1,
             local2: (self.local2_f)(),
-            f: self.f,
+            f: &self.f,
         }
     }
 }

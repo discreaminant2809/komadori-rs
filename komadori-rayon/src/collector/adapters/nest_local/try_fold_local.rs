@@ -5,7 +5,7 @@ use crate::{
     ops::{ChangeOutputType, Try},
 };
 
-use super::{DefineLocal, NestLocalBase, SplittableLocal};
+use super::{DefineInner, NestLocalBase, SplittableInner};
 
 /// A parallel collector that produces each item from each local reduction
 /// to feed into the underlying parallel collector, which an ability
@@ -21,7 +21,7 @@ impl<C, S, FF> TryFoldLocal<C, S, FF> {
     pub(in crate::collector) fn new(collector: C, shared_state: S, consumer: FF) -> Self {
         Self {
             collector,
-            splittable_local: TryFoldLocalSplittableInner {
+            splittable_inner: TryFoldLocalSplittableInner {
                 shared_state,
                 consumer: Some(consumer),
             },
@@ -67,77 +67,42 @@ mod private {
 }
 use private::*;
 
-struct Anchor<'a, S, FF> {
-    shared_state: &'a S,
-    consumer: FF,
-}
-
-impl<'a, S, A, Acc, FF, F> DefineLocal<'a> for TryFoldLocalSplittableInner<S, FF>
-where
-    S: Sync,
-    A: Try<Output = (Acc, F)>,
-    FF: FnOnce(&S) -> A + Clone + Send,
-{
-    type Local = Inner<'a, S, ChangeOutputType<A, Acc>, F>;
-}
-
-impl<S, A, Acc, FF, F> SplittableLocal for TryFoldLocalSplittableInner<S, FF>
-where
-    S: Sync,
-    A: Try<Output = (Acc, F)>,
-    FF: FnOnce(&S) -> A + Clone + Send,
-{
-    #[inline]
-    fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
-        Anchor {
-            shared_state: &self.shared_state,
-            consumer: self.consumer.clone().expect(CONSUMER_TAKEN_MSG),
-        }
-    }
-
-    #[inline]
-    fn take_anchor<'a>(
-        &'a mut self,
-    ) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
-        Anchor {
-            shared_state: &self.shared_state,
-            consumer: self.consumer.take().expect(CONSUMER_TAKEN_MSG),
-        }
-    }
-}
-
-impl<S, FF> Clone for Anchor<'_, S, FF>
-where
-    FF: Clone,
-{
-    #[inline]
-    fn clone(&self) -> Self {
-        Self {
-            shared_state: self.shared_state,
-            consumer: self.consumer.clone(),
-        }
-    }
-
-    #[inline]
-    fn clone_from(&mut self, source: &Self) {
-        self.shared_state = source.shared_state;
-        self.consumer.clone_from(&source.consumer);
-    }
-}
-
-impl<'a, S, A, Acc, FF, F> super::Anchor for Anchor<'a, S, FF>
+impl<'a, S, A, Acc, FF, F> DefineInner<'a> for TryFoldLocalSplittableInner<S, FF>
 where
     S: Sync,
     A: Try<Output = (Acc, F)>,
     FF: FnOnce(&S) -> A + Clone + Send,
 {
     type Inner = Inner<'a, S, ChangeOutputType<A, Acc>, F>;
+}
+
+impl<S, A, Acc, FF, F> SplittableInner for TryFoldLocalSplittableInner<S, FF>
+where
+    S: Sync,
+    A: Try<Output = (Acc, F)>,
+    FF: FnOnce(&S) -> A + Clone + Send,
+{
+    #[inline]
+    fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
+        let consumer = self.consumer.clone().expect(CONSUMER_TAKEN_MSG);
+        || match consumer(&self.shared_state).branch() {
+            ControlFlow::Continue((accum, f)) => Inner::Continue {
+                shared_state: &self.shared_state,
+                accum,
+                f,
+            },
+            ControlFlow::Break(residual) => Inner::Break(residual),
+        }
+    }
 
     #[inline]
-    fn into_inner(self) -> Self::Inner {
-        match (self.consumer)(self.shared_state).branch() {
+    fn take_anchor<'a>(
+        &'a mut self,
+    ) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
+        let consumer = self.consumer.take().expect(CONSUMER_TAKEN_MSG);
+        || match consumer(&self.shared_state).branch() {
             ControlFlow::Continue((accum, f)) => Inner::Continue {
-                shared_state: self.shared_state,
+                shared_state: &self.shared_state,
                 accum,
                 f,
             },

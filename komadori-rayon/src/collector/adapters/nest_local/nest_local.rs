@@ -1,6 +1,6 @@
 use komadori::prelude::*;
 
-use super::{DefineLocal, NestLocalBase, SplittableLocal};
+use super::{DefineInner, NestLocalBase, SplittableInner};
 
 /// A parallel collector that collects all the outputs
 /// from local collectors cloned to each serial reduction.
@@ -15,7 +15,7 @@ impl<C, I> NestLocal<C, I> {
     pub(in crate::collector) fn new(collector: C, inner: I) -> Self {
         Self {
             collector,
-            splittable_local: NestLocalSplittableInner {
+            splittable_inner: NestLocalSplittableInner {
                 collector: Some(inner),
             },
         }
@@ -35,14 +35,14 @@ struct Anchor<C> {
     collector: C,
 }
 
-impl<'a, C> DefineLocal<'a> for NestLocalSplittableInner<C>
+impl<'a, C> DefineInner<'a> for NestLocalSplittableInner<C>
 where
     C: CollectorBase + Clone + Send,
 {
-    type Local = C;
+    type Inner = C;
 }
 
-impl<C> SplittableLocal for NestLocalSplittableInner<C>
+impl<C> SplittableInner for NestLocalSplittableInner<C>
 where
     C: CollectorBase + Clone + Send,
 {
@@ -55,7 +55,7 @@ where
     }
 
     #[inline]
-    fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
+    fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
         Anchor {
             collector: self.collector.as_ref().expect(TAKEN_ERR_MSG).clone(),
         }
@@ -64,7 +64,7 @@ where
     #[inline]
     fn take_anchor<'a>(
         &'a mut self,
-    ) -> impl super::Anchor<Inner = <Self as DefineLocal<'a>>::Local> {
+    ) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
         Anchor {
             collector: self.collector.take().expect(TAKEN_ERR_MSG),
         }

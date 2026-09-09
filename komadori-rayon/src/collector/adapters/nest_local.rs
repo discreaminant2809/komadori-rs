@@ -31,7 +31,7 @@ mod inner {
     #[derive(Clone, Debug)]
     pub struct NestLocalBase<C, S> {
         pub(super) collector: C,
-        pub(super) splittable_local: S,
+        pub(super) splittable_inner: S,
     }
 }
 use inner::NestLocalBase;
@@ -40,29 +40,29 @@ impl<'a, C, S> DefineSerial<'a> for NestLocalBase<C, S>
 where
     C: DefineUnindexedSerial<
             'a,
-            UnindexedSerial: Collector<<<S as DefineLocal<'a>>::Local as CollectorBase>::Output>,
+            UnindexedSerial: Collector<<<S as DefineInner<'a>>::Inner as CollectorBase>::Output>,
         >,
-    S: DefineLocal<'a>,
+    S: DefineInner<'a>,
 {
-    type Serial = unique::Serial<'a, Self, consumer::Serial<C::UnindexedSerial, S::Local>>;
+    type Serial = unique::Serial<'a, Self, consumer::Serial<C::UnindexedSerial, S::Inner>>;
 }
 
 impl<'a, C, S> DefineUnindexedSerial<'a> for NestLocalBase<C, S>
 where
     C: DefineUnindexedSerial<
             'a,
-            UnindexedSerial: Collector<<<S as DefineLocal<'a>>::Local as CollectorBase>::Output>,
+            UnindexedSerial: Collector<<<S as DefineInner<'a>>::Inner as CollectorBase>::Output>,
         >,
-    S: DefineLocal<'a>,
+    S: DefineInner<'a>,
 {
     type UnindexedSerial =
-        unique_unindexed::Serial<'a, Self, consumer::Serial<C::UnindexedSerial, S::Local>>;
+        unique_unindexed::Serial<'a, Self, consumer::Serial<C::UnindexedSerial, S::Inner>>;
 }
 
 impl<C, S> ParallelCollectorBase for NestLocalBase<C, S>
 where
-    C: for<'a> UnindexedParallelCollector<<<S as DefineLocal<'a>>::Local as CollectorBase>::Output>,
-    S: SplittableLocal,
+    C: for<'a> UnindexedParallelCollector<<<S as DefineInner<'a>>::Inner as CollectorBase>::Output>,
+    S: SplittableInner,
 {
     type Output = C::Output;
 
@@ -73,7 +73,7 @@ where
 
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
-        if self.collector.max_afford(1) == 0 || self.splittable_local.max_afford(1) == 0 {
+        if self.collector.max_afford(1) == 0 || self.splittable_inner.max_afford(1) == 0 {
             0
         } else {
             request
@@ -89,7 +89,7 @@ where
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         unique::uniquify((
-            consumer::Consumer::new(consumer, self.splittable_local.anchor()),
+            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
             commit,
         ))
     }
@@ -103,7 +103,7 @@ where
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique::take_uniquify((
-            consumer::Consumer::new(consumer, self.splittable_local.anchor()),
+            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
             commit,
         ))
     }
@@ -111,8 +111,8 @@ where
 
 impl<C, S> UnindexedParallelCollectorBase for NestLocalBase<C, S>
 where
-    C: for<'a> UnindexedParallelCollector<<<S as DefineLocal<'a>>::Local as CollectorBase>::Output>,
-    S: SplittableLocal,
+    C: for<'a> UnindexedParallelCollector<<<S as DefineInner<'a>>::Inner as CollectorBase>::Output>,
+    S: SplittableInner,
 {
     fn parts_unindexed<'a>(
         &'a mut self,
@@ -125,7 +125,7 @@ where
     ) {
         let (consumer, commit) = self.collector.parts_unindexed();
         unique_unindexed::uniquify((
-            consumer::Consumer::new(consumer, self.splittable_local.anchor()),
+            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
             commit,
         ))
     }
@@ -141,7 +141,7 @@ where
     ) {
         let (consumer, commit) = self.collector.take_parts_unindexed();
         unique_unindexed::take_uniquify((
-            consumer::Consumer::new(consumer, self.splittable_local.anchor()),
+            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
             commit,
         ))
     }
