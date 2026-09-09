@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith,
-    ParallelCollectorBase, TakeAnyWhile, TryFoldLocal, TryingResults, UnindexedOnly,
+    ParallelCollectorBase, TakeAnyWhile, TryFoldLocal, TryingOptions, TryingResults, UnindexedOnly,
     assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
@@ -535,6 +535,58 @@ pub trait UnindexedParallelCollectorBase:
         F: FnMut(&S, &mut Acc, T) -> ChangeOutputType<A, ()>,
     {
         assert_unindexed_par_collector::<_, T>(TryFoldLocal::new(self, shared_state, consumer))
+    }
+
+    /// Creates a parallel collector that sets the [`Output`] to [`None`] when
+    /// a [`None`] item is encountered *anywhere*,
+    /// else the underlying collector collects the `item` inside
+    /// [`Some(item)`](Some).
+    ///
+    /// This is analogous to when you collect an iterator of [`Option<T>`]
+    /// to an `Option<Collection<T>>`.
+    ///
+    /// This adapter collects [`Option<T>`] if the
+    /// underlying paralllel collector collects `T`.
+    ///
+    /// [`Output`]: ParallelCollectorBase::Output
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let res = [Some(1), Some(2), Some(3)]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .trying_options()
+    ///     );
+    ///
+    /// assert_eq!(res, Some(vec![1, 2, 3]));
+    /// ```
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::prelude::*;
+    ///
+    /// let res = [Some(1), None, Some(3)]
+    ///     .into_par_iter()
+    ///     .feed_into(
+    ///         vec![]
+    ///             .into_par_collector()
+    ///             .trying_options()
+    ///     );
+    ///
+    /// assert_eq!(res, None);
+    /// ```
+    #[inline]
+    fn trying_options(self) -> TryingOptions<Self>
+    where
+        Self: Sized,
+    {
+        assert_unindexed_par_collector_base(TryingOptions::new(self))
     }
 
     /// Creates a parallel collector that sets the [`Output`] to [`Err(e)`](Err) when
