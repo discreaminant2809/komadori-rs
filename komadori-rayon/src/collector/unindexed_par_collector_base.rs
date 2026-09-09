@@ -448,22 +448,81 @@ pub trait UnindexedParallelCollectorBase:
         assert_unindexed_par_collector::<_, T>(FoldLocal::new(self, local1, local2_f, f))
     }
 
-    /// Creates a parallel collector that uses a closure and local states
-    /// to collect items in each local reduction, which an ability
+    /// Creates a parallel collector that produces each item from each local reduction
+    /// to feed into the underlying parallel collector, which an ability
     /// to stop early.
     ///
-    /// In one local reduction, if `f` or `init` returns a "failure" value,
-    /// that reduction will stop.
+    /// Components:
+    ///
+    /// - `shared_state` (`S`): States that will be shared between worker.
+    ///   Must be [`Sync`].
+    ///
+    /// - `consumer` (`FF`): Things happen inside the splitting process.
+    ///   Must implement [`Clone`] and [`Send`].
+    ///
+    ///   The function will be cloned when being split.
+    ///   When a worker decides to perform a reduction, the function will be called.
+    ///   If it returns a "break" value, the reduction stops immediately
+    ///   and the item of this reduction will be that "break" value.
+    ///   Otherwise, an initial state and a fold function will be returned,
+    ///   and the reduction progresses similarly to [`TryFold`] from `komadori`
+    ///   with the output being the item of this reduction.
+    ///
+    /// - Fold function (`F`): Created alongside with an initial state from `consumer`.
+    ///   No additional trait requirement.
+    ///
+    ///   Each incoming item will be called with this function to update the state,
+    ///   and return a "continue" value to continue folding or "break" value
+    ///   to stop early.
     ///
     /// As of now, the permitted types for `A` is [`Option`], [`Result`],
     /// and [`ControlFlow`].
     ///
+    /// [`TryFold`]: komadori::iter::TryFold
+    ///
     /// # Examples
     ///
-    /// *Coming soon!*
-    // TODO: Write an example after `.trying()`.
+    /// ```
+    /// use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, iter::ParReduce};
+    ///
+    /// fn collect_vec_while<T: Send>(
+    ///     mut pred: impl FnMut(&T) -> bool + Clone + Send,
+    /// ) -> impl UnindexedParallelCollector<T, Output = Vec<T>> {
+    ///     ParReduce::new(|v1, v2: Vec<_>| v1.extend(v2))
+    ///         .map_output(|v| v.unwrap_or(vec![]))
+    ///         .map(|res: Result<_, _>| res.unwrap_or_else(|v| v))
+    ///         .try_fold_local(AtomicBool::new(false), move |stopped| {
+    ///             if stopped.load(Relaxed) {
+    ///                 return Err(vec![]);
+    ///             }
+    ///
+    ///             Ok((
+    ///                 vec![],
+    ///                 move |stopped: &AtomicBool, chunk: &mut Vec<_>, item| {
+    ///                     if stopped.load(Relaxed) {
+    ///                         Err(std::mem::take(chunk))
+    ///                     } else if pred(&item) {
+    ///                         chunk.push(item);
+    ///                         Ok(())
+    ///                     } else {
+    ///                         stopped.store(true, Relaxed);
+    ///                         Err(std::mem::take(chunk))
+    ///                     }
+    ///                 },
+    ///             ))
+    ///         })
+    /// }
+    ///
+    /// let nums = [1, 2, 3, 4, 5]
+    ///     .into_par_iter()
+    ///     .feed_into(collect_vec_while(|&num| num > 0));
+    ///
+    /// assert_eq!(nums, [1, 2, 3, 4, 5]);
+    /// ```
     #[inline]
-    fn try_fold_local<S, A, Acc, FF, F, T, R>(
+    fn try_fold_local<S, A, Acc, FF, F, T>(
         self,
         shared_state: S,
         consumer: FF,

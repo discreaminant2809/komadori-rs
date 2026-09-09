@@ -7,8 +7,8 @@ use crate::{
 
 use super::{DefineLocal, NestLocalBase, SplittableLocal};
 
-/// A parallel collector that uses a closure and local states
-/// to collect items in each local reduction, which an ability
+/// A parallel collector that produces each item from each local reduction
+/// to feed into the underlying parallel collector, which an ability
 /// to stop early.
 ///
 /// This `struct` is created by
