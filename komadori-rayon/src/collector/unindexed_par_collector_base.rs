@@ -420,12 +420,14 @@ pub trait UnindexedParallelCollectorBase:
     ///             piece1.push(' ');
     ///             *piece1 += &piece2;
     ///         })
-    ///         .map(|(_, piece)| piece)
-    ///         .fold_local(true, String::new, |is_first, piece, word| {
-    ///             if !std::mem::replace(is_first, false) {
-    ///                 piece.push(' ');
-    ///             }
-    ///             *piece += word;
+    ///         .fold_local((), |_| {
+    ///             let mut is_first = true;
+    ///             (String::new(), move |_, piece, word| {
+    ///                 if !std::mem::replace(&mut is_first, false) {
+    ///                     piece.push(' ');
+    ///                 }
+    ///                 *piece += word;
+    ///             })
     ///         })
     ///         .map_output(Option::unwrap_or_default)
     ///     );
@@ -433,19 +435,14 @@ pub trait UnindexedParallelCollectorBase:
     /// assert_eq!(sentence, "there are a noble and a singer");
     /// ```
     #[inline]
-    fn fold_local<L1, FL2, L2, F, T>(
-        self,
-        local1: L1,
-        local2_f: FL2,
-        f: F,
-    ) -> FoldLocal<Self, L1, FL2, F>
+    fn fold_local<S, A, FF, F, T>(self, shared_state: S, consumer: FF) -> FoldLocal<Self, S, FF>
     where
-        Self: UnindexedParallelCollector<(L1, L2)> + Sized,
-        L1: Clone + Send,
-        FL2: Fn() -> L2 + Sync,
-        F: Fn(&mut L1, &mut L2, T) + Sync,
+        Self: UnindexedParallelCollector<A> + Sized,
+        S: Sync,
+        FF: FnOnce(&S) -> (A, F) + Clone + Send,
+        F: FnMut(&S, &mut A, T) + Sync,
     {
-        assert_unindexed_par_collector::<_, T>(FoldLocal::new(self, local1, local2_f, f))
+        assert_unindexed_par_collector::<_, T>(FoldLocal::new(self, shared_state, consumer))
     }
 
     /// Creates a parallel collector that produces each item from each local reduction

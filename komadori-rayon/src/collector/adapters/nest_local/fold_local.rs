@@ -13,16 +13,15 @@ use super::{DefineInner, NestLocalBase, SplittableInner};
 /// [`UnindexedParallelCollectorBase::fold_local()`](super::UnindexedParallelCollectorBase::fold_local).
 /// See its documentation for more.
 #[allow(private_interfaces)]
-pub type FoldLocal<C, L1, FL2, F> = NestLocalBase<C, FoldLocalSplittableInner<L1, FL2, F>>;
+pub type FoldLocal<C, S, FF> = NestLocalBase<C, FoldLocalSplittableInner<S, FF>>;
 
-impl<C, L1, FL2, F> FoldLocal<C, L1, FL2, F> {
-    pub(in crate::collector) fn new(collector: C, local1: L1, local2_f: FL2, f: F) -> Self {
+impl<C, S, FF> FoldLocal<C, S, FF> {
+    pub(in crate::collector) fn new(collector: C, shared_state: S, consumer: FF) -> Self {
         Self {
             collector,
             splittable_inner: FoldLocalSplittableInner {
-                local1: Some(local1),
-                local2_f,
-                f,
+                shared_state,
+                consumer: Some(consumer),
             },
         }
     }
@@ -30,43 +29,46 @@ impl<C, L1, FL2, F> FoldLocal<C, L1, FL2, F> {
 
 mod private {
     #[derive(Clone, Debug)]
-    pub struct FoldLocalSplittableInner<L1, FL2, F> {
-        pub(super) local1: Option<L1>,
-        pub(super) local2_f: FL2,
-        pub(super) f: F,
+    pub struct FoldLocalSplittableInner<S, FF> {
+        pub(super) shared_state: S,
+        pub(super) consumer: Option<FF>,
     }
 
-    #[allow(missing_debug_implementations)]
-    pub struct Inner<'a, L1, L2, F> {
-        pub(super) local1: L1,
-        pub(super) local2: L2,
-        pub(super) f: &'a F,
+    #[expect(missing_debug_implementations)]
+    pub struct Inner<'a, S, A, F> {
+        pub(super) shared_state: &'a S,
+        pub(super) accum: A,
+        pub(super) f: F,
     }
 }
 use private::*;
 
-impl<'a, L1, FL2, L2, F> DefineInner<'a> for FoldLocalSplittableInner<L1, FL2, F>
+impl<'a, S, A, FF, F> DefineInner<'a> for FoldLocalSplittableInner<S, FF>
 where
-    L1: Clone + Send,
-    FL2: Fn() -> L2 + Sync,
+    S: Sync,
+    FF: FnOnce(&S) -> (A, F) + Clone + Send,
     F: Sync,
 {
-    type Inner = Inner<'a, L1, L2, F>;
+    type Inner = Inner<'a, S, A, F>;
 }
 
-impl<L1, FL2, L2, F> SplittableInner for FoldLocalSplittableInner<L1, FL2, F>
+impl<S, A, FF, F> SplittableInner for FoldLocalSplittableInner<S, FF>
 where
-    L1: Clone + Send,
-    FL2: Fn() -> L2 + Sync,
+    S: Sync,
+    FF: FnOnce(&S) -> (A, F) + Clone + Send,
     F: Sync,
 {
     #[inline]
     fn anchor<'a>(&'a mut self) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
-        let local1 = self.local1.clone().expect(TAKEN_ERR_MSG);
-        || Inner {
-            local1,
-            local2: (self.local2_f)(),
-            f: &self.f,
+        let consumer = self.consumer.clone().expect(TAKEN_ERR_MSG);
+
+        || {
+            let (accum, f) = consumer(&self.shared_state);
+            Inner {
+                shared_state: &self.shared_state,
+                accum,
+                f,
+            }
         }
     }
 
@@ -74,35 +76,39 @@ where
     fn take_anchor<'a>(
         &'a mut self,
     ) -> impl super::Anchor<Inner = <Self as DefineInner<'a>>::Inner> {
-        let local1 = self.local1.take().expect(TAKEN_ERR_MSG);
-        || Inner {
-            local1,
-            local2: (self.local2_f)(),
-            f: &self.f,
+        let consumer = self.consumer.take().expect(TAKEN_ERR_MSG);
+
+        || {
+            let (accum, f) = consumer(&self.shared_state);
+            Inner {
+                shared_state: &self.shared_state,
+                accum,
+                f,
+            }
         }
     }
 }
 
-const TAKEN_ERR_MSG: &str = "local1 is already taken";
+const TAKEN_ERR_MSG: &str = "`consumer` is already taken";
 
-impl<L1, L2, F> CollectorBase for Inner<'_, L1, L2, F> {
-    type Output = (L1, L2);
+impl<S, A, F> CollectorBase for Inner<'_, S, A, F> {
+    type Output = A;
 
     #[inline]
     fn finish(self) -> Self::Output {
-        (self.local1, self.local2)
+        self.accum
     }
 
     finish_boxed_impl! {}
 }
 
-impl<L1, L2, F, T> Collector<T> for Inner<'_, L1, L2, F>
+impl<S, A, F, T> Collector<T> for Inner<'_, S, A, F>
 where
-    F: Fn(&mut L1, &mut L2, T),
+    F: FnMut(&S, &mut A, T),
 {
     #[inline]
     fn collect(&mut self, item: T) -> ControlFlow<()> {
-        (self.f)(&mut self.local1, &mut self.local2, item);
+        (self.f)(self.shared_state, &mut self.accum, item);
         ControlFlow::Continue(())
     }
 
@@ -110,19 +116,7 @@ where
     fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
         items
             .into_iter()
-            .for_each(|item| (self.f)(&mut self.local1, &mut self.local2, item));
+            .for_each(|item| (self.f)(self.shared_state, &mut self.accum, item));
         ControlFlow::Continue(())
-    }
-
-    #[inline]
-    fn collect_then_finish(mut self, items: impl IntoIterator<Item = T>) -> Self::Output {
-        items.into_iter().for_each({
-            let local1 = &mut self.local1;
-            let local2 = &mut self.local2;
-            let f = self.f;
-            move |item| f(local1, local2, item)
-        });
-
-        (self.local1, self.local2)
     }
 }
