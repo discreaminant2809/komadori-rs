@@ -9,7 +9,7 @@ use crate::{
         },
     },
     helpers::{unique, unique_unindexed},
-    ops::{BasicParClosure, DefineCallMut, ParallelFnMutBase, WithLocalParClosure},
+    ops::{AdvancedParClosure, BasicParClosure, DefineCallMut, ParallelFnMutBase},
 };
 
 // So that we can hide this struct while still be able to satisfy the compiler.
@@ -28,13 +28,13 @@ use inner::FilterMapBase;
 /// See its documentation for more.
 pub type FilterMap<C, P> = FilterMapBase<C, BasicParClosure<P>>;
 
-/// A parallel collector that uses a closure and a cloable state
+/// A parallel collector that uses a "consumer" and a shared state
 /// to both filters and maps each item before collecting.
 ///
 /// This `struct` is created by
 /// [`UnindexedParallelCollectorBase::filter_map_with()`].
 /// See its documentation for more.
-pub type FilterMapWith<C, L1, FL2, P> = FilterMapBase<C, WithLocalParClosure<L1, FL2, P>>;
+pub type FilterMapWith<C, S, FP> = FilterMapBase<C, AdvancedParClosure<S, FP>>;
 
 impl<C, P> FilterMap<C, P> {
     pub(in crate::collector) fn new(collector: C, pred: P) -> Self {
@@ -45,11 +45,11 @@ impl<C, P> FilterMap<C, P> {
     }
 }
 
-impl<C, L1, FL2, P> FilterMapWith<C, L1, FL2, P> {
-    pub(in crate::collector) fn new(collector: C, local1: L1, local2_f: FL2, pred: P) -> Self {
+impl<C, S, FP> FilterMapWith<C, S, FP> {
+    pub(in crate::collector) fn new(collector: C, shared_state: S, consumer: FP) -> Self {
         Self {
             collector,
-            pred: WithLocalParClosure::new(local1, local2_f, pred),
+            pred: AdvancedParClosure::new(shared_state, consumer),
         }
     }
 }

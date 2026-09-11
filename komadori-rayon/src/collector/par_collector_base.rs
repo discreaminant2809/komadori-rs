@@ -447,8 +447,10 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         assert_par_collector::<_, U>(Map::new(self, f))
     }
 
-    /// Same as [`map()`](Self::map), but with a state that will either be cloned
-    /// or created from a factory (or both) to each serial execution.
+    /// Same as [`map()`](Self::map), but with a shared state and a
+    /// clonable "consumer." Each leaf reduction receives a shared reference
+    /// to the shared state and a function created by the consumer
+    /// specifically for this leaf.
     ///
     /// This adapter collects `U`.
     ///
@@ -467,9 +469,9 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     ///     .feed_into(
     ///         vec![]
     ///             .into_par_collector()
-    ///             .map_with(
-    ///                 sender, String::new,
-    ///                 |sender, buf, num| {
+    ///             .map_with((), move |_| {
+    ///                 let mut buf = String::new();
+    ///                 move |_, num| {
     ///                     // I know, this is not an efficient way to
     ///                     // count the number of digits.
     ///                     // This is just an example.
@@ -479,8 +481,8 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     ///
     ///                     sender.send(num).unwrap();
     ///                     buf.len()
-    ///                 },
-    ///             ),
+    ///                 }
+    ///             }),
     ///     );
     ///
     /// let mut sum = receiver.iter().feed_into(0_u32.into_sum());
@@ -489,19 +491,14 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// assert_eq!(sum, 2_004_003_001);
     /// ```
     #[inline]
-    fn map_with<L1, FL2, L2, F, T, U>(
-        self,
-        local1: L1,
-        local2_f: FL2,
-        f: F,
-    ) -> MapWith<Self, L1, FL2, F>
+    fn map_with<S, FF, F, T, U>(self, shared_state: S, consumer: FF) -> MapWith<Self, S, FF>
     where
         Self: ParallelCollector<T> + Sized,
-        L1: Clone + Send,
-        FL2: Fn() -> L2 + Sync,
-        F: Fn(&mut L1, &mut L2, U) -> T + Sync,
+        S: Sync,
+        FF: FnOnce(&S) -> F + Clone + Send,
+        F: FnMut(&S, U) -> T,
     {
-        assert_par_collector::<_, U>(MapWith::new(self, local1, local2_f, f))
+        assert_par_collector::<_, U>(MapWith::new(self, shared_state, consumer))
     }
 
     /// Creates a parallel collector that transforms the final accumulated result.

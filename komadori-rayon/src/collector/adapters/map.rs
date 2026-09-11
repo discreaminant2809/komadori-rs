@@ -9,7 +9,7 @@ use crate::{
         },
     },
     helpers::{unique, unique_unindexed},
-    ops::{BasicParClosure, DefineCallMut, ParallelFnMutBase, WithLocalParClosure},
+    ops::{AdvancedParClosure, BasicParClosure, DefineCallMut, ParallelFnMutBase},
 };
 
 // So that we can hide this struct while still be able to satisfy the compiler.
@@ -23,20 +23,20 @@ mod inner {
 // `trying_results()` and similar collectors rely on this.
 pub(crate) use inner::MapBase;
 
-/// A parallel collector that uses a closure to determine whether
-/// an item should be accumulated.
+/// A parallel collector that uses a function
+/// to transform each collected item.
 ///
 /// This `struct` is created by [`ParallelCollectorBase::map()`].
 /// See its documentation for more.
 pub type Map<C, F> = MapBase<C, BasicParClosure<F>>;
 
-/// A parallel collector that uses a closure and a cloable state
-/// to determine whether an item should be accumulated.
+/// A parallel collector that uses a "consumer" and a shared state
+/// to transform each collected item.
 ///
 /// This `struct` is created by
 /// [`ParallelCollectorBase::map_with()`].
 /// See its documentation for more.
-pub type MapWith<C, L1, FL2, F> = MapBase<C, WithLocalParClosure<L1, FL2, F>>;
+pub type MapWith<C, S, FF> = MapBase<C, AdvancedParClosure<S, FF>>;
 
 impl<C, F> MapBase<C, F> {
     pub(crate) fn new_base(collector: C, f: F) -> Self {
@@ -53,11 +53,11 @@ impl<C, F> Map<C, F> {
     }
 }
 
-impl<C, L1, FL2, F> MapWith<C, L1, FL2, F> {
-    pub(in crate::collector) fn new(collector: C, local1: L1, local2_f: FL2, f: F) -> Self {
+impl<C, S, FF> MapWith<C, S, FF> {
+    pub(in crate::collector) fn new(collector: C, shared_state: S, consumer: FF) -> Self {
         Self {
             collector,
-            f: WithLocalParClosure::new(local1, local2_f, f),
+            f: AdvancedParClosure::new(shared_state, consumer),
         }
     }
 }

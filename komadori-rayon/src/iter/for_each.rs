@@ -9,7 +9,7 @@ use crate::{
         },
     },
     helpers::{unique, unique_unindexed},
-    ops::{BasicParClosure, DefineCallMut, ParallelFnMutBase, WithLocalParClosure},
+    ops::{AdvancedParClosure, BasicParClosure, DefineCallMut, ParallelFnMutBase},
 };
 
 mod private {
@@ -20,7 +20,7 @@ mod private {
 }
 use private::ParForEachBase;
 
-/// A parallel collector that calls a provided closure for each collected item.
+/// A parallel collector that calls a provided function for each collected item.
 ///
 /// This parallel collector corresponds to [`Iterator::for_each()`].
 ///
@@ -43,39 +43,46 @@ use private::ParForEachBase;
 /// ```
 pub type ParForEach<F> = ParForEachBase<BasicParClosure<F>>;
 
-/// Same as [`ParForEach`], but with a state that will either be cloned
-/// or created from a factory (or both) to each serial execution.
-///
-// We can't link to `ParForEach::with` directly due to false
-// `#[warn(rustdoc::private_intra_doc_links)]`.
-/// This `struct` is created by [`ParForEach::with()`](ParForEach).
+/// Same as [`ParForEach`], but with a shared state and a
+/// clonable "consumer." Each leaf reduction receives a shared reference
+/// to the shared state and a function created by the consumer
+/// specifically for this leaf.
 ///
 /// # Examples
 ///
 /// ```
 /// use rayon::prelude::*;
-/// use komadori_rayon::{prelude::*, iter::ParForEach};
+/// use komadori_rayon::{prelude::*, iter::ParForEachWith};
 /// use komadori::prelude::*;
 /// use std::sync::mpsc::channel;
 ///
 /// let (sender, receiver) = channel();
 ///
-/// (1..=5)
+/// [1, 22, 20, 4444]
 ///     .into_par_iter()
-///     .feed_into(ParForEach::with(
-///         sender, || {},
-///         |sender, _, i| sender.send(i).unwrap(),
-///     ));
+///     .feed_into(ParForEachWith::new((), move |_| {
+///         let mut buf = String::new();
+///         move |_, num| {
+///             // I know, this is not an efficient way to
+///             // count the number of digits.
+///             // This is just an example.
+///             buf.clear();
+///             use std::fmt::Write;
+///             write!(buf, "{num}");
+///
+///             sender.send(buf.len()).unwrap();
+///         }
+///     }));
 ///
 /// let mut nums = receiver.iter().feed_into(vec![]);
 /// nums.sort_unstable();
 ///
-/// assert_eq!(nums, [1, 2, 3, 4, 5]);
+/// assert_eq!(nums, [1, 2, 2, 4]);
 /// ```
-pub type ParForEachWith<L1, FL2, F> = ParForEachBase<WithLocalParClosure<L1, FL2, F>>;
+pub type ParForEachWith<S, FF> = ParForEachBase<AdvancedParClosure<S, FF>>;
 
 impl<F> ParForEach<F> {
-    /// Creates a new instance of this collector with a closure.
+    /// Creates a new instance of this collector with a function.
     ///
     /// This parallel collector collects `T`.
     #[inline]
@@ -87,20 +94,22 @@ impl<F> ParForEach<F> {
             f: BasicParClosure::new(f),
         })
     }
+}
 
-    /// Creates a new instance of this collector with
-    /// a state to be cloned, a factory of another state, and a closure.
+impl<S, FF> ParForEachWith<S, FF> {
+    /// Creates a new instance of this collector with a "consumer"
+    /// and a shared state.
     ///
     /// This parallel collector collects `T`.
     #[inline]
-    pub fn with<L1, FL2, L2, T>(local1: L1, local2_f: FL2, f: F) -> ParForEachWith<L1, FL2, F>
+    pub fn new<F, T>(shared_state: S, consumer: FF) -> Self
     where
-        L1: Clone + Send,
-        FL2: Fn() -> L2 + Sync,
-        F: Fn(&mut L1, &mut L2, T) + Sync,
+        S: Sync,
+        FF: FnOnce(&S) -> F + Clone + Send,
+        F: FnMut(&S, T),
     {
-        assert_unindexed_par_collector::<_, T>(ParForEachBase {
-            f: WithLocalParClosure::new(local1, local2_f, f),
+        assert_unindexed_par_collector::<_, T>(Self {
+            f: AdvancedParClosure::new(shared_state, consumer),
         })
     }
 }

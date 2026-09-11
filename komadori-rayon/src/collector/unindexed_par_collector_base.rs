@@ -113,8 +113,10 @@ pub trait UnindexedParallelCollectorBase:
         assert_unindexed_par_collector::<_, T>(Filter::new(self, pred))
     }
 
-    /// Same as [`filter()`](Self::filter), but with a state that will either be cloned
-    /// or created from a factory (or both) to each serial execution.
+    /// Same as [`filter()`](Self::filter), but with a shared state and a
+    /// clonable "consumer." Each leaf reduction receives a shared reference
+    /// to the shared state and a predicate created by the consumer
+    /// specifically for this leaf.
     ///
     /// This adapter collects `T`.
     ///
@@ -133,9 +135,9 @@ pub trait UnindexedParallelCollectorBase:
     ///     .feed_into(
     ///         vec![]
     ///             .into_par_collector()
-    ///             .filter_with(
-    ///                 sender, String::new,
-    ///                 |sender, buf, &num| {
+    ///             .filter_with((), move |_| {
+    ///                 let mut buf = String::new();
+    ///                 move |_, &num| {
     ///                     // I know, this is not an efficient way to
     ///                     // count the number of digits.
     ///                     // This is just an example.
@@ -149,8 +151,8 @@ pub trait UnindexedParallelCollectorBase:
     ///                         sender.send(num).unwrap();
     ///                         false
     ///                     }
-    ///                 },
-    ///             ),
+    ///                 }
+    ///             }),
     ///     );
     ///
     /// let mut smalls = receiver.iter().feed_into(vec![]);
@@ -160,19 +162,14 @@ pub trait UnindexedParallelCollectorBase:
     /// assert_eq!(smalls, [1, 300]);
     /// ```
     #[inline]
-    fn filter_with<L1, FL2, L2, P, T>(
-        self,
-        local1: L1,
-        local2_f: FL2,
-        pred: P,
-    ) -> FilterWith<Self, L1, FL2, P>
+    fn filter_with<S, FP, P, T>(self, shared_state: S, consumer: FP) -> FilterWith<Self, S, FP>
     where
         Self: UnindexedParallelCollector<T> + Sized,
-        L1: Clone + Send,
-        FL2: Fn() -> L2 + Sync,
-        P: Fn(&mut L1, &mut L2, &T) -> bool + Sync,
+        S: Sync,
+        FP: FnOnce(&S) -> P + Clone + Send,
+        P: FnMut(&S, &T) -> bool,
     {
-        assert_unindexed_par_collector::<_, T>(FilterWith::new(self, local1, local2_f, pred))
+        assert_unindexed_par_collector::<_, T>(FilterWith::new(self, shared_state, consumer))
     }
 
     /// A parallel collector that both filters and maps each item before collecting.
@@ -216,8 +213,10 @@ pub trait UnindexedParallelCollectorBase:
         assert_unindexed_par_collector::<_, T>(FilterMap::new(self, pred))
     }
 
-    /// Same as [`filter_map()`](Self::filter_map), but with a state that will either be cloned
-    /// or created from a factory (or both) to each serial execution.
+    /// Same as [`filter_map()`](Self::filter_map), but with a shared state and a
+    /// clonable "consumer." Each leaf reduction receives a shared reference
+    /// to the shared state and a predicate created by the consumer
+    /// specifically for this leaf.
     ///
     /// This adapter collects `T`.
     ///
@@ -236,16 +235,15 @@ pub trait UnindexedParallelCollectorBase:
     ///     .feed_into(
     ///         vec![]
     ///             .into_par_collector()
-    ///             .filter_map_with(
-    ///                 sender, || {},
-    ///                 |sender, _, s: &str| match s.parse::<i32>() {
+    ///             .filter_map_with((), move |_| move |_, s: &str| {
+    ///                 match s.parse::<i32>() {
     ///                     Ok(num) => Some(num),
     ///                     Err(_) => {
     ///                         sender.send(s);
     ///                         None
     ///                     }
-    ///                 },
-    ///             )
+    ///                 }
+    ///             })
     ///     );
     ///
     /// let mut nans = receiver.iter().feed_into(vec![]);
@@ -254,19 +252,18 @@ pub trait UnindexedParallelCollectorBase:
     /// assert_eq!(nans, ["three"]);
     /// ```
     #[inline]
-    fn filter_map_with<L1, FL2, L2, P, T, R>(
+    fn filter_map_with<S, FP, P, T, R>(
         self,
-        local1: L1,
-        local2_f: FL2,
-        pred: P,
-    ) -> FilterMapWith<Self, L1, FL2, P>
+        shared_state: S,
+        consumer: FP,
+    ) -> FilterMapWith<Self, S, FP>
     where
         Self: UnindexedParallelCollector<R> + Sized,
-        L1: Clone + Send,
-        FL2: Fn() -> L2 + Sync,
-        P: Fn(&mut L1, &mut L2, T) -> Option<R> + Sync,
+        S: Sync,
+        FP: FnOnce(&S) -> P + Clone + Send,
+        P: FnMut(&S, T) -> Option<R>,
     {
-        assert_unindexed_par_collector::<_, T>(FilterMapWith::new(self, local1, local2_f, pred))
+        assert_unindexed_par_collector::<_, T>(FilterMapWith::new(self, shared_state, consumer))
     }
 
     /// Creates a parallel collector that accumulates items until it encounters
