@@ -352,47 +352,26 @@ pub trait UnindexedParallelCollectorBase:
     ///
     /// ```
     /// use rayon::prelude::*;
-    /// use komadori::prelude::*;
     /// use komadori_rayon::{prelude::*, iter::ParReduce};
-    /// use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
     ///
     /// let nums = (1..=5)
     ///     .into_par_iter()
     ///     .feed_into(
-    ///         // A rough recreation of `take_any_while()`!
-    ///         ParReduce::new(|v1, mut v2: Vec<_>| v1.append(&mut v2))
-    ///             .nest_local_with(Arc::new(AtomicBool::new(false)), |stopped| {
-    ///                 vec![]
-    ///                     .into_collector()
-    ///                     .take_while(move |&num| {
-    ///                         if stopped.load(Ordering::Relaxed) {
-    ///                             false
-    ///                         } else if num <= 3 {
-    ///                             true
-    ///                         } else {
-    ///                             stopped.store(true, Ordering::Relaxed);
-    ///                             false
-    ///                         }
-    ///                     })
-    ///             })
-    ///             .map_output(Option::unwrap_or_default)
+    ///         ParReduce::new(|v1, v2: Vec<_>| v1.extend(v2))
+    ///             .nest_local_with((), |_| vec![])
     ///     );
     ///
-    /// // Honestly we can't guarantee anything other than
-    /// // every number must be less than or equal to 3
-    /// for num in nums {
-    ///     assert!(num <= 3, "{num} is greater than 3");
-    /// }
+    /// assert_eq!(nums, Some(vec![1, 2, 3, 4, 5]));
     /// ```
     #[inline]
-    fn nest_local_with<L, F, C>(self, local: L, inner_f: F) -> NestLocalWith<Self, L, F>
+    fn nest_local_with<S, F, C>(self, shared_state: S, consumer: F) -> NestLocalWith<Self, S, F>
     where
         Self: UnindexedParallelCollector<C::Output> + Sized,
-        L: Clone + Send,
-        F: Fn(L) -> C + Sync,
+        S: Sync,
+        F: FnOnce(&S) -> C + Clone + Send,
         C: IntoCollectorBase,
     {
-        assert_unindexed_par_collector_base(NestLocalWith::new(self, local, inner_f))
+        assert_unindexed_par_collector_base(NestLocalWith::new(self, shared_state, consumer))
     }
 
     /// Creates a parallel collector that uses a closure and local states
