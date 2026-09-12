@@ -8,6 +8,8 @@
 - `crate::iter::ParLast`.
 - `crate::iter::ParAny`.
 - `crate::iter::ParForEachWith::new()`.
+- `crate::ops::ParAnd`.
+- `crate::ops::ParOr`.
 - `UnindexedParallelCollectorBase::try_fold_local()`.
 - `UnindexedParallelCollectorBase::trying_options()`.
 - `UnindexedParallelCollectorBase::trying_results()`.
