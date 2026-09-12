@@ -164,7 +164,7 @@ impl<F> UnindexedParallelCollectorBase for ParForEachBase<F>
 where
     F: ParallelFnMutBase,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -178,7 +178,7 @@ where
         }))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<

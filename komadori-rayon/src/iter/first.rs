@@ -185,7 +185,7 @@ impl<T> UnindexedParallelCollectorBase for ParFirst<T>
 where
     T: Send,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<

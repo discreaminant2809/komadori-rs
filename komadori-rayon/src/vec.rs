@@ -148,7 +148,7 @@ impl<T> UnindexedParallelCollectorBase for IntoParCollector<T>
 where
     T: Send,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -243,7 +243,7 @@ impl<'v, T> UnindexedParallelCollectorBase for ParCollectorMut<'v, T>
 where
     T: Send,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -427,7 +427,7 @@ mod miri_tests {
     #[test]
     fn serial_cell_opt_ref_mut_is_sound() {
         let mut collector = vec![1, 2, 3].into_par_collector();
-        let (consumer, commit) = collector.take_parts_unindexed();
+        let (consumer, commit) = collector.take_unindexed_parts();
 
         let right_consumer = consumer;
         let left_consumer = right_consumer.split_off_left();

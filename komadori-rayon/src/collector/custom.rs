@@ -333,7 +333,7 @@ where
     IF: FnMut(&mut S) -> I,
     IC: FnMut(&mut S, I::Output),
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -350,7 +350,7 @@ where
         let indexed = self
             .indexed
             .insert((self.indexed_f)(&mut self.state).into_par_collector());
-        let (consumer, commit) = indexed.take_parts_unindexed();
+        let (consumer, commit) = indexed.take_unindexed_parts();
 
         unique_unindexed::uniquify((consumer, |output| {
             commit(output);
@@ -362,7 +362,7 @@ where
         }))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -378,7 +378,7 @@ where
             .indexed
             .insert((self.indexed_f)(&mut self.state).into_par_collector());
 
-        unique_unindexed::take_uniquify(indexed.take_parts_unindexed())
+        unique_unindexed::take_uniquify(indexed.take_unindexed_parts())
     }
 }
 
@@ -482,7 +482,7 @@ where
     UF: FnMut(&mut S) -> U,
     UC: FnMut(&mut S, U::Output),
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -499,7 +499,7 @@ where
         let unindexed = self
             .unindexed
             .insert((self.unindexed_f)(&mut self.state).into_par_collector());
-        let (consumer, commit) = unindexed.take_parts_unindexed();
+        let (consumer, commit) = unindexed.take_unindexed_parts();
 
         unique_unindexed::uniquify((consumer, |output| {
             commit(output);
@@ -511,7 +511,7 @@ where
         }))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -527,6 +527,6 @@ where
             .unindexed
             .insert((self.unindexed_f)(&mut self.state).into_par_collector());
 
-        unique_unindexed::take_uniquify(unindexed.take_parts_unindexed())
+        unique_unindexed::take_uniquify(unindexed.take_unindexed_parts())
     }
 }

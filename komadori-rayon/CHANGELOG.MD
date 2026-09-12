@@ -28,6 +28,10 @@
 - API surface of `UnindexedParallelCollectorBase::filter_with()`.
 - API surface of `UnindexedParallelCollectorBase::filter_map_with()`.
 - API surface of `crate::iter::ParForEachWith`.
+- Renamed `UnindexedParallelCollectorBase::parts_unindexed()`
+  to `UnindexedParallelCollectorBase::unindexed_parts()`.
+- Renamed `UnindexedParallelCollectorBase::take_parts_unindexed()`
+  to `UnindexedParallelCollectorBase::take_unindexed_parts()`.
 
 ### Fixed
 

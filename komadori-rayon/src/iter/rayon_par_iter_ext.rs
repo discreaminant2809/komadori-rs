@@ -44,7 +44,7 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
         match self.opt_len() {
             None if collector.max_afford(1) == 0 => collector.finish(),
             None => {
-                let (consumer, commit) = collector.take_parts_unindexed();
+                let (consumer, commit) = collector.take_unindexed_parts();
                 commit(unindexed_slow_path(self, consumer));
                 collector.finish()
             }

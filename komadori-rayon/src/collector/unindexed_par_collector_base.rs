@@ -23,7 +23,7 @@ pub trait UnindexedParallelCollectorBase:
 {
     /// Prepares a space to accept *any* amount of items landing on anywhere,
     /// and returns "parts" needed to drive this parallel collector.
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -54,7 +54,7 @@ pub trait UnindexedParallelCollectorBase:
     /// The signature is similar to [`parts_unindexed()`](Self::parts_unindexed),
     /// except the returning function which does not return
     /// a [`ControlFlow`].
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -63,7 +63,7 @@ pub trait UnindexedParallelCollectorBase:
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
-        let (consumer, commit) = self.parts_unindexed();
+        let (consumer, commit) = self.unindexed_parts();
         (consumer, |output| {
             let _ = commit(output);
         })

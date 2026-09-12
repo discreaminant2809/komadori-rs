@@ -65,7 +65,7 @@ where
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        unique::uniquify(self.collector.parts_unindexed())
+        unique::uniquify(self.collector.unindexed_parts())
     }
 
     fn take_parts<'a>(
@@ -78,7 +78,7 @@ where
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output),
     ) {
-        unique::take_uniquify(self.collector.take_parts_unindexed())
+        unique::take_uniquify(self.collector.take_unindexed_parts())
     }
 }
 
@@ -86,7 +86,7 @@ impl<C> UnindexedParallelCollectorBase for UnindexedOnly<C>
 where
     C: UnindexedParallelCollectorBase,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -97,10 +97,10 @@ where
             <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ){
-        unique_unindexed::uniquify(self.collector.parts_unindexed())
+        unique_unindexed::uniquify(self.collector.unindexed_parts())
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -109,6 +109,6 @@ where
         >,
         impl FnOnce(<<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output),
     ){
-        unique_unindexed::take_uniquify(self.collector.take_parts_unindexed())
+        unique_unindexed::take_uniquify(self.collector.take_unindexed_parts())
     }
 }

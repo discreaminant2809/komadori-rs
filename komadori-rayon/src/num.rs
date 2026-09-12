@@ -125,7 +125,7 @@ macro_rules! prim_sum_impl {
         }
 
         impl UnindexedParallelCollectorBase for IntoParSum<$PrimTy> {
-            fn parts_unindexed<'a>(
+            fn unindexed_parts<'a>(
                 &'a mut self,
             ) -> (
                 impl UnindexedConsumer<
@@ -196,7 +196,7 @@ macro_rules! prim_product_impl {
         }
 
         impl UnindexedParallelCollectorBase for IntoParProduct<$PrimTy> {
-            fn parts_unindexed<'a>(
+            fn unindexed_parts<'a>(
                 &'a mut self,
             ) -> (
                 impl UnindexedConsumer<

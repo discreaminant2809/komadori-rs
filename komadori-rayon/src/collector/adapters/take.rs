@@ -128,7 +128,7 @@ impl<C> UnindexedParallelCollectorBase for Take<C>
 where
     C: UnindexedParallelCollectorBase,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -137,7 +137,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.collector.parts_unindexed();
+        let (consumer, commit) = self.collector.unindexed_parts();
         unique_unindexed::uniquify((
             unindexed::Consumer::new(consumer, &self.remaining),
             |output| {
@@ -151,7 +151,7 @@ where
         ))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -160,7 +160,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
-        let (consumer, commit) = self.collector.take_parts_unindexed();
+        let (consumer, commit) = self.collector.take_unindexed_parts();
         unique_unindexed::take_uniquify((
             unindexed::Consumer::new(consumer, &self.remaining),
             commit,

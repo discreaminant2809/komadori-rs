@@ -123,7 +123,7 @@ where
     T: Send,
     F: Fn(&mut T, T) + Sync,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<

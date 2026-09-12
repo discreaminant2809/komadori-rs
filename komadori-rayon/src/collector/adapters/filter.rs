@@ -108,7 +108,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.collector.parts_unindexed();
+        let (consumer, commit) = self.collector.unindexed_parts();
         unique::uniquify((
             consumer::Consumer::new(consumer, self.pred.callable_mut()),
             commit,
@@ -123,7 +123,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
-        let (consumer, commit) = self.collector.take_parts_unindexed();
+        let (consumer, commit) = self.collector.take_unindexed_parts();
         unique::take_uniquify((
             consumer::Consumer::new(consumer, self.pred.take_callable_mut()),
             commit,
@@ -136,7 +136,7 @@ where
     C: UnindexedParallelCollectorBase,
     P: ParallelFnMutBase,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -145,14 +145,14 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.collector.parts_unindexed();
+        let (consumer, commit) = self.collector.unindexed_parts();
         unique_unindexed::uniquify((
             consumer::Consumer::new(consumer, self.pred.callable_mut()),
             commit,
         ))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -161,7 +161,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
-        let (consumer, commit) = self.collector.take_parts_unindexed();
+        let (consumer, commit) = self.collector.take_unindexed_parts();
         unique_unindexed::take_uniquify((
             consumer::Consumer::new(consumer, self.pred.take_callable_mut()),
             commit,

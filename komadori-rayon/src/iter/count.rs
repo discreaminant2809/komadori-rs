@@ -77,7 +77,7 @@ impl<'this> DefineUnindexedSerial<'this> for ParCount {
 }
 
 impl UnindexedParallelCollectorBase for ParCount {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<

@@ -124,7 +124,7 @@ impl<T> UnindexedParallelCollectorBase for IntoParCollector<T>
 where
     T: Send,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -186,7 +186,7 @@ impl<'c, T> UnindexedParallelCollectorBase for ParCollectorMut<'c, T>
 where
     T: Send,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<

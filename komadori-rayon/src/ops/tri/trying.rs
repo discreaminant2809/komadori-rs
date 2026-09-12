@@ -125,7 +125,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        self.parts_unindexed()
+        self.unindexed_parts()
     }
 
     fn take_parts<'a>(
@@ -135,7 +135,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
-        self.take_parts_unindexed()
+        self.take_unindexed_parts()
     }
 }
 
@@ -143,7 +143,7 @@ impl<C> UnindexedParallelCollectorBase for ParTrying<C>
 where
     C: Try<Output: UnindexedParallelCollectorBase, Residual: Send>,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -158,7 +158,7 @@ where
                 committer(&mut self.residual, None),
             )
         } else if let Some(collector) = &mut self.collector {
-            let (consumer, commit) = collector.parts_unindexed();
+            let (consumer, commit) = collector.unindexed_parts();
             let stopped = self.stopped.write(AtomicBool::new(false));
 
             (
@@ -170,7 +170,7 @@ where
         }
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -185,7 +185,7 @@ where
                 take_committer(&mut self.residual, None),
             )
         } else if let Some(collector) = &mut self.collector {
-            let (consumer, commit) = collector.take_parts_unindexed();
+            let (consumer, commit) = collector.take_unindexed_parts();
             let stopped = self.stopped.write(AtomicBool::new(false));
 
             (

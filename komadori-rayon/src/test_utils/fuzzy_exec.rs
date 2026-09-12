@@ -129,7 +129,7 @@ where
         starting_ma,
     )?;
 
-    let (consumer, commit) = collector.parts_unindexed();
+    let (consumer, commit) = collector.unindexed_parts();
     let output = pool.bridge_unindexed(iter.take_producer(), consumer, split_decision)?;
     assert_ending_cf(commit(output), raw_cf(ending), METHOD_NAME)?;
 
@@ -177,7 +177,7 @@ where
         starting_ma,
     )?;
 
-    let (consumer, commit) = collector.take_parts_unindexed();
+    let (consumer, commit) = collector.take_unindexed_parts();
     let output = pool.bridge_unindexed(iter.take_producer(), consumer, split_decision)?;
     commit(output);
 

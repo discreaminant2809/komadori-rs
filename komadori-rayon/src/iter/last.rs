@@ -188,7 +188,7 @@ impl<T> UnindexedParallelCollectorBase for ParLast<T>
 where
     T: Send,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<

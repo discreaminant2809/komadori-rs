@@ -92,7 +92,7 @@ impl<C> UnindexedParallelCollectorBase for &mut C
 where
     C: UnindexedParallelCollectorBase + ?Sized,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -101,10 +101,10 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify(C::parts_unindexed(self))
+        unique_unindexed::uniquify(C::unindexed_parts(self))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -115,7 +115,7 @@ where
     ) {
         // Explicitly override it to strengthen the invariant in the doc,
         // and to shield from the change in the default implementation.
-        let (consumer, commit) = C::parts_unindexed(self);
+        let (consumer, commit) = C::unindexed_parts(self);
         unique_unindexed::take_uniquify((consumer, |output| {
             let _ = commit(output);
         }))

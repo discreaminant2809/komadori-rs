@@ -183,7 +183,7 @@ where
     C2: UnindexedParallelCollectorBase,
     TF: Clone + Send,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -192,8 +192,8 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        let (consumer1, commit1) = self.collector1.parts_unindexed();
-        let (consumer2, commit2) = self.collector2.parts_unindexed();
+        let (consumer1, commit1) = self.collector1.unindexed_parts();
+        let (consumer2, commit2) = self.collector2.unindexed_parts();
 
         unique_unindexed::uniquify((
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),
@@ -201,7 +201,7 @@ where
         ))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -210,8 +210,8 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
-        let (consumer1, commit1) = self.collector1.take_parts_unindexed();
-        let (consumer2, commit2) = self.collector2.take_parts_unindexed();
+        let (consumer1, commit1) = self.collector1.take_unindexed_parts();
+        let (consumer2, commit2) = self.collector2.take_unindexed_parts();
 
         unique_unindexed::take_uniquify((
             consumer::Consumer::new(consumer1, consumer2, self.teer.clone()),

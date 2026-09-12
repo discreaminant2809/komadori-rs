@@ -111,7 +111,7 @@ impl<C> UnindexedParallelCollectorBase for Fuse<C>
 where
     C: UnindexedParallelCollectorBase,
 {
-    fn parts_unindexed<'a>(
+    fn unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -120,13 +120,13 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        let (consumer, commit) = self.collector.parts_unindexed();
+        let (consumer, commit) = self.collector.unindexed_parts();
         unique_unindexed::uniquify((consumer::Consumer::new(consumer, self.stopped), |output| {
             set_stopped_and_ret_bh(&mut self.stopped, commit(output))
         }))
     }
 
-    fn take_parts_unindexed<'a>(
+    fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
         impl UnindexedConsumer<
@@ -135,7 +135,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
-        let (consumer, commit) = self.collector.take_parts_unindexed();
+        let (consumer, commit) = self.collector.take_unindexed_parts();
         unique_unindexed::take_uniquify((consumer::Consumer::new(consumer, self.stopped), commit))
     }
 }
