@@ -10,6 +10,7 @@
 - `crate::iter::ParForEachWith::new()`.
 - `crate::ops::ParAnd`.
 - `crate::ops::ParOr`.
+- `crate::tuple::IntoParCollector`.
 - `UnindexedParallelCollectorBase::try_fold_local()`.
 - `UnindexedParallelCollectorBase::trying_options()`.
 - `UnindexedParallelCollectorBase::trying_results()`.

@@ -161,7 +161,7 @@ pub(crate) mod reference;
 pub mod slice;
 #[cfg(test)]
 mod test_utils;
-mod tuple;
+pub mod tuple;
 pub mod unit;
 pub mod vec;
 

@@ -1,6 +1,7 @@
 use crate::tuple::Tuple;
 
 /// [`FnOnce`], but can be a concrete type.
+#[expect(private_bounds)]
 pub trait CallOnce<Args: Tuple> {
     type Output;
 
@@ -8,11 +9,13 @@ pub trait CallOnce<Args: Tuple> {
 }
 
 /// [`FnMut`], but can be a concrete type.
+#[expect(private_bounds)]
 pub trait CallMut<Args: Tuple>: CallOnce<Args> {
     fn call_mut(&mut self, args: Args) -> Self::Output;
 }
 
 /// [`Fn`], but can be a concrete type.
+#[expect(private_bounds)]
 pub trait Call<Args: Tuple>: CallMut<Args> {
     fn call(&self, args: Args) -> Self::Output;
 }

@@ -1,9 +1,15 @@
+//! Parallel collectors for tuples.
+
+mod into_collector;
+
+pub use into_collector::*;
+
 /// Tuples
-pub trait Tuple {}
+pub(crate) trait Tuple {}
 
 #[allow(dead_code)] // FIXME: will be used in `nest_serial`
 /// Tuples that can append one more type at the start.
-pub trait PushFrontTuple: Tuple {
+pub(crate) trait PushFrontTuple: Tuple {
     type PushFront<T>: Tuple;
 
     fn push_front<T>(self, item: T) -> Self::PushFront<T>;
