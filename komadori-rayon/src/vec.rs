@@ -158,7 +158,7 @@ where
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(&mut self.0), |output| {
-            debug_assert!(output.is_left_most());
+            output.finalize();
             ControlFlow::Continue(())
         }))
     }
@@ -253,7 +253,7 @@ where
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((linked_vec::Consumer::new(self.0), |output| {
-            debug_assert!(output.is_left_most());
+            output.finalize();
             ControlFlow::Continue(())
         }))
     }

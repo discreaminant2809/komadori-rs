@@ -60,12 +60,87 @@ pub enum Serial<'a, C, T> {
     Right(Vec<T>),
 }
 
-pub enum Output<'a, C, T> {
-    LeftMost(&'a mut C),
-    Right {
+pub struct Output<'a, C, T> {
+    collection: Option<&'a mut C>,
+    // We won't be pushing chunks into the collections yet
+    // since it may incur so much reallocations.
+    // We save this job in the committer.
+    chunks: Chunks<T>,
+}
+
+enum Chunks<T> {
+    Single(Vec<T>),
+    Plural {
         chunks: LinkedList<Vec<T>>,
         len: usize,
     },
+}
+
+impl<T> Chunks<T> {
+    fn extend(&mut self, right: Self) {
+        match (&mut *self, right) {
+            (Self::Single(left_chunk), Self::Single(right_chunk)) if left_chunk.is_empty() => {
+                *left_chunk = right_chunk;
+            }
+            (Self::Single(left_chunk), right) => {
+                let left_chunk = std::mem::take(left_chunk);
+                *self = match right {
+                    Self::Single(right_chunk) => Self::Plural {
+                        len: left_chunk.len() + right_chunk.len(),
+                        chunks: [left_chunk, right_chunk].into(),
+                    },
+                    Self::Plural { chunks, len } => Self::Plural {
+                        len: left_chunk.len() + len,
+                        chunks: if left_chunk.is_empty() {
+                            chunks
+                        } else {
+                            let mut chunk = LinkedList::from([left_chunk]);
+                            chunk.extend(chunks);
+                            chunk
+                        },
+                    },
+                };
+            }
+            (Self::Plural { chunks, len }, Self::Single(chunk)) => {
+                *len += chunk.len();
+                chunks.push_back(chunk);
+            }
+            (
+                Self::Plural {
+                    chunks: left_chunks,
+                    len: left_len,
+                },
+                Self::Plural {
+                    chunks: mut right_chunks,
+                    len: right_len,
+                },
+            ) => {
+                *left_len += right_len;
+                left_chunks.append(&mut right_chunks);
+            }
+        }
+    }
+}
+
+impl<C, T> Output<'_, C, T>
+where
+    C: Collection<T>,
+{
+    pub(crate) fn finalize(self) {
+        let Some(collection) = self.collection else {
+            // Which means that the parallel collector will be disposed soon
+            // (possibly under `trying_options()` or similar),
+            // or just being combined incorrectly.
+            return;
+        };
+
+        match self.chunks {
+            // `Vec` already has specialization for `extend`ing a `Vec`.
+            // No need for a method like `push_back_vec`.
+            Chunks::Single(items) => collection.push_back_iter(items),
+            Chunks::Plural { chunks, len } => collection.push_back_linked_vec(chunks, len),
+        }
+    }
 }
 
 pub struct Combiner(());
@@ -77,13 +152,6 @@ impl<'a, C, T> Consumer<'a, C, T> {
             collection: CellOptRefMut::from(Some(collection)),
             _marker: PhantomData,
         }
-    }
-}
-
-impl<C, T> Output<'_, C, T> {
-    #[inline]
-    pub fn is_left_most(&self) -> bool {
-        matches!(self, Self::LeftMost(_))
     }
 }
 
@@ -149,23 +217,12 @@ where
 {
     #[inline]
     fn combine(self, left: &mut Output<'a, C, T>, right: Output<'a, C, T>) {
-        let Output::Right {
-            chunks: mut right_chunks,
-            len: right_len,
-        } = right
-        else {
-            panic!("the right-side output must be a linked list of vecs");
-        };
+        debug_assert!(
+            right.collection.is_none(),
+            "only the left-most output can have a mutable reference to the collection",
+        );
 
-        match left {
-            Output::LeftMost(collection) => {
-                collection.push_back_linked_vec(right_chunks, right_len)
-            }
-            Output::Right { chunks, len } => {
-                chunks.append(&mut right_chunks);
-                *len += right_len;
-            }
-        }
+        left.chunks.extend(right.chunks);
     }
 }
 
@@ -175,16 +232,16 @@ where
 {
     type Output = Output<'a, C, T>;
 
+    #[inline]
     fn finish(self) -> Self::Output {
         match self {
-            Self::LeftMost(collection) => Output::LeftMost(collection),
-            Self::Right(chunk) => Output::Right {
-                len: chunk.len(),
-                chunks: if chunk.is_empty() {
-                    LinkedList::new()
-                } else {
-                    LinkedList::from([chunk])
-                },
+            Self::LeftMost(collection) => Output {
+                collection: Some(collection),
+                chunks: Chunks::Single(vec![]),
+            },
+            Self::Right(chunk) => Output {
+                collection: None,
+                chunks: Chunks::Single(chunk),
             },
         }
     }
@@ -239,17 +296,16 @@ where
         match self {
             Self::LeftMost(collection) => {
                 collection.push_back_iter(items);
-                Output::LeftMost(collection)
+                Output {
+                    collection: Some(collection),
+                    chunks: Chunks::Single(vec![]),
+                }
             }
             Self::Right(mut chunk) => {
                 chunk.extend(items);
-                Output::Right {
-                    len: chunk.len(),
-                    chunks: if chunk.is_empty() {
-                        LinkedList::new()
-                    } else {
-                        LinkedList::from([chunk])
-                    },
+                Output {
+                    collection: None,
+                    chunks: Chunks::Single(chunk),
                 }
             }
         }
@@ -284,17 +340,16 @@ where
         match self {
             Self::LeftMost(collection) => {
                 collection.push_back_iter_ref(items);
-                Output::LeftMost(collection)
+                Output {
+                    collection: Some(collection),
+                    chunks: Chunks::Single(vec![]),
+                }
             }
             Self::Right(mut chunk) => {
                 chunk.extend(items);
-                Output::Right {
-                    len: chunk.len(),
-                    chunks: if chunk.is_empty() {
-                        LinkedList::new()
-                    } else {
-                        LinkedList::from([chunk])
-                    },
+                Output {
+                    collection: None,
+                    chunks: Chunks::Single(chunk),
                 }
             }
         }
@@ -333,17 +388,16 @@ where
         match self {
             Self::LeftMost(collection) => {
                 collection.push_back_iter(items);
-                Output::LeftMost(collection)
+                Output {
+                    collection: Some(collection),
+                    chunks: Chunks::Single(vec![]),
+                }
             }
             Self::Right(mut chunk) => {
                 chunk.extend(items);
-                Output::Right {
-                    len: chunk.len(),
-                    chunks: if chunk.is_empty() {
-                        LinkedList::new()
-                    } else {
-                        LinkedList::from([chunk])
-                    },
+                Output {
+                    collection: None,
+                    chunks: Chunks::Single(chunk),
                 }
             }
         }
