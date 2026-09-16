@@ -11,6 +11,7 @@
 - `crate::ops::ParAnd`.
 - `crate::ops::ParOr`.
 - `crate::tuple::IntoParCollector`.
+- `ParallelCollectorBase::funnel()`.
 - `UnindexedParallelCollectorBase::try_fold_local()`.
 - `UnindexedParallelCollectorBase::trying_options()`.
 - `UnindexedParallelCollectorBase::trying_results()`.

@@ -122,6 +122,13 @@
 //! [`parts_unindexed()`]: super::UnindexedParallelCollectorBase::parts_unindexed
 //! [`take_parts_unindexed()`]: super::UnindexedParallelCollectorBase::take_parts_unindexed
 
+mod basic;
+mod consumer_ext;
+
+#[expect(unused, reason = "used later")]
+pub(crate) use basic::BasicConsumer;
+pub(crate) use consumer_ext::*;
+
 use std::ops::ControlFlow;
 
 /// Re-exported so that you do not need to import `komadori`.

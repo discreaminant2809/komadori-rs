@@ -6,9 +6,9 @@ use crate::collector::plumbing::{SerialOf, SerialOutputOf};
 
 use super::plumbing::{Consumer, DefineSerial};
 use super::{
-    Cloning, Copying, Enumerate, Fuse, IndexedOnly, IntoCollector, IntoParallelCollectorBase, Map,
-    MapOutput, MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut, assert_par_collector,
-    assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
+    Cloning, Copying, Enumerate, Funnel, Fuse, IndexedOnly, IntoCollector,
+    IntoParallelCollectorBase, Map, MapOutput, MapWith, Take, Tee, TeeClone, TeeFunnel, TeeMut,
+    assert_par_collector, assert_par_collector_base, tee, tee_clone, tee_funnel, tee_mut,
 };
 
 /// An (indexed) parallel collector.
@@ -655,6 +655,62 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
         Self: Sized,
     {
         assert_par_collector_base(Copying::new(self))
+    }
+
+    /// Creates a parallel collector that feeds the underlying parallel collector with
+    /// the mutable reference to the item, "pretending" the parallel collector
+    /// accepts owned items.
+    ///
+    /// This is useful when you only have a parallel collector that collects
+    /// references, but you want to to collect owned items (e.g. as the last
+    /// parallel collector in a tuple).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, clb_mut, iter::ParReduce};
+    ///
+    /// fn par_total_str_len(
+    /// ) -> impl for<'a> UnindexedParallelCollector<&'a str, Output = usize> {
+    ///     0_usize.into_par_sum().map(str::len)
+    /// }
+    ///
+    /// fn par_concat(
+    /// ) -> impl for<'a> UnindexedParallelCollector<&'a str, Output = String> {
+    ///     ParReduce::new(|s1, s2: String| s1.push_str(&s2))
+    ///         .fold_local((), |_| (
+    ///             String::new(),
+    ///             clb_mut!(|__: &(), chunk: &mut String, s: &str| -> () {
+    ///                 chunk.push_str(s);
+    ///             }),
+    ///         ))
+    ///         .map_output(Option::unwrap_or_default)
+    /// }
+    ///
+    /// fn as_ref(s: &mut String) -> &str { &s[..] }
+    ///
+    /// let (total_len, s) = ["noble", "and", "singer"]
+    ///     .into_par_iter()
+    ///     .map(String::from)
+    ///     .feed_into((
+    ///         par_total_str_len().map(as_ref),
+    ///         // This only collects `&mut String`, but we want it
+    ///         // to collect `String`. What can we do?
+    ///         par_concat().map(as_ref)
+    ///             // `funnel()` solves it!
+    ///             .funnel(),
+    ///     ));
+    ///
+    /// assert_eq!(total_len, 14);
+    /// assert_eq!(s, "nobleandsinger");
+    /// ```
+    #[inline]
+    fn funnel(self) -> Funnel<Self>
+    where
+        Self: Sized,
+    {
+        assert_par_collector_base(Funnel::new(self))
     }
 
     /// Creates a (serial) collector from a parallel collector.
