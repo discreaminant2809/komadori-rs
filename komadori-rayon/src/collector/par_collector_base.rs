@@ -51,8 +51,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// you should override this method.
     ///
     /// The signature is similar to [`parts()`](Self::parts),
-    /// except the returning function which does not return
-    /// a [`ControlFlow`].
+    /// except the returning [`FnOnce`] which does not return a [`ControlFlow`].
     fn take_parts<'a>(
         &'a mut self,
         len: usize,
@@ -109,7 +108,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     /// are guaranteed to **not** be accumulated. This means that at that point:
     ///
     /// - the committer of [`parts()`](Self::parts) and
-    ///   [`parts_unindexed()`](super::UnindexedParallelCollectorBase::parts_unindexed)
+    ///   [`unindexed_parts()`](super::UnindexedParallelCollectorBase::unindexed_parts)
     ///   returns [`Break(())`].
     ///
     /// - Collectors obtained from consumers are fused.
@@ -117,7 +116,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     ///
     /// However, `fuse()` does **not** protect you from behaviors happens
     /// after calling [`take_parts()`](Self::take_parts) and
-    /// [`take_parts_unindexed()`](super::UnindexedParallelCollectorBase::take_parts_unindexed).
+    /// [`take_unindexed_parts()`](super::UnindexedParallelCollectorBase::take_unindexed_parts).
     /// You still have to consider such collectors as being "taken" and only
     /// call [`finish()`](Self::finish) on them.
     ///

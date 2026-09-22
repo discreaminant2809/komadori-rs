@@ -13,7 +13,7 @@
 //! # Motivation
 //!
 //! Suppose we are given an array of `i32` and we are asked to
-//! find its maximum value and collect to a [`Vec`], in parallel.
+//! find its sum and create a [`Vec`] of every integer being doubled, in parallel.
 //! What would be our approach?
 //!
 //! - Approach 1: Two-pass
@@ -22,14 +22,19 @@
 //! use rayon::prelude::*;
 //!
 //! let nums = [1, 3, 2];
-//! let max = nums.into_par_iter().max();
-//! let v: Vec<_> = nums.into_par_iter().collect();
 //!
-//! assert_eq!(max, Some(3));
-//! assert_eq!(v, [1, 3, 2]);
+//! let sum: i32 = nums.into_par_iter().sum();
+//! let doubles: Vec<_> = nums
+//!     .into_par_iter()
+//!     .map(|num| num * 2)
+//!     .collect();
+//!
+//! assert_eq!(sum, 6);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
-//! **Cons:** This performs two passes over the data, which is worse than one-pass in performance.
+//! **Cons:** This performs two passes over the data, which may be worse than one-pass
+//! due to increased memory traffic.
 //! Also, we submit more tasks to the thread pool, making it busier, hence blocking more other tasks,
 //! hence even worse performance in practice.
 //!
@@ -39,22 +44,22 @@
 //! use rayon::prelude::*;
 //!
 //! fn id() -> (i32, Vec<i32>) {
-//!     (i32::MIN, vec![])
+//!     (0, vec![])
 //! }
 //!
-//! let (max, v) = [1, 3, 2]
+//! let (sum, doubles) = [1, 3, 2]
 //!     .into_par_iter()
-//!     .fold(id, |(max, mut v), num| {
-//!         v.push(num);
-//!         (max.max(num), v)
+//!     .fold(id, |(sum, mut v), num| {
+//!         v.push(num * 2);
+//!         (sum + num, v)
 //!     })
-//!     .reduce(id, |(max1, mut v1), (max2, mut v2)| {
+//!     .reduce(id, |(sum1, mut v1), (sum2, mut v2)| {
 //!         v1.append(&mut v2);
-//!         (max1.max(max2), v1)
+//!         (sum1 + sum2, v1)
 //!     });
 //!
-//! assert_eq!(max, 3);
-//! assert_eq!(v, [1, 3, 2]);
+//! assert_eq!(sum, 6);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
 //! **Cons:** This is incredibly verbose and performs worse due to concatenation
@@ -68,42 +73,46 @@
 //! use rayon::prelude::*;
 //! use std::sync::atomic::{AtomicI32, Ordering};
 //!
-//! let max = AtomicI32::new(0);
-//! let v: Vec<_> = [1, 3, 2]
+//! let sum = AtomicI32::new(0);
+//! let doubles: Vec<_> = [1, 3, 2]
 //!     .into_par_iter()
-//!     .inspect(|&num| {
-//!         max.fetch_max(num, Ordering::Relaxed);
+//!     .map(|num| {
+//!         sum.fetch_add(num, Ordering::Relaxed);
+//!         num * 2
 //!     })
 //!     .collect();
 //!
-//! assert_eq!(max.into_inner(), 3);
-//! assert_eq!(v, [1, 3, 2]);
+//! assert_eq!(sum.into_inner(), 6);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
 //! **Cons:** This has the worst possible performance, because the collection to [`Vec`]
 //! is cheap so the costs of CAS and cache ping-pong dominate.
-//! By "the worst possible performance," I mean... hundreds times slower than serial execution!
-//! This is fine when the pipeline is expensive (e.g. processing each image).
+//! By "the worst possible performance," I mean... hundreds times slower than serial `for`-loop!
+//! (To be fair, this is fine if the pipeline is expensive, such as image processing)
 //!
 //! This crate proposes a one-pass, declarative approach:
 //!
 //! ```
 //! use rayon::prelude::*;
-//! use komadori_rayon::{prelude::*, cmp::ParMax};
+//! use komadori_rayon::prelude::*;
 //!
-//! let (max, v) = [1, 3, 2]
+//! let (sum, doubles) = [1, 3, 2]
 //!     .into_par_iter()
-//!     .feed_into(ParMax::new().tee(vec![]));
+//!     .feed_into((
+//!         0.into_par_sum(),
+//!         vec![].into_par_collector().map(|num| num * 2),
+//!     ));
 //!
-//! assert_eq!(max, Some(3));
-//! assert_eq!(v, [1, 3, 2]);
+//! assert_eq!(sum, 6);
+//! assert_eq!(doubles, [2, 6, 4]);
 //! ```
 //!
 //! This approach is both one-pass and declarative, while is also composable.
 //! Moreoever, it still utilizes the indexed path which is to mutate the [`Vec`]
 //! in-place.
 //!
-//! See [here][max_vec_bench_mark] for the benchmark of the above and more approaches.
+//! See [here][sum_doubles_bench_mark] for the benchmark of the above and more approaches.
 //!
 //! # Crate stucture
 //!
@@ -121,10 +130,10 @@
 //!   there is this feature which can be turned off and effectively make the crate
 //!   not an integration with `rayon` anymore.
 //!
-//!   Because the idea is *thread-pool-agnostic* (as long as the parallel approach is fork-join),
+//!   Because the idea is *thread-pool-agnostic* (as long as the parallel approach follow the `rayon` model),
 //!   you can turn off this feature and use your own thread pool if you find `rayon` not satisfy
 //!   your use case, such as `chili` or `forte`.
-//!   Be aware that in this case, [`feed_into()`] and similar methods will not be available,
+//!   Be aware that in this case, [`feed_into()`] and similar methods will **not** be available,
 //!   so you have to drive parallel collectors by yourself, or wait until this crate
 //!   add more integrations with other thread pools.
 //!
@@ -137,7 +146,7 @@
 //! [`ParallelIterator`]: rayon::iter::ParallelIterator
 //! [`ParallelCollector`]: crate::collector::ParallelCollector
 //! [`feed_into()`]: crate::iter::RayonParallelIteratorExt::feed_into
-//! [max_vec_bench_mark]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/benches/max_vec.rs
+//! [sum_doubles_bench_mark]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/benches/sum_doubles.rs
 //! [par-iter-example]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/examples/par_iter_crate
 
 #![forbid(missing_docs)]

@@ -76,53 +76,60 @@
 //! # Unspecified behaviors
 //!
 //! Unless stated otherwise by the parallel collector’s implementation,
-//! after the committer of [`parts()`] or [`parts_unindexed()`]
-//! have returned [`Break(())`] once,
+//! after the committer of [`parts()`] or [`unindexed_parts()`]
+//! has returned [`Break(())`] once,
 //! behaviors of subsequent calls to [`max_afford()`][par_max_afford] are unspecified.
-//! You can still call [`parts()`], [`parts_unindexed()`],
-//! [`take_parts()`] and [`take_parts_unindexed()`] and use the resulting consumers,
-//! but the converted serial collectors are counted to have returned [`Break(())`] before
+//! You can still call [`parts()`], [`unindexed_parts()`],
+//! [`take_parts()`] and [`take_unindexed_parts()`] and use the resulting consumers,
+//! but calls to their [`max_afford()`][consumer_max_afford] are unspecified,
+//! and the converted serial collectors are considered to have returned [`Break(())`] before
 //! (see [here](komadori::collector#unspecified-behaviors) for what happens
 //! for such serial collectors and what should be done next).
-//! They may panic, overflow, or even resume accumulation
-//! (similar to how [`Iterator::next()`] might yield again after returning [`None`]).
 //! Callers should generally call [`finish()`](ParallelCollectorBase::finish)
 //! once a parallel collector has signaled a stop.
 //! If this invariant cannot be upheld, wrap it with [`fuse()`](ParallelCollectorBase::fuse).
 //! Furthermore, a parallel collector is in an unspecified state if panicked.
 //!
-//! Additionally, after calling [`take_parts()`] and [`take_parts_unindexed()`],
-//! a parallel collector is counted to have been "taken," and behaviors of
-//! subsequent calls to [`max_afford()`][par_max_afford], [`parts()`], [`parts_unindexed()`],
-//! [`take_parts()`] and [`take_parts_unindexed()`] are also unspecified.
+//! Additionally, after calling [`take_parts()`] and [`take_unindexed_parts()`],
+//! a parallel collector is considered to have been "taken," and behaviors of
+//! subsequent calls to [`max_afford()`][par_max_afford], [`parts()`], [`unindexed_parts()`],
+//! [`take_parts()`] and [`take_unindexed_parts()`] are also unspecified.
 //! In this case, caller should generally call [`finish()`](ParallelCollectorBase::finish)
 //! afterwards. Unlike the previous one, [`fuse()`](ParallelCollectorBase::fuse)
 //! **cannot** save you here.
 //!
-//! In [`parts()`] and [`take_parts()`], the returning `usize` is referred as
-//! the "maximum length" the indexed parallel collector can actually affort.
-//! Implementations must **not** report a "maximum length" greater the given `len`,
-//! otherwise the behavior is unspecified.
-//! However, this is just a hint, and the callers can still freely
-//! split exceeding the reported "maximum length."
-//! That length also does **not** imply that the parallel collector stops after
-//! that amount of items, even if it is less than the feeding length.
+//! In the indexed path (from [`parts(len)`][`parts()`] and [`take_parts(len)`][`take_parts()`]):
 //!
-//! For a serial collector obtained by a consumer of [`parts()`] and [`take_parts()`],
-//! at a time, you must feed it at **most** the maximum amount
-//! the serial collector would affort.
-//! Furthermore, before the serial collector is finished, the collector
-//! must have returned [`Break(())`] once ([`collect_then_finish()`]
-//! is counted as [`collect_many()`] followed by
-//! [`finish()`](komadori::collector::CollectorBase::finish)).
-//! Also, when the last item before full-filling the amount is collected,
-//! you **must** treat the returned [`ControlFlow`] as [`Break(())`], even though
-//! the implementation may actually return [`Continue(())`].
-//! Behaviors of violating the above are unspecified.
+//! - The consumer obtained from those methods has a length of `len` and occupies
+//!   an index range `0..len`.
+//! - When a consumer occupying an index range `start..end` is split at `idx`,
+//!   it produces another consumer of index range `start..start + idx`
+//!   and the original consumer becomes restricted to `start + idx..end`.
+//!   The allowed `idx` is within `0..end - start`.
+//! - A consumer occupying an index range `start..end` creates a (serial) collector
+//!   whose `len` is `end - start`. The caller must feed it at **most** `len` items
+//!   at a time. Furthermore, before the collector is finished, it must have returned
+//!   [`Break(())`] once ([`collect_then_finish()`] is counted as [`collect_many()`]
+//!   followed by [`finish()`](komadori::collector::CollectorBase::finish)).
+//!   Also, after collecting the `len`-th item,
+//!   you **must** treat the returned [`ControlFlow`] as [`Break(())`], even though
+//!   the implementation may actually return [`Continue(())`].
+//! - Any violations of the above result in unspecified behaviors.
 //!
-//! These loosenesses allows for optimizations (for example, omitting an internal "stopped” flag).
+//! Before using the committer, you must ensure that all serial outputs are fully combined
+//! in an correct order (a "left" output can only be combined from "right" outputs),
+//! and no "stray" consumers or serial collectors left, otherwise the behavior is unspecified
+//! after you commit an output. However, it is permitted to **not** commit at all and drop
+//! all the consumers, serial collectors, serial outputs and combiners, but after that
+//! the parallel collector will enter an unspecified state and should only be dropped.
+//! (This technique is used in some parallel collectors like
+//! [`trying_options()`](UnindexedParallelCollectorBase::trying_options))
 //!
-//! Although the behavior is unspecified, none of the aforementioned methods are `unsafe`.
+//! Unspecified behaviors include (but not limited to) panicking, overflowing,
+//! or even resuming collection
+//! (similar to how [`Iterator::next()`] might yield again after returning [`None`]).
+//! They can be exploited for optimizations (for example, omitting an internal "stopped” flag).
+//! However, none of the aforementioned methods are `unsafe`.
 //! Implementors must **not** cause memory corruptions, undefined behaviors,
 //! or any other safety violations, and callers must **not** rely on such outcomes.
 //!
@@ -141,9 +148,10 @@
 //! [`collect_then_finish()`]: komadori::collector::Collector::collect_then_finish
 //! [`parts()`]: ParallelCollectorBase::parts
 //! [par_max_afford]: ParallelCollectorBase::max_afford
+//! [consumer_max_afford]: plumbing::Consumer::max_afford
 //! [`take_parts()`]: ParallelCollectorBase::take_parts
-//! [`parts_unindexed()`]: UnindexedParallelCollectorBase::parts_unindexed
-//! [`take_parts_unindexed()`]: UnindexedParallelCollectorBase::take_parts_unindexed
+//! [`unindexed_parts()`]: UnindexedParallelCollectorBase::unindexed_parts
+//! [`take_unindexed_parts()`]: UnindexedParallelCollectorBase::take_unindexed_parts
 //! [`filter()`]: UnindexedParallelCollectorBase::filter
 
 mod adapters;

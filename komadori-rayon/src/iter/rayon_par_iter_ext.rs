@@ -35,6 +35,22 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
     /// the indexed path whenever possible.
     ///
     /// To use this method, import the [`RayonParallelIteratorExt`] trait.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, cmp::ParMax};
+    ///
+    /// let mut nums = vec![9];
+    /// let (_, max) = [4, 7, 6, 3]
+    ///     .into_par_iter()
+    ///     .filter(|&num| num % 2 == 0)
+    ///     .feed_into((&mut nums, ParMax::new()));
+    ///
+    /// assert_eq!(nums, [9, 4, 6]);
+    /// assert_eq!(max, Some(6));
+    /// ```
     fn feed_into<C>(self, collector: C) -> C::Output
     where
         C: IntoUnindexedParallelCollector<Self::Item>,
@@ -74,6 +90,24 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
     /// the indexed path whenever possible.
     ///
     /// To use this method, import the [`RayonParallelIteratorExt`] trait.
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{prelude::*, iter::ParFirst};
+    ///
+    /// let mut nums = vec![9];
+    /// let (_, first_odd) = [4, 7, 3]
+    ///     .into_par_iter()
+    ///     .feed_into_indexed((
+    ///         &mut nums,
+    ///         ParFirst::new()
+    ///             .filter(|&(_, num)| num % 2 != 0)
+    ///             .enumerate(),
+    ///     ));
+    ///
+    /// assert_eq!(nums, [9, 4, 7, 3]);
+    /// assert_eq!(first_odd, Some((1, 7)));
+    /// ```
     fn feed_into_indexed<C>(self, collector: C) -> C::Output
     where
         Self: IndexedParallelIterator,

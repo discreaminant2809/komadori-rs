@@ -27,8 +27,8 @@ where
 
 /// A mutable reference to a parallel collector is also a parallel collector.
 ///
-/// Note that even in the [`take_parts()`](ParallelCollectorBase::take_parts)
-/// and [`take_parts_unindexed()`](UnindexedParallelCollectorBase::take_parts_unindexed)
+/// Note that even in [`take_parts()`](ParallelCollectorBase::take_parts)
+/// and [`take_unindexed_parts()`](UnindexedParallelCollectorBase::take_unindexed_parts)
 /// methods, the underlying parallel collectors will **not** be "taken,"
 /// and can still be used afterwards.
 ///
@@ -42,7 +42,10 @@ where
 /// use komadori_rayon::{prelude::*, iter::ParCount};
 /// use rayon::prelude::*;
 ///
-/// let mut collector = ParCount::new();
+/// // We should fuse. We can't know whether the parallel collector
+/// // stops when using via `feed_into()`.
+/// let mut collector = ParCount::new().fuse();
+///
 /// [1, 2, 3]
 ///     .into_par_iter()
 ///     .feed_into(&mut collector);
@@ -88,6 +91,7 @@ where
     }
 }
 
+/// See [this implementation for more](ParallelCollectorBase#impl-ParallelCollectorBase-for-%26mut+C).
 impl<C> UnindexedParallelCollectorBase for &mut C
 where
     C: UnindexedParallelCollectorBase + ?Sized,

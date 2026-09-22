@@ -93,7 +93,7 @@
 //!
 //! For the unindexed version, it is the same
 //! except for the two functions which do not take `len`
-//! and are used in the [`parts_unindexed()`] and [`take_parts_unindexed()`]
+//! and are used in the [`unindexed_parts()`] and [`take_unindexed_parts()`]
 //! methods, respectively.
 //!
 //! It should be inaccessible to the callers so that they cannot
@@ -119,8 +119,8 @@
 //!
 //! [`parts()`]: super::ParallelCollectorBase::parts
 //! [`take_parts()`]: super::ParallelCollectorBase::take_parts
-//! [`parts_unindexed()`]: super::UnindexedParallelCollectorBase::parts_unindexed
-//! [`take_parts_unindexed()`]: super::UnindexedParallelCollectorBase::take_parts_unindexed
+//! [`unindexed_parts()`]: super::UnindexedParallelCollectorBase::unindexed_parts
+//! [`take_unindexed_parts()`]: super::UnindexedParallelCollectorBase::take_unindexed_parts
 
 mod basic;
 mod consumer_ext;
@@ -143,8 +143,8 @@ pub use komadori::collector::{Collector, CollectorBase, IntoCollector, IntoColle
 /// We cannot use GAT because of [this limitation][limitation],
 /// so this is basically a [workaround of it by Sabrina Jewson][workaround].
 ///
-/// [limitation]: (https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
-/// [workaround]: (https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
+/// [limitation]: https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds
+/// [workaround]: https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats
 pub trait DefineSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<'this, Self>> {
     /// Which serial collector being produced in the indexed path?
     type Serial: CollectorBase<Output: Send>;
@@ -159,8 +159,8 @@ pub trait DefineSerial<'this, Binder: self_binder::Sealed = self_binder::Binder<
 /// We cannot use GAT because of [this limitation][limitation],
 /// so this is basically a [workaround of it by Sabrina Jewson][workaround].
 ///
-/// [limitation]: (https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bounds)
-/// [workaround]: (https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats),
+/// [limitation]: https://blog.rust-lang.org/2022/10/28/gats-stabilization/#implied-static-requirement-from-higher-ranked-trait-bound
+/// [workaround]: https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats#the-better-gats
 pub trait DefineUnindexedSerial<
     'this,
     Binder: self_binder::Sealed = self_binder::Binder<'this, Self>,
@@ -217,8 +217,9 @@ pub trait Consumer: IntoCollectorBase<Output: Send> + Send + Sized {
     /// Queries the maximum amount of items this consumer can afford
     /// given the requested amount of items.
     ///
-    /// It is a hint used for the driver to stop splitting further,
-    /// but adapters may still ignore the hint and split anyway.
+    /// It is a hint used for the driver to stop splitting further
+    /// if the returned value is `0`, but it can be ignored and
+    /// the driver may continue splitting anyway.
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
         request

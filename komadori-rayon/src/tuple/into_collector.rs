@@ -47,17 +47,18 @@ use crate::{
 /// use rayon::prelude::*;
 /// use komadori_rayon::{prelude::*, cmp::ParMax};
 ///
-/// let (sum, max, nums) = [4, 2, 6, 3]
+/// let mut nums = vec![1];
+/// let (sum, _, max) = [4, 2, 6, 3]
 ///     .into_par_iter()
 ///     .feed_into((
 ///         0.into_par_sum(),
-///         ParMax::new().copying(),
-///         vec![],
+///         &mut nums,
+///         ParMax::new(),
 ///     ));
 ///
 /// assert_eq!(sum, 15);
 /// assert_eq!(max, Some(6));
-/// assert_eq!(nums, [4, 2, 6, 3]);
+/// assert_eq!(nums, [1, 4, 2, 6, 3]);
 /// ```
 #[expect(private_bounds)]
 pub struct IntoParCollector<Cs: Tuple>(Cs::IntoParCollectorRepr);

@@ -51,9 +51,8 @@ pub trait UnindexedParallelCollectorBase:
     /// but if it is the case or you are implementing an adapter,
     /// you should override this method.
     ///
-    /// The signature is similar to [`parts_unindexed()`](Self::parts_unindexed),
-    /// except the returning function which does not return
-    /// a [`ControlFlow`].
+    /// The signature is similar to [`unindexed_parts()`](Self::unindexed_parts),
+    /// except the returning [`FnOnce`] which does not return a [`ControlFlow`].
     fn take_unindexed_parts<'a>(
         &'a mut self,
     ) -> (
@@ -377,11 +376,28 @@ pub trait UnindexedParallelCollectorBase:
     /// The underlying parallel collector will receive a tuple of both local states
     /// after each local reduction ends.
     ///
-    /// `fold_local()` is usually used after [`ParReduce`](crate::iter::ParReduce).
-    /// You can also use [`map()`](ParallelCollectorBase::map) between the two
-    /// to get rid of the tuple.
+    /// Components:
+    ///
+    /// - `shared_state` (`S`): States that will be shared between worker.
+    ///   Must be [`Sync`].
+    ///
+    /// - `consumer` (`FF`): Things happen inside the splitting process.
+    ///   Must implement [`Clone`] and [`Send`].
+    ///
+    ///   The function will be cloned when being split.
+    ///   When a worker decides to perform a reduction, the function will be called.
+    ///   An initial state and a fold function will be returned
+    ///   and the reduction progresses similarly to [`Fold`] from `komadori`
+    ///   with the output being an item for the underlying parallel collector.
+    ///
+    /// - Fold function (`F`): Created alongside with an initial state from `consumer`.
+    ///   No additional trait requirement.
+    ///
+    ///   Each incoming item will be called with this function to update the state.
     ///
     /// This adapter collects `T`.
+    ///
+    /// [`Fold`]: komadori::iter::Fold
     ///
     /// # Examples
     ///
@@ -396,6 +412,7 @@ pub trait UnindexedParallelCollectorBase:
     ///             piece1.push(' ');
     ///             *piece1 += &piece2;
     ///         })
+    ///         .map_output(Option::unwrap_or_default)
     ///         .fold_local((), |_| {
     ///             let mut is_first = true;
     ///             (String::new(), move |_, piece, word| {
@@ -405,7 +422,6 @@ pub trait UnindexedParallelCollectorBase:
     ///                 *piece += word;
     ///             })
     ///         })
-    ///         .map_output(Option::unwrap_or_default)
     ///     );
     ///
     /// assert_eq!(sentence, "there are a noble and a singer");
@@ -439,7 +455,7 @@ pub trait UnindexedParallelCollectorBase:
     ///   and the item of this reduction will be that "break" value.
     ///   Otherwise, an initial state and a fold function will be returned,
     ///   and the reduction progresses similarly to [`TryFold`] from `komadori`
-    ///   with the output being the item of this reduction.
+    ///   with the output being an item for the underlying parallel collector.
     ///
     /// - Fold function (`F`): Created alongside with an initial state from `consumer`.
     ///   No additional trait requirement.
@@ -450,6 +466,8 @@ pub trait UnindexedParallelCollectorBase:
     ///
     /// As of now, the permitted types for `A` is [`Option`], [`Result`],
     /// and [`ControlFlow`].
+    ///
+    /// This adapter collects `T`.
     ///
     /// [`TryFold`]: komadori::iter::TryFold
     ///
@@ -464,7 +482,7 @@ pub trait UnindexedParallelCollectorBase:
     ///     mut pred: impl FnMut(&T) -> bool + Clone + Send,
     /// ) -> impl UnindexedParallelCollector<T, Output = Vec<T>> {
     ///     ParReduce::new(|v1, v2: Vec<_>| v1.extend(v2))
-    ///         .map_output(|v| v.unwrap_or(vec![]))
+    ///         .map_output(Option::unwrap_or_default)
     ///         .map(|res: Result<_, _>| res.unwrap_or_else(|v| v))
     ///         .try_fold_local(AtomicBool::new(false), move |stopped| {
     ///             if stopped.load(Relaxed) {
