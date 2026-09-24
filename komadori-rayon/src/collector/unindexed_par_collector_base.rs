@@ -4,7 +4,7 @@ use komadori::prelude::*;
 
 use crate::{
     collector::{
-        assert_unindexed_par_collector_base,
+        IntoUnindexedParallelCollectorBase, assert_unindexed_par_collector_base,
         plumbing::{UnindexedSerialOf, UnindexedSerialOutputOf},
     },
     ops::{ChangeOutputType, Try},
@@ -12,8 +12,8 @@ use crate::{
 
 use super::{
     Filter, FilterMap, FilterMapWith, FilterWith, FoldLocal, NestLocal, NestLocalWith,
-    ParallelCollectorBase, TakeAnyWhile, TryFoldLocal, TryingOptions, TryingResults, UnindexedOnly,
-    assert_unindexed_par_collector,
+    ParallelCollectorBase, Partition, TakeAnyWhile, TryFoldLocal, TryingOptions, TryingResults,
+    UnindexedOnly, assert_unindexed_par_collector,
     plumbing::{DefineUnindexedSerial, UnindexedConsumer},
 };
 
@@ -634,6 +634,70 @@ pub trait UnindexedParallelCollectorBase:
         E: Send,
     {
         assert_unindexed_par_collector_base(TryingResults::new(self))
+    }
+
+    /// Creates a parallel collector that distributes items between two parallel collectors
+    /// based on whether an item is "left" or "right."
+    ///
+    /// Items in [`Either::Left`] go to the first parallel collector,
+    /// and items in [`Either::Right`] go to the second parallel collector.
+    ///
+    /// This adapter collects [`Either<L, R>`][`Either`]
+    /// if the left parallel collector collects `L` and
+    /// the right parallel collector collects `R`.
+    ///
+    /// [`Either`]: crate::either::Either
+    /// [`Either::Left`]: crate::either::Either::Left
+    /// [`Either::Right`]: crate::either::Either::Right
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{
+    ///     prelude::*,
+    ///     cmp::ParMax,
+    ///     iter::ParCount,
+    /// };
+    /// use either::IntoEither;
+    ///
+    /// let nums = [1, 4, 2, 5];
+    ///
+    /// let (max_even, odd_count) = nums
+    ///     .into_par_iter()
+    ///     .map(|x| x.into_either(x % 2 == 0))
+    ///     .feed_into(ParMax::new().partition(ParCount::new()));
+    ///
+    /// assert_eq!(max_even, Some(4));
+    /// assert_eq!(odd_count, 2);
+    /// ```
+    ///
+    /// It may be more readable to use [`crate::collector::par_partition()`]:
+    ///
+    /// ```
+    /// use rayon::prelude::*;
+    /// use komadori_rayon::{
+    ///     prelude::*,
+    ///     collector::par_partition,
+    /// };
+    /// use either::IntoEither;
+    ///
+    /// let (evens, odds) = (-5..5)
+    ///     .into_par_iter()
+    ///     .map(|x| x.into_either(x % 2 == 0))
+    ///     // More readable than `vec![].into_par_collector().partition(vec![])`!
+    ///     .feed_into(par_partition(vec![], vec![]));
+    ///
+    /// assert_eq!(evens, [-4, -2, 0, 2, 4]);
+    /// assert_eq!(odds, [-5, -3, -1, 1, 3]);
+    /// ```
+    #[inline]
+    fn partition<C>(self, right: C) -> Partition<Self, C::IntoParCollector>
+    where
+        Self: Sized,
+        C: IntoUnindexedParallelCollectorBase,
+    {
+        assert_unindexed_par_collector_base(Partition::new(self, right.into_par_collector()))
     }
 
     /// Creates a parallel collector that restricts to the unindexed path only.

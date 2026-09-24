@@ -15,6 +15,8 @@
 - `UnindexedParallelCollectorBase::try_fold_local()`.
 - `UnindexedParallelCollectorBase::trying_options()`.
 - `UnindexedParallelCollectorBase::trying_results()`.
+- `UnindexedParallelCollectorBase::partition()`.
+- `crate::collector::par_partition()`.
 - `crate::collector::plumbing::SerialOf`.
 - `crate::collector::plumbing::SerialOutputOf`.
 - `crate::collector::plumbing::UnindexedSerialOf`.

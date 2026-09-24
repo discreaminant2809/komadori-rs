@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 9cbb825c1102816c77a4a2709873eabe9d310ed8f2f4d0e1668443108eeba290 # shrinks to pool = CoroutinePool { seed: 9647333241217837237, rng: Xoshiro128PlusPlus { s: [925831192, 2946995473, 3853542593, 825180733] } }, (nums, count, split_decision) = ([], 0, Stay), starting_request = 1, ending_request = 0, left_n = 0, right_n = 0

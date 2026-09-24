@@ -122,11 +122,13 @@
 //! [`unindexed_parts()`]: super::UnindexedParallelCollectorBase::unindexed_parts
 //! [`take_unindexed_parts()`]: super::UnindexedParallelCollectorBase::take_unindexed_parts
 
-mod basic;
+mod basic_consumer;
+mod basic_unindexed_consumer;
 mod consumer_ext;
 
 #[expect(unused, reason = "used later")]
-pub(crate) use basic::BasicConsumer;
+pub(crate) use basic_consumer::BasicConsumer;
+pub(crate) use basic_unindexed_consumer::BasicUnindexedConsumer;
 pub(crate) use consumer_ext::*;
 
 use std::ops::ControlFlow;
@@ -248,6 +250,16 @@ pub trait Combiner<O> {
     /// Combines two outputs by merging the "right" output
     /// into the "left" one.
     fn combine(self, left: &mut O, right: O);
+}
+
+impl<F, O> Combiner<O> for F
+where
+    F: FnOnce(&mut O, O),
+{
+    #[inline]
+    fn combine(self, left: &mut O, right: O) {
+        self(left, right)
+    }
 }
 
 /// Defines a wrapper that makes your serial collector type "unique."
