@@ -92,7 +92,7 @@ where
         // we only have this amount left.
         let (consumer, commit) = self.collector.parts(max_len);
 
-        unique::uniquify((indexed::Consumer::new(consumer, max_len), move |output| {
+        unique::uniquify((indexed::consumer(consumer, max_len), move |output| {
             // Don't forget to commit the output first,
             // which means not to put the `break_hint` before this.
             commit(output)?;
@@ -120,7 +120,7 @@ where
         // we only have this amount left.
         let (consumer, commit) = self.collector.take_parts(max_len);
 
-        unique::take_uniquify((indexed::Consumer::new(consumer, max_len), commit))
+        unique::take_uniquify((indexed::consumer(consumer, max_len), commit))
     }
 }
 
@@ -138,17 +138,14 @@ where
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         let (consumer, commit) = self.collector.unindexed_parts();
-        unique_unindexed::uniquify((
-            unindexed::Consumer::new(consumer, &self.remaining),
-            |output| {
-                commit(output)?;
-                if self.remaining.load(Ordering::Relaxed) == 0 {
-                    ControlFlow::Break(())
-                } else {
-                    ControlFlow::Continue(())
-                }
-            },
-        ))
+        unique_unindexed::uniquify((unindexed::consumer(consumer, &self.remaining), |output| {
+            commit(output)?;
+            if self.remaining.load(Ordering::Relaxed) == 0 {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        }))
     }
 
     fn take_unindexed_parts<'a>(
@@ -161,10 +158,7 @@ where
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_unindexed_parts();
-        unique_unindexed::take_uniquify((
-            unindexed::Consumer::new(consumer, &self.remaining),
-            commit,
-        ))
+        unique_unindexed::take_uniquify((unindexed::consumer(consumer, &self.remaining), commit))
     }
 }
 
@@ -195,65 +189,33 @@ fn max_afford(remaining: &AtomicUsize, max_afford: usize) -> usize {
     }
 }
 
-#[allow(missing_debug_implementations)]
 mod indexed {
     use komadori::prelude::*;
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{BasicConsumer, Consumer, OpaqueConsumer};
 
-    pub struct Consumer<C> {
-        consumer: C,
-        n: usize,
-    }
+    pub fn consumer<C>(consumer: C, n: usize) -> OpaqueConsumer!(Serial<C::IntoCollector>)
+    where
+        C: Consumer,
+    {
+        BasicConsumer {
+            state: (consumer, n),
+            split_f: |(consumer, n), idx| {
+                let idx = idx.clamp(0, *n);
+                let (consumer, combiner) = consumer.split_off_left_at(idx);
+                *n -= idx;
 
-    impl<C> Consumer<C> {
-        #[inline]
-        pub(super) fn new(consumer: C, n: usize) -> Self {
-            Self { consumer, n }
+                ((consumer, idx), combiner)
+            },
+            ma_f: |(consumer, n), request| consumer.max_afford(request).min(*n),
+            collector_f: |(consumer, n)| consumer.into_collector().take(n),
         }
     }
 
     pub type Serial<C> = komadori::collector::Take<C>;
-
-    impl<C> IntoCollectorBase for Consumer<C>
-    where
-        C: IntoCollectorBase,
-    {
-        type Output = C::Output;
-
-        type IntoCollector = Serial<C::IntoCollector>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            // We have to limit by ourselves.
-            // Some collectors may be fed more items than neccessary,
-            // since we lied to the underlying collector.
-            self.consumer.into_collector().take(self.n)
-        }
-    }
-
-    impl<C> plumbing::Consumer for Consumer<C>
-    where
-        C: plumbing::Consumer,
-    {
-        type Combiner = C::Combiner;
-
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let index = index.clamp(0, self.n);
-            let (consumer, combiner) = self.consumer.split_off_left_at(index);
-            self.n -= index;
-
-            (Self { consumer, n: index }, combiner)
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            self.consumer.max_afford(request).min(self.n)
-        }
-    }
 }
 
-#[allow(missing_debug_implementations)]
+#[expect(missing_debug_implementations)]
 mod unindexed {
     use std::{
         ops::ControlFlow,
@@ -262,84 +224,41 @@ mod unindexed {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumer};
+    use crate::collector::plumbing::{
+        self, BasicUnindexedConsumer, OpaqueUnindexedConsumer, UnindexedConsumer,
+    };
 
-    pub struct Consumer<'a, C> {
+    pub fn consumer<C>(
         consumer: C,
-        remaining: &'a AtomicUsize,
+        remaining: &AtomicUsize,
+    ) -> OpaqueUnindexedConsumer!(Serial<'_, C::IntoCollector>)
+    where
+        C: UnindexedConsumer,
+    {
+        BasicUnindexedConsumer {
+            state: (consumer, remaining),
+            split_f: |(consumer, remaining)| (consumer.split_off_left(), remaining),
+            combiner_f: |(consumer, _)| consumer.to_combiner(),
+            ma_f: |(consumer, remaining), request| {
+                let max_afford = consumer.max_afford(request);
+
+                // We can potentially avoid an atomic operation.
+                if max_afford == 0 {
+                    0
+                } else {
+                    remaining.load(Ordering::Relaxed).min(max_afford)
+                }
+            },
+            collector_f: |(consumer, remaining)| Serial {
+                collector: consumer.into_collector(),
+                remaining,
+            },
+        }
     }
 
     pub struct Serial<'a, C> {
         collector: C,
         remaining: &'a AtomicUsize,
-    }
-
-    impl<'a, C> Consumer<'a, C> {
-        #[inline]
-        pub(super) fn new(consumer: C, remaining: &'a AtomicUsize) -> Self {
-            Self {
-                consumer,
-                remaining,
-            }
-        }
-    }
-
-    impl<'a, C> IntoCollectorBase for Consumer<'a, C>
-    where
-        C: IntoCollectorBase,
-    {
-        type Output = C::Output;
-
-        type IntoCollector = Serial<'a, C::IntoCollector>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial {
-                collector: self.consumer.into_collector(),
-                remaining: self.remaining,
-            }
-        }
-    }
-
-    impl<C> plumbing::Consumer for Consumer<'_, C>
-    where
-        C: UnindexedConsumer,
-    {
-        type Combiner = C::Combiner;
-
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            let max_afford = self.consumer.max_afford(request);
-
-            // We can potentially avoid an atomic operation.
-            if max_afford == 0 {
-                0
-            } else {
-                self.remaining.load(Ordering::Relaxed).min(max_afford)
-            }
-        }
-    }
-
-    impl<C> UnindexedConsumer for Consumer<'_, C>
-    where
-        C: UnindexedConsumer,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self {
-                consumer: self.consumer.split_off_left(),
-                remaining: self.remaining,
-            }
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            self.consumer.to_combiner()
-        }
     }
 
     impl<C> CollectorBase for Serial<'_, C>

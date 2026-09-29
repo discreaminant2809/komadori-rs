@@ -169,9 +169,9 @@ where
         _len: usize,
     ) -> (
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
-        impl FnOnce(SerialOutputOf<'a, Self>) -> std::ops::ControlFlow<()>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::Consumer::new(&self.found), |output| {
+        unique::uniquify((consumer::unindexed(&self.found), |output| {
             combine(&mut self.value, output);
             if self.value.is_some() {
                 ControlFlow::Break(())
@@ -195,7 +195,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::Consumer::new(&self.found), |output| {
+        unique_unindexed::uniquify((consumer::unindexed(&self.found), |output| {
             combine(&mut self.value, output);
             if self.value.is_some() {
                 ControlFlow::Break(())
@@ -224,83 +224,28 @@ fn combine<T>(left: &mut Option<T>, right: Option<T>) {
 #[expect(missing_debug_implementations)]
 mod consumer {
     use std::{
-        marker::PhantomData,
         ops::ControlFlow,
         sync::atomic::{AtomicBool, Ordering},
     };
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{self, BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    pub struct Consumer<'a, T> {
-        found: &'a AtomicBool,
-        _marker: PhantomData<T>,
+    pub fn unindexed<T>(found: &AtomicBool) -> OpaqueUnindexedConsumer!(Serial<'_, T>)
+    where
+        T: Send,
+    {
+        BasicUnindexedConsumer {
+            state: found,
+            split_f: Clone::clone,
+            combiner_f: |_| super::combine,
+            ma_f: |found, request| super::max_afford(found, request),
+            collector_f: |found| Serial { found, value: None },
+        }
     }
-
-    pub struct Combiner(());
 
     pub struct Serial<'a, T> {
         found: &'a AtomicBool,
         value: Option<T>,
-    }
-
-    impl<'a, T> Consumer<'a, T> {
-        #[inline]
-        pub(super) fn new(found: &'a AtomicBool) -> Self {
-            Self {
-                found,
-                _marker: PhantomData,
-            }
-        }
-    }
-
-    impl<'a, T> plumbing::IntoCollectorBase for Consumer<'a, T> {
-        type Output = Option<T>;
-
-        type IntoCollector = Serial<'a, T>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial {
-                found: self.found,
-                value: None,
-            }
-        }
-    }
-
-    impl<T> plumbing::Consumer for Consumer<'_, T>
-    where
-        T: Send,
-    {
-        type Combiner = Combiner;
-
-        plumbing::impl_split_off_left_at_via_unindexed! {}
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            super::max_afford(self.found, request)
-        }
-    }
-
-    impl<T> plumbing::UnindexedConsumer for Consumer<'_, T>
-    where
-        T: Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self::new(self.found)
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl<T> plumbing::Combiner<Option<T>> for Combiner {
-        #[inline]
-        fn combine(self, left: &mut Option<T>, right: Option<T>) {
-            super::combine(left, right);
-        }
     }
 
     impl<T> plumbing::CollectorBase for Serial<'_, T> {

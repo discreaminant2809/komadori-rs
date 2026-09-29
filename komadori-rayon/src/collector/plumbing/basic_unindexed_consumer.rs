@@ -1,6 +1,4 @@
-use super::{
-    Combiner, Consumer, IntoCollectorBase, UnindexedConsumer, impl_split_off_left_at_via_unindexed,
-};
+use super::{Consumer, IntoCollectorBase, UnindexedConsumer, impl_split_at_via_unindexed};
 
 pub struct BasicUnindexedConsumer<S, SF, ComF, MAF, CF, Com, I>
 where
@@ -10,7 +8,7 @@ where
     MAF: Fn(&S, usize) -> usize + Clone + Send,
     CF: FnOnce(S) -> I + Clone + Send,
     I: IntoCollectorBase<Output: Send>,
-    Com: Combiner<I::Output>,
+    Com: FnOnce(&mut I::Output, I::Output),
 {
     pub state: S,
     pub split_f: SF,
@@ -28,7 +26,7 @@ where
     MAF: Fn(&S, usize) -> usize + Clone + Send,
     CF: FnOnce(S) -> I + Clone + Send,
     I: IntoCollectorBase<Output: Send>,
-    Com: Combiner<I::Output>,
+    Com: FnOnce(&mut I::Output, I::Output),
 {
     type Output = I::Output;
 
@@ -48,11 +46,9 @@ where
     MAF: Fn(&S, usize) -> usize + Clone + Send,
     CF: FnOnce(S) -> I + Clone + Send,
     I: IntoCollectorBase<Output: Send>,
-    Com: Combiner<I::Output>,
+    Com: FnOnce(&mut I::Output, I::Output),
 {
-    type Combiner = Com;
-
-    impl_split_off_left_at_via_unindexed! {}
+    impl_split_at_via_unindexed!(S, SF, ComF, MAF, CF, Com, I);
 
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
@@ -69,7 +65,7 @@ where
     MAF: Fn(&S, usize) -> usize + Clone + Send,
     CF: FnOnce(S) -> I + Clone + Send,
     I: IntoCollectorBase<Output: Send>,
-    Com: Combiner<I::Output>,
+    Com: FnOnce(&mut I::Output, I::Output),
 {
     #[inline]
     fn split_off_left(&self) -> Self {
@@ -84,7 +80,9 @@ where
     }
 
     #[inline]
-    fn to_combiner(&self) -> Self::Combiner {
+    fn to_combiner(
+        &self,
+    ) -> impl FnOnce(&mut Self::Output, Self::Output) + use<S, SF, ComF, MAF, CF, Com, I> {
         (self.combiner_f)(&self.state)
     }
 }

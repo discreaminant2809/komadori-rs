@@ -216,10 +216,14 @@ mod consumer {
         C: plumbing::Consumer,
         FF: FnOnce() -> F + Clone + Send,
     {
-        type Combiner = C::Combiner;
-
         #[inline]
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
+        fn split_off_left_at(
+            &mut self,
+            index: usize,
+        ) -> (
+            Self,
+            impl FnOnce(&mut Self::Output, Self::Output) + use<C, FF, F>,
+        ) {
             let (consumer, combiner) = self.consumer.split_off_left_at(index);
             (
                 Self {
@@ -236,10 +240,10 @@ mod consumer {
         }
     }
 
-    impl<C, PF, P> plumbing::UnindexedConsumer for Consumer<C, PF>
+    impl<C, FF, F> plumbing::UnindexedConsumer for Consumer<C, FF>
     where
         C: plumbing::UnindexedConsumer,
-        PF: FnOnce() -> P + Clone + Send,
+        FF: FnOnce() -> F + Clone + Send,
     {
         #[inline]
         fn split_off_left(&self) -> Self {
@@ -250,7 +254,7 @@ mod consumer {
         }
 
         #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
+        fn to_combiner(&self) -> impl FnOnce(&mut Self::Output, Self::Output) + use<C, FF, F> {
             self.consumer.to_combiner()
         }
     }

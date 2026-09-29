@@ -1,17 +1,45 @@
 #![allow(missing_debug_implementations)]
 
-use std::{collections::LinkedList, marker::PhantomData, ops::ControlFlow};
+use std::{collections::LinkedList, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::{cell::CellOptRefMut, collector::plumbing};
+use crate::{
+    cell::CellOptRefMut,
+    collector::plumbing::{self, BasicUnindexedConsumer, OpaqueUnindexedConsumer},
+};
 
 // The entire idea is that we keep a mutable reference to the original collection
 // in the "left most" consumer.
-// This way, we can be heavily optimized in `par_collector.into_collector()`,
-// but reallocations may be triggered more often for general parallel uses.
+// This way, we can be heavily optimized in `par_collector.into_collector()`.
 // Based on the benchmark, it performs just as good as `rayon`'s approach in average,
 // which simply (can't call it "naively," tho) just uses linked lists of vecs.
+
+pub fn unindexed<C, T>(collection: &mut C) -> OpaqueUnindexedConsumer!(Serial<'_, C, T>)
+where
+    C: Collection<T> + Send,
+    T: Send,
+{
+    BasicUnindexedConsumer {
+        state: CellOptRefMut::from(Some(collection)),
+        split_f: |collection| collection.take().into(),
+        combiner_f: |_| {
+            |left: &mut Output<'_, C, T>, right: Output<'_, C, T>| {
+                debug_assert!(
+                    right.collection.is_none(),
+                    "only the left-most output can have a mutable reference to the collection",
+                );
+
+                left.chunks.extend(right.chunks);
+            }
+        },
+        ma_f: |_, request| request,
+        collector_f: |collection| match collection.into_inner() {
+            Some(collection) => Serial::LeftMost(collection),
+            None => Serial::Right(vec![]),
+        },
+    }
+}
 
 pub trait Collection<T> {
     fn push_back(&mut self, elem: T);
@@ -48,11 +76,6 @@ pub trait Collection<T> {
             .into_iter()
             .for_each(|chunk| self.push_back_iter(chunk));
     }
-}
-
-pub struct Consumer<'a, C, T> {
-    collection: CellOptRefMut<'a, C>,
-    _marker: PhantomData<fn(T)>,
 }
 
 pub enum Serial<'a, C, T> {
@@ -140,89 +163,6 @@ where
             Chunks::Single(items) => collection.push_back_iter(items),
             Chunks::Plural { chunks, len } => collection.push_back_linked_vec(chunks, len),
         }
-    }
-}
-
-pub struct Combiner(());
-
-impl<'a, C, T> Consumer<'a, C, T> {
-    #[inline]
-    pub(crate) fn new(collection: &'a mut C) -> Self {
-        Self {
-            collection: CellOptRefMut::from(Some(collection)),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<'a, C, T> IntoCollectorBase for Consumer<'a, C, T>
-where
-    C: Collection<T>,
-{
-    type Output = Output<'a, C, T>;
-
-    type IntoCollector = Serial<'a, C, T>;
-
-    #[inline]
-    fn into_collector(self) -> Self::IntoCollector {
-        match self.collection.into_inner() {
-            Some(collection) => Serial::LeftMost(collection),
-            None => Serial::Right(vec![]),
-        }
-    }
-}
-
-impl<'a, C, T> plumbing::Consumer for Consumer<'a, C, T>
-where
-    // For most collections in the standard library,
-    // the collection being Send only needs their elements to be Send.
-    // It is slightly problematic for something like HashSet
-    // because the build hasher needs to be Send as well,
-    // but in practice build hashers are mostly Send,
-    // and the user can build a custom one fairly easily anyway.
-    C: Collection<T> + Send,
-    T: Send,
-{
-    type Combiner = Combiner;
-
-    #[inline]
-    fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-        use plumbing::UnindexedConsumer;
-        (self.split_off_left(), self.to_combiner())
-    }
-}
-
-impl<C, T> plumbing::UnindexedConsumer for Consumer<'_, C, T>
-where
-    C: Collection<T> + Send,
-    T: Send,
-{
-    #[inline]
-    fn split_off_left(&self) -> Self {
-        Consumer {
-            collection: self.collection.take().into(),
-            _marker: PhantomData,
-        }
-    }
-
-    #[inline]
-    fn to_combiner(&self) -> Self::Combiner {
-        Combiner(())
-    }
-}
-
-impl<'a, C, T> plumbing::Combiner<Output<'a, C, T>> for Combiner
-where
-    C: Collection<T>,
-{
-    #[inline]
-    fn combine(self, left: &mut Output<'a, C, T>, right: Output<'a, C, T>) {
-        debug_assert!(
-            right.collection.is_none(),
-            "only the left-most output can have a mutable reference to the collection",
-        );
-
-        left.chunks.extend(right.chunks);
     }
 }
 

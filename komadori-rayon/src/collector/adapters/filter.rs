@@ -110,7 +110,7 @@ where
     ) {
         let (consumer, commit) = self.collector.unindexed_parts();
         unique::uniquify((
-            consumer::Consumer::new(consumer, self.pred.callable_mut()),
+            consumer::unindexed(consumer, self.pred.callable_mut()),
             commit,
         ))
     }
@@ -125,7 +125,7 @@ where
     ) {
         let (consumer, commit) = self.collector.take_unindexed_parts();
         unique::take_uniquify((
-            consumer::Consumer::new(consumer, self.pred.take_callable_mut()),
+            consumer::unindexed(consumer, self.pred.take_callable_mut()),
             commit,
         ))
     }
@@ -147,7 +147,7 @@ where
     ) {
         let (consumer, commit) = self.collector.unindexed_parts();
         unique_unindexed::uniquify((
-            consumer::Consumer::new(consumer, self.pred.callable_mut()),
+            consumer::unindexed(consumer, self.pred.callable_mut()),
             commit,
         ))
     }
@@ -163,7 +163,7 @@ where
     ) {
         let (consumer, commit) = self.collector.take_unindexed_parts();
         unique_unindexed::take_uniquify((
-            consumer::Consumer::new(consumer, self.pred.take_callable_mut()),
+            consumer::unindexed(consumer, self.pred.take_callable_mut()),
             commit,
         ))
     }
@@ -176,88 +176,40 @@ mod consumer {
     use komadori::prelude::*;
 
     use crate::{
-        collector::plumbing::{self, UnindexedConsumer},
+        collector::plumbing::{
+            self, BasicUnindexedConsumer, OpaqueUnindexedConsumer, UnindexedConsumer,
+        },
         ops::CallMut,
     };
 
-    pub struct Consumer<C, PF> {
+    pub fn unindexed<C, P>(
         consumer: C,
-        into_pred: PF,
+        into_pred: impl FnOnce() -> P + Clone + Send,
+    ) -> OpaqueUnindexedConsumer!(Serial<C::IntoCollector, P>)
+    where
+        C: UnindexedConsumer,
+    {
+        BasicUnindexedConsumer {
+            state: (consumer, into_pred),
+            split_f: |(consumer, into_pred)| (consumer.split_off_left(), into_pred.clone()),
+            combiner_f: |(consumer, _)| consumer.to_combiner(),
+            ma_f: |(consumer, _), request| {
+                if consumer.max_afford(1) == 0 {
+                    0
+                } else {
+                    request
+                }
+            },
+            collector_f: |(consumer, into_pred)| Serial {
+                collector: consumer.into_collector(),
+                pred: into_pred(),
+            },
+        }
     }
 
-    // Can't utilize from komadori's filter(), since it requires item type right away.
     pub struct Serial<C, P> {
         collector: C,
         pred: P,
-    }
-
-    impl<C, P> Consumer<C, P> {
-        #[inline]
-        pub(super) fn new(consumer: C, into_pred: P) -> Self {
-            Self {
-                consumer,
-                into_pred,
-            }
-        }
-    }
-
-    impl<C, PF, P> IntoCollectorBase for Consumer<C, PF>
-    where
-        C: IntoCollectorBase,
-        PF: FnOnce() -> P,
-    {
-        type Output = C::Output;
-
-        type IntoCollector = Serial<C::IntoCollector, P>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial {
-                collector: self.consumer.into_collector(),
-                pred: (self.into_pred)(),
-            }
-        }
-    }
-
-    impl<C, PF, P> plumbing::Consumer for Consumer<C, PF>
-    where
-        C: plumbing::UnindexedConsumer,
-        PF: FnOnce() -> P + Clone + Send,
-    {
-        type Combiner = C::Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            if self.consumer.max_afford(1) == 0 {
-                0
-            } else {
-                request
-            }
-        }
-    }
-
-    impl<C, PF, P> plumbing::UnindexedConsumer for Consumer<C, PF>
-    where
-        C: plumbing::UnindexedConsumer,
-        PF: FnOnce() -> P + Clone + Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self {
-                consumer: self.consumer.split_off_left(),
-                into_pred: self.into_pred.clone(),
-            }
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            self.consumer.to_combiner()
-        }
     }
 
     impl<C, P> CollectorBase for Serial<C, P>

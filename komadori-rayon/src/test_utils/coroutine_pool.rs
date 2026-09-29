@@ -10,7 +10,7 @@ use proptest::prelude::*;
 use rand::{RngExt, SeedableRng, distr::Distribution, rngs::Xoshiro128PlusPlus};
 
 use crate::{
-    collector::plumbing::{Combiner, Consumer, UnindexedConsumer},
+    collector::plumbing::{Consumer, UnindexedConsumer},
     test_utils::{IndexedProducer, IndexedSplitDecision},
 };
 
@@ -250,7 +250,7 @@ where
         UnindexedSplitDecision::Split { left, right } => {
             let producer_left = producer.split_off_left();
             let consumer_left = consumer.split_off_left();
-            let combiner = consumer.to_combiner();
+            let combine = consumer.to_combiner();
             let producer_right = producer;
             let consumer_right = consumer;
             let state_left = Rc::clone(&state);
@@ -279,7 +279,7 @@ where
             yield_now().await;
 
             let mut output = left_output;
-            combiner.combine(&mut output, right_output);
+            combine(&mut output, right_output);
             yield_now().await;
 
             Ok(output)
@@ -317,7 +317,7 @@ where
         IndexedSplitDecision::Split { left, right, at } => {
             let at = *at;
             let (producer_left, producer_right) = (producer.split_off_left_at(at), producer);
-            let ((consumer_left, combiner), consumer_right) =
+            let ((consumer_left, combine), consumer_right) =
                 (consumer.split_off_left_at(at), consumer);
             let state_left = Rc::clone(&state);
             let state_right = Rc::clone(&state);
@@ -349,7 +349,7 @@ where
             yield_now().await;
 
             let mut output = left_output;
-            combiner.combine(&mut output, right_output);
+            combine(&mut output, right_output);
             yield_now().await;
 
             Ok(output)

@@ -7,8 +7,8 @@ use crate::{
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
         plumbing::{
-            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
-            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+            Consumer, DefineSerial, DefineUnindexedSerial, OpaqueUnindexedConsumer, SerialOf,
+            SerialOutputOf, UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
         },
     },
     helpers::{unique, unique_unindexed},
@@ -161,19 +161,19 @@ impl Clone for ParOr {
 }
 
 impl<'a> DefineSerial<'a> for ParAnd {
-    type Serial = unique::Serial<'a, Self, consumer::Consumer<'a, true>>;
+    type Serial = unique::Serial<'a, Self, consumer::Serial<'a, true>>;
 }
 
 impl<'a> DefineSerial<'a> for ParOr {
-    type Serial = unique::Serial<'a, Self, consumer::Consumer<'a, false>>;
+    type Serial = unique::Serial<'a, Self, consumer::Serial<'a, false>>;
 }
 
 impl<'a> DefineUnindexedSerial<'a> for ParAnd {
-    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Consumer<'a, true>>;
+    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Serial<'a, true>>;
 }
 
 impl<'a> DefineUnindexedSerial<'a> for ParOr {
-    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Consumer<'a, false>>;
+    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Serial<'a, false>>;
 }
 
 impl ParallelCollectorBase for ParAnd {
@@ -309,10 +309,10 @@ fn max_afford<const IS_AND: bool>(flag: &AtomicBool, request: usize) -> usize {
 fn parts<const IS_AND: bool>(
     flag: &AtomicBool,
 ) -> (
-    consumer::Consumer<'_, IS_AND>,
+    OpaqueUnindexedConsumer!(consumer::Serial<'_, IS_AND>),
     impl FnOnce(()) -> ControlFlow<()>,
 ) {
-    (consumer::Consumer::new(flag), |_| {
+    (consumer::unindexed(flag), |_| {
         if flag.load(Ordering::Relaxed) ^ IS_AND {
             ControlFlow::Break(())
         } else {
@@ -324,8 +324,11 @@ fn parts<const IS_AND: bool>(
 #[inline]
 fn take_parts<const IS_AND: bool>(
     flag: &AtomicBool,
-) -> (consumer::Consumer<'_, IS_AND>, impl FnOnce(())) {
-    (consumer::Consumer::new(flag), |_| {})
+) -> (
+    OpaqueUnindexedConsumer!(consumer::Serial<'_, IS_AND>),
+    impl FnOnce(()),
+) {
+    (consumer::unindexed(flag), |_| {})
 }
 
 #[expect(missing_debug_implementations)]
@@ -335,20 +338,23 @@ mod consumer {
         sync::atomic::{AtomicBool, Ordering},
     };
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{self, BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    pub struct Consumer<'a, const IS_AND: bool>(&'a AtomicBool);
-
-    pub struct Combiner(());
-
-    impl<'a, const IS_AND: bool> Consumer<'a, IS_AND> {
-        #[inline]
-        pub(super) fn new(flag: &'a AtomicBool) -> Self {
-            Self(flag)
+    pub fn unindexed<const IS_AND: bool>(
+        flag: &AtomicBool,
+    ) -> OpaqueUnindexedConsumer!(Serial<'_, IS_AND>) {
+        BasicUnindexedConsumer {
+            state: flag,
+            split_f: Clone::clone,
+            combiner_f: |_| |_, _| {},
+            ma_f: |flag, request| super::max_afford::<IS_AND>(flag, request),
+            collector_f: Serial,
         }
     }
 
-    impl<const IS_AND: bool> plumbing::CollectorBase for Consumer<'_, IS_AND> {
+    pub struct Serial<'a, const IS_AND: bool>(&'a AtomicBool);
+
+    impl<const IS_AND: bool> plumbing::CollectorBase for Serial<'_, IS_AND> {
         type Output = ();
 
         #[inline]
@@ -362,7 +368,7 @@ mod consumer {
         }
     }
 
-    impl<const IS_AND: bool> plumbing::Collector<bool> for Consumer<'_, IS_AND> {
+    impl<const IS_AND: bool> plumbing::Collector<bool> for Serial<'_, IS_AND> {
         #[inline]
         fn collect(&mut self, item: bool) -> ControlFlow<()> {
             if IS_AND {
@@ -379,34 +385,6 @@ mod consumer {
                 }
             }
         }
-    }
-
-    impl<const IS_AND: bool> plumbing::Consumer for Consumer<'_, IS_AND> {
-        type Combiner = Combiner;
-
-        plumbing::impl_split_off_left_at_via_unindexed! {}
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            plumbing::CollectorBase::max_afford(self, request)
-        }
-    }
-
-    impl<const IS_AND: bool> plumbing::UnindexedConsumer for Consumer<'_, IS_AND> {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self::new(self.0)
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl plumbing::Combiner<()> for Combiner {
-        #[inline]
-        fn combine(self, _left: &mut (), _right: ()) {}
     }
 }
 

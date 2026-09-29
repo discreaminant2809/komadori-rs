@@ -259,11 +259,6 @@ mod consumer {
         }
     }
 
-    pub struct Combiner<C1, C2> {
-        combiner1: C1,
-        combiner2: C2,
-    }
-
     // Unlike komadori's tee variants, the collectors here are obtained
     // from fused parallel collectors, which already guarantees fuse.
     pub struct Serial<C1, C2, TF> {
@@ -297,12 +292,16 @@ mod consumer {
         C2: plumbing::Consumer,
         TF: Clone + Send,
     {
-        type Combiner = Combiner<C1::Combiner, C2::Combiner>;
-
         #[inline]
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let (consumer1, combiner1) = self.consumer1.split_off_left_at(index);
-            let (consumer2, combiner2) = self.consumer2.split_off_left_at(index);
+        fn split_off_left_at(
+            &mut self,
+            index: usize,
+        ) -> (
+            Self,
+            impl FnOnce(&mut Self::Output, Self::Output) + use<C1, C2, TF>,
+        ) {
+            let (consumer1, combine1) = self.consumer1.split_off_left_at(index);
+            let (consumer2, combine2) = self.consumer2.split_off_left_at(index);
 
             (
                 Self {
@@ -310,9 +309,9 @@ mod consumer {
                     consumer2,
                     teer: self.teer.clone(),
                 },
-                Combiner {
-                    combiner1,
-                    combiner2,
+                |(left1, left2), (right1, right2)| {
+                    combine1(left1, right1);
+                    combine2(left2, right2)
                 },
             )
         }
@@ -342,23 +341,14 @@ mod consumer {
         }
 
         #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner {
-                combiner1: self.consumer1.to_combiner(),
-                combiner2: self.consumer2.to_combiner(),
-            }
-        }
-    }
+        fn to_combiner(&self) -> impl FnOnce(&mut Self::Output, Self::Output) + use<C1, C2, TF> {
+            let combine1 = self.consumer1.to_combiner();
+            let combine2 = self.consumer2.to_combiner();
 
-    impl<C1, C2, O1, O2> plumbing::Combiner<(O1, O2)> for Combiner<C1, C2>
-    where
-        C1: plumbing::Combiner<O1>,
-        C2: plumbing::Combiner<O2>,
-    {
-        #[inline]
-        fn combine(self, (left1, left2): &mut (O1, O2), (right1, right2): (O1, O2)) {
-            self.combiner1.combine(left1, right1);
-            self.combiner2.combine(left2, right2);
+            |(left1, left2), (right1, right2)| {
+                combine1(left1, right1);
+                combine2(left2, right2)
+            }
         }
     }
 

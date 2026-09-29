@@ -117,7 +117,7 @@ macro_rules! prim_sum_impl {
                 impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
                 impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
-                unique::uniquify((sum::Consumer::new(), |count| {
+                unique::uniquify((sum::unindexed(), |count| {
                     self.0 += count;
                     ControlFlow::Continue(())
                 }))
@@ -134,7 +134,7 @@ macro_rules! prim_sum_impl {
                 >,
                 impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
-                unique_unindexed::uniquify((sum::Consumer::new(), |count| {
+                unique_unindexed::uniquify((sum::unindexed(), |count| {
                     self.0 += count;
                     ControlFlow::Continue(())
                 }))
@@ -188,7 +188,7 @@ macro_rules! prim_product_impl {
                 impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
                 impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
-                unique::uniquify((product::Consumer::new(), |count| {
+                unique::uniquify((product::unindexed(), |count| {
                     self.0 *= count;
                     ControlFlow::Continue(())
                 }))
@@ -205,7 +205,7 @@ macro_rules! prim_product_impl {
                 >,
                 impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
             ) {
-                unique_unindexed::uniquify((product::Consumer::new(), |count| {
+                unique_unindexed::uniquify((product::unindexed(), |count| {
                     self.0 *= count;
                     ControlFlow::Continue(())
                 }))
@@ -235,155 +235,53 @@ macro_rules! float_impls {
 }
 float_impls!(f32 f64);
 
-#[allow(missing_debug_implementations)]
 mod sum {
-    use std::{marker::PhantomData, ops::AddAssign};
+    use std::ops::AddAssign;
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumer};
+    use crate::collector::plumbing::{BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    pub struct Consumer<Num>(PhantomData<Num>);
-
-    pub struct Combiner(());
+    pub fn unindexed<Num>() -> OpaqueUnindexedConsumer!(Serial<Num>)
+    where
+        Serial<Num>: Default + CollectorBase<Output = Num>,
+        Num: AddAssign + Send,
+    {
+        BasicUnindexedConsumer {
+            state: (),
+            split_f: Clone::clone,
+            combiner_f: |_| |left, right| *left += right,
+            ma_f: |_, request| request,
+            collector_f: |_| Serial::default(),
+        }
+    }
 
     pub type Serial<Num> = komadori::num::IntoSum<Num>;
-
-    impl<Num> Consumer<Num> {
-        #[inline]
-        pub(super) fn new() -> Self {
-            Self(PhantomData)
-        }
-    }
-
-    impl<Num> IntoCollectorBase for Consumer<Num>
-    where
-        Serial<Num>: Default + CollectorBase<Output = Num>,
-    {
-        type Output = Num;
-
-        type IntoCollector = Serial<Num>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial::default()
-        }
-    }
-
-    impl<Num> plumbing::Consumer for Consumer<Num>
-    where
-        Serial<Num>: Default + CollectorBase<Output = Num>,
-        Num: AddAssign + Send,
-    {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-    }
-
-    impl<Num> UnindexedConsumer for Consumer<Num>
-    where
-        Serial<Num>: Default + CollectorBase<Output = Num>,
-        Num: AddAssign + Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self::new()
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl<Num> plumbing::Combiner<Num> for Combiner
-    where
-        Num: AddAssign,
-    {
-        #[inline]
-        fn combine(self, left: &mut Num, right: Num) {
-            *left += right;
-        }
-    }
 }
 
 #[allow(missing_debug_implementations)]
 mod product {
-
-    use std::{marker::PhantomData, ops::MulAssign};
+    use std::ops::MulAssign;
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumer};
+    use crate::collector::plumbing::{BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    pub struct Consumer<Num>(PhantomData<Num>);
-
-    pub struct Combiner(());
+    pub fn unindexed<Num>() -> OpaqueUnindexedConsumer!(Serial<Num>)
+    where
+        Serial<Num>: Default + CollectorBase<Output = Num>,
+        Num: MulAssign + Send,
+    {
+        BasicUnindexedConsumer {
+            state: (),
+            split_f: Clone::clone,
+            combiner_f: |_| |left, right| *left *= right,
+            ma_f: |_, request| request,
+            collector_f: |_| Serial::default(),
+        }
+    }
 
     pub type Serial<Num> = komadori::num::IntoProduct<Num>;
-
-    impl<Num> Consumer<Num> {
-        #[inline]
-        pub(super) fn new() -> Self {
-            Self(PhantomData)
-        }
-    }
-
-    impl<Num> IntoCollectorBase for Consumer<Num>
-    where
-        Serial<Num>: Default + CollectorBase<Output = Num>,
-    {
-        type Output = Num;
-
-        type IntoCollector = Serial<Num>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial::default()
-        }
-    }
-
-    impl<Num> plumbing::Consumer for Consumer<Num>
-    where
-        Serial<Num>: Default + CollectorBase<Output = Num>,
-        Num: MulAssign + Send,
-    {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-    }
-
-    impl<Num> UnindexedConsumer for Consumer<Num>
-    where
-        Serial<Num>: Default + CollectorBase<Output = Num>,
-        Num: MulAssign + Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self::new()
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl<Num> plumbing::Combiner<Num> for Combiner
-    where
-        Num: MulAssign,
-    {
-        #[inline]
-        fn combine(self, left: &mut Num, right: Num) {
-            *left *= right;
-        }
-    }
 }
 
 #[cfg(test)]

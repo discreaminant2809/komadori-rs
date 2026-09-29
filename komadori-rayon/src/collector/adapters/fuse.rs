@@ -202,14 +202,13 @@ mod consumer {
     where
         C: plumbing::Consumer,
     {
-        type Combiner = C::Combiner;
-
         #[inline]
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let (consumer, combiner) =
-                self.consumer
-                    .split_off_left_at(if self.stopped { 0 } else { index });
-
+        fn split_off_left_at(
+            &mut self,
+            index: usize,
+        ) -> (Self, impl FnOnce(&mut Self::Output, Self::Output) + use<C>) {
+            let index = if self.stopped { 0 } else { index };
+            let (consumer, combiner) = self.consumer.split_off_left_at(index);
             (Self::new(consumer, self.stopped), combiner)
         }
 
@@ -234,7 +233,7 @@ mod consumer {
         }
 
         #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
+        fn to_combiner(&self) -> impl FnOnce(&mut Self::Output, Self::Output) + use<C> {
             self.consumer.to_combiner()
         }
     }

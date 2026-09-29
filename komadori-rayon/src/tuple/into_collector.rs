@@ -377,8 +377,6 @@ mod consumer {
 
     pub struct Consumer<Cs: Tuple>(Cs);
 
-    pub struct Combiner<Cs: Tuple>(Cs);
-
     // We don't need to fuse. We've fused at the parallel collector level.
     pub struct Serial<Cs: Tuple>(Cs);
 
@@ -412,16 +410,21 @@ mod consumer {
             where
                 $($C: plumbing::Consumer,)*
             {
-                type Combiner = Combiner<($($C::Combiner,)*)>;
-
                 #[inline]
-                fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
+                fn split_off_left_at(
+                    &mut self, index: usize
+                ) -> (Self, impl FnOnce(&mut Self::Output, Self::Output) + use<$($C,)*>) {
                     let ($($C,)*) = &mut self.0;
                     $(let $C = $C.split_off_left_at(index);)*
+                    let combiners = ($($C.1,)*);
 
                     (
                         Self(($($C.0,)*)),
-                        Combiner(($($C.1,)*)),
+                        |($($C,)*), ($($O,)*)| {
+                            let ($($O,)*) = ($(($C, $O),)*);
+                            let ($($C,)*) = combiners;
+                            $($C($O.0, $O.1);)*
+                        },
                     )
                 }
 
@@ -446,22 +449,15 @@ mod consumer {
                 }
 
                 #[inline]
-                fn to_combiner(&self) -> Self::Combiner {
+                fn to_combiner(&self) -> impl FnOnce(&mut Self::Output, Self::Output) + use<$($C,)*> {
                     let ($($C,)*) = &self.0;
-                    Combiner(($($C.to_combiner(),)*))
-                }
-            }
+                    let combiners = ($($C.to_combiner(),)*);
 
-            #[expect(non_snake_case)]
-            impl<$($C,)* $($O,)*> plumbing::Combiner<($($O,)*)> for Combiner<($($C,)*)>
-            where
-                $($C: plumbing::Combiner<$O>,)*
-            {
-                #[inline]
-                fn combine(self, ($($C,)*): &mut ($($O,)*), ($($O,)*): ($($O,)*)) {
-                    let ($($O,)*) = ($(($C, $O),)*);
-                    let ($($C,)*) = self.0;
-                    $($C.combine($O.0, $O.1);)*
+                    |($($C,)*), ($($O,)*)| {
+                        let ($($O,)*) = ($(($C, $O),)*);
+                        let ($($C,)*) = combiners;
+                        $($C($O.0, $O.1);)*
+                    }
                 }
             }
         };

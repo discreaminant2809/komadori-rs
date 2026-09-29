@@ -14,7 +14,7 @@ pub(crate) fn commit<'a, T>(proof: WriteProof<'a, T>, expected_addr: *mut T, exp
     assert_eq!(
         (proof.start.get(), proof.init_len),
         (expected_addr, expected_len),
-        "outputs were not fully reduced: expected (addr: {:?}, len: {}), got (addr: {:?}, len: {})",
+        "outputs were not fully combined: expected (addr: {:?}, len: {}), got (addr: {:?}, len: {})",
         expected_addr,
         expected_len,
         proof.start,
@@ -46,7 +46,7 @@ where
 {
     /// # Safety
     ///
-    /// Must ensure that `start` is properly aligned, and the memory region
+    /// Must ensure that `start` is non-null and properly aligned, and the memory region
     /// from `start` to `start.add(len)` is not aliased and valid to write to.
     pub(crate) unsafe fn new(start: *mut T, len: usize) -> Self {
         Consumer {
@@ -69,8 +69,6 @@ pub struct WriteProof<'a, T> {
     _marker: PhantomData<fn(&'a mut [T]) -> &'a mut [T]>,
 }
 
-pub struct Combiner(());
-
 impl<'a, T> IntoCollectorBase for Consumer<'a, T> {
     type Output = WriteProof<'a, T>;
 
@@ -91,50 +89,36 @@ impl<'a, T> plumbing::Consumer for Consumer<'a, T>
 where
     T: Send,
 {
-    type Combiner = Combiner;
+    #[inline]
+    fn split_off_left_at(
+        &mut self,
+        index: usize,
+    ) -> (
+        Self,
+        impl FnOnce(&mut Self::Output, Self::Output) + use<'a, T>,
+    ) {
+        assert!(
+            (0..=self.len).contains(&index),
+            "splitting out of bound: len is {}, but index is {index}",
+            self.len,
+        );
 
-    fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-        // Based on the trait's spec, the caller may provide an index exceeding
-        // the reported len.
-        let index = index.clamp(0, self.len);
+        let consumer = Self {
+            start: self.start,
+            len: index,
+            _marker: PhantomData,
+        };
 
-        let left_start = self.start;
-        unsafe {
-            // SAFETY: the index was clamped to 0..=len.
-            self.start = self.start.add(index);
-        }
+        // SAFETY: the index was checked to be in 0..=len.
+        self.start = unsafe { self.start.add(index) };
         self.len -= index;
 
-        (
-            Self {
-                start: left_start,
-                len: index,
-                _marker: PhantomData,
-            },
-            Combiner(()),
-        )
+        (consumer, WriteProof::append)
     }
-}
 
-impl<'a, T> plumbing::Combiner<WriteProof<'a, T>> for Combiner {
-    fn combine(self, left: &mut WriteProof<'a, T>, right: WriteProof<'a, T>) {
-        left.debug_assert_fully_written();
-        right.debug_assert_fully_written();
-
-        let expected_addr = unsafe { left.start.add(left.init_len) };
-        if expected_addr != right.start {
-            #[cfg(debug_assertions)]
-            panic!(
-                "failed to combine write proofs: left address = {:?}, expected right address {:?}, got right address {:?}",
-                left.start, expected_addr, right.start,
-            );
-
-            // If we're not in debug assertion, drop everything written in `right`.
-        } else {
-            left.init_len += right.init_len;
-            left.len += right.len;
-            forget(right);
-        }
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        self.len.min(request)
     }
 }
 
@@ -146,6 +130,28 @@ impl<'a, T> WriteProof<'a, T> {
             "have not fully written: address = {:?}, expected len {}, got len {}",
             self.start, self.len, self.init_len,
         );
+    }
+
+    #[inline]
+    fn append(&mut self, other: Self) {
+        self.debug_assert_fully_written();
+        other.debug_assert_fully_written();
+
+        let expected_addr = unsafe { self.start.add(self.init_len) };
+        if expected_addr != other.start {
+            #[cfg(debug_assertions)]
+            panic!(
+                "failed to combine write proofs: left address = {:?}, \
+                expected right address {:?}, got right address {:?}",
+                self.start, expected_addr, other.start,
+            );
+
+            // If we're not in debug assertion, drop everything written in `right`.
+        } else {
+            self.init_len += other.init_len;
+            self.len += other.len;
+            forget(other);
+        }
     }
 
     #[inline]

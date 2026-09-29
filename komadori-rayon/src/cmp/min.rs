@@ -101,7 +101,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::Consumer::new(), |output| {
+        unique::uniquify((consumer::unindexed(), |output| {
             combine(&mut self.min, output);
             ControlFlow::Continue(())
         }))
@@ -121,7 +121,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::Consumer::new(), |output| {
+        unique_unindexed::uniquify((consumer::unindexed(), |output| {
             combine(&mut self.min, output);
             ControlFlow::Continue(())
         }))
@@ -137,75 +137,21 @@ fn combine<T: Ord>(left: &mut Option<T>, right: Option<T>) {
     });
 }
 
-#[allow(missing_debug_implementations)]
 mod consumer {
-    use std::marker::PhantomData;
+    use crate::collector::plumbing::{BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    use komadori::prelude::*;
-
-    use crate::collector::plumbing::{self, UnindexedConsumer};
-
-    pub struct Consumer<T>(PhantomData<T>);
-
-    pub struct Combiner(());
+    pub fn unindexed<T>() -> OpaqueUnindexedConsumer!(Serial<T>)
+    where
+        T: Ord + Send,
+    {
+        BasicUnindexedConsumer {
+            state: (),
+            split_f: |_| {},
+            combiner_f: |_| super::combine,
+            ma_f: |_, request| request,
+            collector_f: |_| Serial::new(),
+        }
+    }
 
     pub type Serial<T> = komadori::cmp::Min<T>;
-
-    impl<T> Consumer<T> {
-        #[inline]
-        pub(super) fn new() -> Self {
-            Self(PhantomData)
-        }
-    }
-
-    impl<T> IntoCollectorBase for Consumer<T>
-    where
-        T: Ord,
-    {
-        type Output = Option<T>;
-
-        type IntoCollector = Serial<T>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Self::IntoCollector::new()
-        }
-    }
-
-    impl<T> plumbing::Consumer for Consumer<T>
-    where
-        T: Ord + Send,
-    {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-    }
-
-    impl<T> UnindexedConsumer for Consumer<T>
-    where
-        T: Ord + Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self::new()
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl<T> plumbing::Combiner<Option<T>> for Combiner
-    where
-        T: Ord,
-    {
-        #[inline]
-        fn combine(self, left: &mut Option<T>, right: Option<T>) {
-            super::combine(left, right);
-        }
-    }
 }

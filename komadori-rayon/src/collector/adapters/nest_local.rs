@@ -89,7 +89,7 @@ where
     ) {
         let (consumer, commit) = self.collector.unindexed_parts();
         unique::uniquify((
-            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
+            consumer::unindexed(consumer, self.splittable_inner.anchor()),
             commit,
         ))
     }
@@ -103,7 +103,7 @@ where
     ) {
         let (consumer, commit) = self.collector.take_unindexed_parts();
         unique::take_uniquify((
-            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
+            consumer::unindexed(consumer, self.splittable_inner.take_anchor()),
             commit,
         ))
     }
@@ -125,7 +125,7 @@ where
     ) {
         let (consumer, commit) = self.collector.unindexed_parts();
         unique_unindexed::uniquify((
-            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
+            consumer::unindexed(consumer, self.splittable_inner.anchor()),
             commit,
         ))
     }
@@ -141,7 +141,7 @@ where
     ) {
         let (consumer, commit) = self.collector.take_unindexed_parts();
         unique_unindexed::take_uniquify((
-            consumer::Consumer::new(consumer, self.splittable_inner.anchor()),
+            consumer::unindexed(consumer, self.splittable_inner.take_anchor()),
             commit,
         ))
     }
@@ -152,86 +152,41 @@ mod consumer {
     use std::ops::ControlFlow;
 
     use crate::collector::plumbing::{
-        self, Collector, CollectorBase, IntoCollector, IntoCollectorBase, UnindexedConsumer,
+        self, BasicUnindexedConsumer, Collector, CollectorBase, OpaqueUnindexedConsumer,
+        UnindexedConsumer,
     };
 
     use super::Anchor;
 
-    pub struct Consumer<C, A> {
+    pub fn unindexed<C, A>(
         consumer: C,
         anchor: A,
+    ) -> OpaqueUnindexedConsumer!(Serial<C::IntoCollector, A::Inner>)
+    where
+        C: UnindexedConsumer<IntoCollector: Collector<<A::Inner as CollectorBase>::Output>>,
+        A: Anchor,
+    {
+        BasicUnindexedConsumer {
+            state: (consumer, anchor),
+            split_f: |(consumer, anchor)| (consumer.split_off_left(), anchor.clone()),
+            combiner_f: |(consumer, _)| consumer.to_combiner(),
+            ma_f: |(consumer, anchor), request| {
+                if consumer.max_afford(1) == 0 {
+                    0
+                } else {
+                    anchor.max_afford(request)
+                }
+            },
+            collector_f: |(consumer, anchor)| Serial {
+                outer: consumer.into_collector(),
+                inner: anchor.into_inner(),
+            },
+        }
     }
 
     pub struct Serial<O, I> {
         outer: O,
         inner: I,
-    }
-
-    impl<C, A> Consumer<C, A> {
-        pub fn new(consumer: C, anchor: A) -> Self {
-            Self { consumer, anchor }
-        }
-    }
-
-    impl<C, A, I> IntoCollectorBase for Consumer<C, A>
-    where
-        C: IntoCollector<I::Output>,
-        A: Anchor<Inner = I>,
-        I: CollectorBase,
-    {
-        type Output = C::Output;
-
-        type IntoCollector = Serial<C::IntoCollector, I>;
-
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial {
-                outer: self.consumer.into_collector(),
-                inner: self.anchor.into_inner(),
-            }
-        }
-    }
-
-    impl<C, A, I> plumbing::Consumer for Consumer<C, A>
-    where
-        C: UnindexedConsumer<IntoCollector: Collector<I::Output>>,
-        A: Anchor<Inner = I>,
-        I: CollectorBase,
-    {
-        type Combiner = C::Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _index: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            if self.consumer.max_afford(1) == 0 {
-                0
-            } else {
-                self.anchor.max_afford(request)
-            }
-        }
-    }
-
-    impl<C, A, I> UnindexedConsumer for Consumer<C, A>
-    where
-        C: UnindexedConsumer<IntoCollector: Collector<I::Output>>,
-        A: Anchor<Inner = I>,
-        I: CollectorBase,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self {
-                consumer: self.consumer.split_off_left(),
-                anchor: self.anchor.clone(),
-            }
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            self.consumer.to_combiner()
-        }
     }
 
     impl<O, I> CollectorBase for Serial<O, I>

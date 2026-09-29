@@ -103,7 +103,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::Consumer::new(&self.f), |output| {
+        unique::uniquify((consumer::unindexed(&self.f), |output| {
             crate::iter::combine_opt(&mut self.accum, output, &self.f);
             ControlFlow::Continue(())
         }))
@@ -132,95 +132,34 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::Consumer::new(&self.f), |output| {
+        unique_unindexed::uniquify((consumer::unindexed(&self.f), |output| {
             crate::iter::combine_opt(&mut self.accum, output, &self.f);
             ControlFlow::Continue(())
         }))
     }
 }
 
-#[allow(missing_debug_implementations)]
 mod consumer {
-    use std::marker::PhantomData;
+    use crate::collector::plumbing::{BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    use komadori::prelude::*;
-
-    use crate::collector::plumbing::{self, UnindexedConsumer};
-
-    pub struct Consumer<T, F> {
-        f: F,
-        _marker: PhantomData<T>,
-    }
-
-    pub struct Combiner<F> {
-        f: F,
+    pub fn unindexed<T, F>(f: F) -> OpaqueUnindexedConsumer!(Serial<T, F>)
+    where
+        T: Send,
+        F: FnMut(&mut T, T) + Clone + Send,
+    {
+        BasicUnindexedConsumer {
+            state: f,
+            split_f: Clone::clone,
+            combiner_f: |f| {
+                let f = f.clone();
+                |left, right| crate::iter::combine_opt(left, right, f)
+            },
+            ma_f: |_, request| request,
+            collector_f: Serial::new,
+        }
     }
 
     pub type Serial<T, F> = komadori::iter::Reduce<T, F>;
-
-    impl<T, F> Consumer<T, F> {
-        pub(super) fn new(f: F) -> Self {
-            Self {
-                f,
-                _marker: PhantomData,
-            }
-        }
-    }
-
-    impl<T, F> IntoCollectorBase for Consumer<T, F>
-    where
-        F: FnMut(&mut T, T),
-    {
-        type Output = Option<T>;
-
-        type IntoCollector = komadori::iter::Reduce<T, F>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Self::IntoCollector::new(self.f)
-        }
-    }
-
-    impl<T, F> plumbing::Consumer for Consumer<T, F>
-    where
-        T: Send,
-        F: FnMut(&mut T, T) + Clone + Send,
-    {
-        type Combiner = Combiner<F>;
-
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-    }
-
-    impl<T, F> plumbing::UnindexedConsumer for Consumer<T, F>
-    where
-        T: Send,
-        F: FnMut(&mut T, T) + Clone + Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self {
-                f: self.f.clone(),
-                _marker: PhantomData,
-            }
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner { f: self.f.clone() }
-        }
-    }
-
-    impl<F, T> plumbing::Combiner<Option<T>> for Combiner<F>
-    where
-        F: FnMut(&mut T, T),
-    {
-        #[inline]
-        fn combine(self, left: &mut Option<T>, right: Option<T>) {
-            crate::iter::combine_opt(left, right, self.f);
-        }
-    }
 }
 
 #[cfg(test)]

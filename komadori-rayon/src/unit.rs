@@ -76,7 +76,7 @@ impl ParallelCollectorBase for ParCollector {
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::Consumer, |_| ControlFlow::Break(())))
+        unique::uniquify((consumer::unindexed(), |_| ControlFlow::Break(())))
     }
 }
 
@@ -90,59 +90,24 @@ impl UnindexedParallelCollectorBase for ParCollector {
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::Consumer, |_| ControlFlow::Break(())))
+        unique_unindexed::uniquify((consumer::unindexed(), |_| ControlFlow::Break(())))
     }
 }
 
 mod consumer {
     use komadori::prelude::*;
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    pub struct Consumer;
-
-    pub struct Combiner;
+    pub fn unindexed() -> OpaqueUnindexedConsumer!(Serial) {
+        BasicUnindexedConsumer {
+            state: (),
+            split_f: Clone::clone,
+            combiner_f: |_| |_, _| {},
+            ma_f: |_, _| 0,
+            collector_f: IntoCollectorBase::into_collector,
+        }
+    }
 
     pub type Serial = <() as IntoCollectorBase>::IntoCollector;
-
-    impl IntoCollectorBase for Consumer {
-        type Output = ();
-
-        type IntoCollector = Serial;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            ().into_collector()
-        }
-    }
-
-    impl plumbing::Consumer for Consumer {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (Self, Combiner)
-        }
-
-        #[inline]
-        fn max_afford(&self, _request: usize) -> usize {
-            0
-        }
-    }
-
-    impl plumbing::UnindexedConsumer for Consumer {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner
-        }
-    }
-
-    impl plumbing::Combiner<()> for Combiner {
-        fn combine(self, _: &mut (), _: ()) {}
-    }
 }

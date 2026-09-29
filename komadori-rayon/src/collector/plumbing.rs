@@ -126,7 +126,6 @@ mod basic_consumer;
 mod basic_unindexed_consumer;
 mod consumer_ext;
 
-#[expect(unused, reason = "used later")]
 pub(crate) use basic_consumer::BasicConsumer;
 pub(crate) use basic_unindexed_consumer::BasicUnindexedConsumer;
 pub(crate) use consumer_ext::*;
@@ -206,22 +205,32 @@ pub type UnindexedSerialOutputOf<'a, C> = <UnindexedSerialOf<'a, C> as Collector
 /// After the two split consumers are processed to two outputs,
 /// you use a provided combiner to combine those two.
 pub trait Consumer: IntoCollectorBase<Output: Send> + Send + Sized {
-    /// Which combiner being produced?
-    type Combiner: Combiner<Self::Output>;
-
-    /// Produces the "left" consumer and a combiner. After calling this method,
+    /// Produces the "left" consumer. After calling this method,
     /// this consumer should be treated as the "right" consumer,
-    /// effectively being split.
-    /// After both produce outputs, the outputs are combined
-    /// using that combiner.
-    fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner);
+    /// effectively being split at `index`.
+    ///
+    /// A function is returned also. After both produce outputs,
+    /// the outputs are combined using that function.
+    /// The returned function must **not** use the lifetime of `&mut self`.
+    // We don't use the old `(&mut self, usize) -> (Self, Combiner)` form
+    // because the implementor would have to use precise capture (`use<...>`)
+    // to avoid capturing the lifetime of `&mut self`.
+    // Sure that for `UnindexedConsumer` the implementor has to, which is unavoidable.
+    // We can only avoid precise capture as much as we can.
+    fn split_off_left_at(
+        &mut self,
+        index: usize,
+    ) -> (
+        Self,
+        impl FnOnce(&mut Self::Output, Self::Output) + use<Self>,
+    );
 
     /// Queries the maximum amount of items this consumer can afford
     /// given the requested amount of items.
     ///
     /// It is a hint used for the driver to stop splitting further
-    /// if the returned value is `0`, but it can be ignored and
-    /// the driver may continue splitting anyway.
+    /// if the returned value is `0` when `request > 0`,
+    /// but it can be ignored and the driver may continue splitting anyway.
     #[inline]
     fn max_afford(&self, request: usize) -> usize {
         request
@@ -236,30 +245,16 @@ pub trait UnindexedConsumer: Consumer {
     /// Produces the "left" consumer. After calling this method,
     /// this consumer should be treated as the "right" consumer,
     /// effectively being split.
+    ///
     /// After both produce outputs, the outputs are combined
-    /// using the combiner produced by [`to_combiner()`](Self::to_combiner).
+    /// using a function produced by [`to_combiner()`](Self::to_combiner).
     fn split_off_left(&self) -> Self;
 
     /// Produces a combiner to combine the outputs
     /// of the two split of the consumers.
-    fn to_combiner(&self) -> Self::Combiner;
-}
-
-/// A combiner used to combine the outputs of the two splits of a consumer.
-pub trait Combiner<O> {
-    /// Combines two outputs by merging the "right" output
-    /// into the "left" one.
-    fn combine(self, left: &mut O, right: O);
-}
-
-impl<F, O> Combiner<O> for F
-where
-    F: FnOnce(&mut O, O),
-{
-    #[inline]
-    fn combine(self, left: &mut O, right: O) {
-        self(left, right)
-    }
+    ///
+    /// The returned function must **not** use the lifetime of `&self`.
+    fn to_combiner(&self) -> impl FnOnce(&mut Self::Output, Self::Output) + use<Self>;
 }
 
 /// Defines a wrapper that makes your serial collector type "unique."
@@ -302,8 +297,6 @@ macro_rules! uniquify_serial {
             }
             // SAFETY: we're JUST a marker.
             unsafe impl<This, C: Send> Send for Consumer<'_, This, C> {}
-
-            struct Combiner<C>(C);
 
             pub struct Serial<'a, This, C> {
                 collector: C,
@@ -380,15 +373,19 @@ macro_rules! uniquify_serial {
                 }
             }
 
-            impl<This, C> plumbing::Consumer for Consumer<'_, This, C>
+            impl<'a, This, C> plumbing::Consumer for Consumer<'a, This, C>
             where
                 C: plumbing::Consumer,
             {
-                type Combiner = Combiner<C::Combiner>;
-
                 #[inline]
-                fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-                    let (consumer, combiner) =
+                fn split_off_left_at(
+                    &mut self,
+                    index: usize,
+                ) -> (
+                    Self,
+                    impl FnOnce(&mut Self::Output, Self::Output) + use<'a, This, C>,
+                ) {
+                    let (consumer, combine) =
                         plumbing::Consumer::split_off_left_at(&mut self.consumer, index);
 
                     (
@@ -396,23 +393,13 @@ macro_rules! uniquify_serial {
                             consumer,
                             _marker: PhantomData,
                         },
-                        Combiner(combiner),
+                        |left, right| combine(&mut left.output, right.output),
                     )
                 }
 
                 #[inline]
                 fn max_afford(&self, request: usize) -> usize {
                     plumbing::Consumer::max_afford(&self.consumer, request)
-                }
-            }
-
-            impl<'a, This, C, O> plumbing::Combiner<Output<'a, This, O>> for Combiner<C>
-            where
-                C: plumbing::Combiner<O>,
-            {
-                #[inline]
-                fn combine(self, left: &mut Output<'a, This, O>, right: Output<'a, This, O>) {
-                    plumbing::Combiner::combine(self.0, &mut left.output, right.output);
                 }
             }
 
@@ -483,8 +470,6 @@ macro_rules! uniquify_serial {
             // SAFETY: we're JUST a marker.
             unsafe impl<This, C: Send> Send for Consumer<'_, This, C> {}
 
-            struct Combiner<C>(C);
-
             pub struct Serial<'a, This, C> {
                 collector: C,
                 _marker: InvariantLtAndNoAutoTraits<'a, This>,
@@ -560,22 +545,27 @@ macro_rules! uniquify_serial {
                 }
             }
 
-            impl<This, C> plumbing::Consumer for Consumer<'_, This, C>
+            impl<'a, This, C> plumbing::Consumer for Consumer<'a, This, C>
             where
                 C: plumbing::UnindexedConsumer,
             {
-                type Combiner = Combiner<C::Combiner>;
-
                 #[inline]
-                fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-                    let (consumer, combiner) =
+                fn split_off_left_at(
+                    &mut self,
+                    index: usize,
+                ) -> (
+                    Self,
+                    impl FnOnce(&mut Self::Output, Self::Output) + use<'a, This, C>,
+                ) {
+                    let (left, combine) =
                         plumbing::Consumer::split_off_left_at(&mut self.consumer, index);
+
                     (
                         Self {
-                            consumer,
+                            consumer: left,
                             _marker: PhantomData,
                         },
-                        Combiner(combiner),
+                        |left, right| combine(&mut left.output, right.output),
                     )
                 }
 
@@ -585,7 +575,7 @@ macro_rules! uniquify_serial {
                 }
             }
 
-            impl<This, C> plumbing::UnindexedConsumer for Consumer<'_, This, C>
+            impl<'a, This, C> plumbing::UnindexedConsumer for Consumer<'a, This, C>
             where
                 C: plumbing::UnindexedConsumer,
             {
@@ -598,18 +588,11 @@ macro_rules! uniquify_serial {
                 }
 
                 #[inline]
-                fn to_combiner(&self) -> Self::Combiner {
-                    Combiner(plumbing::UnindexedConsumer::to_combiner(&self.consumer))
-                }
-            }
-
-            impl<'a, This, C, O> plumbing::Combiner<Output<'a, This, O>> for Combiner<C>
-            where
-                C: plumbing::Combiner<O>,
-            {
-                #[inline]
-                fn combine(self, left: &mut Output<'a, This, O>, right: Output<'a, This, O>) {
-                    plumbing::Combiner::combine(self.0, &mut left.output, right.output);
+                fn to_combiner(
+                    &self,
+                ) -> impl FnOnce(&mut Self::Output, Self::Output) + use<'a, This, C> {
+                    let combine = plumbing::UnindexedConsumer::to_combiner(&self.consumer);
+                    |left, right| combine(&mut left.output, right.output)
                 }
             }
 
@@ -681,21 +664,42 @@ macro_rules! finish_boxed_impl {
 }
 pub(crate) use finish_boxed_impl;
 
-/// Syntax: `impl_split_off_left_at_via_unindexed! {}`
-macro_rules! impl_split_off_left_at_via_unindexed {
-    () => {
+macro_rules! impl_split_at_via_unindexed {
+    ($($generic_tt:tt)*) => {
         #[inline]
-        fn split_off_left_at(&mut self, _index: usize) -> (Self, Self::Combiner) {
+        fn split_off_left_at(
+            &mut self,
+            _index: usize,
+        ) -> (
+            Self,
+            impl FnOnce(&mut Self::Output, Self::Output) + use<$($generic_tt)*>,
+        ) {
             use $crate::collector::plumbing::UnindexedConsumer;
-
-            (
-                UnindexedConsumer::split_off_left(self),
-                UnindexedConsumer::to_combiner(self),
-            )
+            (UnindexedConsumer::split_off_left(self), UnindexedConsumer::to_combiner(self))
         }
     };
 }
-pub(crate) use impl_split_off_left_at_via_unindexed;
+pub(crate) use impl_split_at_via_unindexed;
+
+macro_rules! OpaqueConsumer {
+    ($CollectorTy:ty) => {
+        impl $crate::collector::plumbing::Consumer<
+            IntoCollector = $CollectorTy,
+            Output = <$CollectorTy as $crate::collector::plumbing::CollectorBase>::Output,
+        >
+    };
+}
+pub(crate) use OpaqueConsumer;
+
+macro_rules! OpaqueUnindexedConsumer {
+    ($CollectorTy:ty) => {
+        impl $crate::collector::plumbing::UnindexedConsumer<
+            IntoCollector = $CollectorTy,
+            Output = <$CollectorTy as $crate::collector::plumbing::CollectorBase>::Output,
+        >
+    };
+}
+pub(crate) use OpaqueUnindexedConsumer;
 
 #[inline]
 pub(crate) fn break_hint(collector: &(impl CollectorBase + ?Sized)) -> ControlFlow<()> {

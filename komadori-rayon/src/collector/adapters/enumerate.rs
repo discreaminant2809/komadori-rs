@@ -58,7 +58,7 @@ where
         let (consumer, commit) = self.collector.parts(len);
         let idx = &mut self.idx;
 
-        unique::uniquify((consumer::Consumer::new(consumer, *idx), move |output| {
+        unique::uniquify((consumer::indexed(consumer, *idx), move |output| {
             // If we stop early, there's no point to update the index
             // to cause an unnecessary and even incorrect panic in debug.
             commit(output)?;
@@ -75,7 +75,7 @@ where
         impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_parts(len);
-        unique::take_uniquify((consumer::Consumer::new(consumer, self.idx), commit))
+        unique::take_uniquify((consumer::indexed(consumer, self.idx), commit))
     }
 }
 
@@ -85,61 +85,34 @@ mod consumer {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{self, BasicConsumer, Consumer, OpaqueConsumer};
 
-    pub struct Consumer<C> {
-        consumer: C,
-        start: usize,
+    pub fn indexed<C>(consumer: C, start: usize) -> OpaqueConsumer!(Serial<C::IntoCollector>)
+    where
+        C: Consumer,
+    {
+        BasicConsumer {
+            state: (consumer, start),
+            split_f: |(consumer, start), idx| {
+                let (consumer, combiner) = consumer.split_off_left_at(idx);
+                let left_start = *start;
+                // The runtime is permitted to split pass we can hold,
+                // so even in the debug build, we shouldn't panic!
+                *start = start.wrapping_add(idx);
+
+                ((consumer, left_start), combiner)
+            },
+            ma_f: |(consumer, _), request| consumer.max_afford(request),
+            collector_f: |(consumer, idx)| Serial {
+                collector: consumer.into_collector(),
+                idx,
+            },
+        }
     }
 
     pub struct Serial<C> {
         collector: C,
         idx: usize,
-    }
-
-    impl<C> Consumer<C> {
-        pub(super) fn new(consumer: C, start: usize) -> Self {
-            Self { consumer, start }
-        }
-    }
-
-    impl<C> IntoCollectorBase for Consumer<C>
-    where
-        C: IntoCollectorBase,
-    {
-        type Output = C::Output;
-
-        type IntoCollector = Serial<C::IntoCollector>;
-
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial {
-                collector: self.consumer.into_collector(),
-                idx: self.start,
-            }
-        }
-    }
-
-    impl<C> plumbing::Consumer for Consumer<C>
-    where
-        C: plumbing::Consumer,
-    {
-        type Combiner = C::Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let (consumer, combiner) = self.consumer.split_off_left_at(index);
-            let start = self.start;
-            // The runtime is permitted to split pass we can hold,
-            // so even in the debug build, we shouldn't panic!
-            self.start = self.start.wrapping_add(index);
-
-            (Self { consumer, start }, combiner)
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            self.consumer.max_afford(request)
-        }
     }
 
     impl<C> CollectorBase for Serial<C>

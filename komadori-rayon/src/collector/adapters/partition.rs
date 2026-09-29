@@ -194,8 +194,8 @@ mod consumer {
     use either::Either;
 
     use crate::collector::plumbing::{
-        BasicUnindexedConsumer, Collector, CollectorBase, Combiner, UnindexedConsumer, and_break,
-        break_hint, finish_boxed_impl,
+        BasicUnindexedConsumer, Collector, CollectorBase, UnindexedConsumer, and_break, break_hint,
+        finish_boxed_impl,
     };
 
     // We don't use the `komadori` one to avoid one layer of `Fuse`.
@@ -222,8 +222,8 @@ mod consumer {
                 let left = left.to_combiner();
                 let right = right.to_combiner();
                 |(ll, lr): &mut _, (rl, rr)| {
-                    left.combine(ll, rl);
-                    right.combine(lr, rr);
+                    left(ll, rl);
+                    right(lr, rr);
                 }
             },
             ma_f: |(left, right), request| {

@@ -165,13 +165,10 @@ where
     ) {
         let (consumer, commit) = self.collector.unindexed_parts();
         let take_pred = &self.take_pred;
-        unique::uniquify((
-            consumer::Consumer::new(consumer, take_pred),
-            move |output| {
-                commit(output)?;
-                take_pred.break_hint()
-            },
-        ))
+        unique::uniquify((consumer::unindexed(consumer, take_pred), move |output| {
+            commit(output)?;
+            take_pred.break_hint()
+        }))
     }
 
     fn take_parts<'a>(
@@ -182,7 +179,7 @@ where
         impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_unindexed_parts();
-        unique::take_uniquify((consumer::Consumer::new(consumer, &self.take_pred), commit))
+        unique::take_uniquify((consumer::unindexed(consumer, &self.take_pred), commit))
     }
 }
 
@@ -202,13 +199,10 @@ where
     ) {
         let (consumer, commit) = self.collector.unindexed_parts();
         let take_pred = &self.take_pred;
-        unique_unindexed::uniquify((
-            consumer::Consumer::new(consumer, take_pred),
-            move |output| {
-                commit(output)?;
-                take_pred.break_hint()
-            },
-        ))
+        unique_unindexed::uniquify((consumer::unindexed(consumer, take_pred), move |output| {
+            commit(output)?;
+            take_pred.break_hint()
+        }))
     }
 
     fn take_unindexed_parts<'a>(
@@ -221,10 +215,7 @@ where
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
         let (consumer, commit) = self.collector.take_unindexed_parts();
-        unique_unindexed::take_uniquify((
-            consumer::Consumer::new(consumer, &self.take_pred),
-            commit,
-        ))
+        unique_unindexed::take_uniquify((consumer::unindexed(consumer, &self.take_pred), commit))
     }
 }
 
@@ -234,13 +225,32 @@ mod consumer {
 
     use komadori::prelude::*;
 
-    use crate::collector::plumbing::{self, UnindexedConsumer};
+    use crate::collector::plumbing::{
+        self, BasicUnindexedConsumer, OpaqueUnindexedConsumer, UnindexedConsumer,
+    };
 
     use super::TakePred;
 
-    pub struct Consumer<'a, C, P> {
+    pub fn unindexed<C, P>(
         consumer: C,
-        take_pred: &'a TakePred<P>,
+        take_pred: &TakePred<P>,
+    ) -> OpaqueUnindexedConsumer!(Serial<'_, C::IntoCollector, P>)
+    where
+        C: UnindexedConsumer,
+        P: Sync,
+    {
+        BasicUnindexedConsumer {
+            state: (consumer, take_pred),
+            split_f: |(consumer, take_pred)| (consumer.split_off_left(), take_pred),
+            combiner_f: |(consumer, _)| consumer.to_combiner(),
+            ma_f: |(consumer, take_pred), request| {
+                take_pred.max_afford_with(consumer.max_afford(request))
+            },
+            collector_f: |(consumer, take_pred)| Serial {
+                collector: consumer.into_collector(),
+                take_pred,
+            },
+        }
     }
 
     pub struct Serial<'a, C, P> {
@@ -248,72 +258,7 @@ mod consumer {
         take_pred: &'a TakePred<P>,
     }
 
-    impl<'a, C, P> Consumer<'a, C, P> {
-        #[inline]
-        pub(super) fn new(consumer: C, take_pred: &'a TakePred<P>) -> Self {
-            Self {
-                consumer,
-                take_pred,
-            }
-        }
-    }
-
-    impl<'a, C, P> IntoCollectorBase for Consumer<'a, C, P>
-    where
-        C: IntoCollectorBase,
-    {
-        type Output = C::Output;
-
-        type IntoCollector = Serial<'a, C::IntoCollector, P>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial {
-                collector: self.consumer.into_collector(),
-                take_pred: self.take_pred,
-            }
-        }
-    }
-
-    impl<C, P> plumbing::Consumer for Consumer<'_, C, P>
-    where
-        C: UnindexedConsumer,
-        P: Sync,
-    {
-        type Combiner = C::Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            self.take_pred
-                .max_afford_with(self.consumer.max_afford(request))
-        }
-    }
-
-    impl<C, P> UnindexedConsumer for Consumer<'_, C, P>
-    where
-        C: UnindexedConsumer,
-        P: Sync,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self {
-                consumer: self.consumer.split_off_left(),
-                take_pred: self.take_pred,
-            }
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            self.consumer.to_combiner()
-        }
-    }
-
-    impl<'a, C, P> CollectorBase for Serial<'a, C, P>
+    impl<C, P> CollectorBase for Serial<'_, C, P>
     where
         C: CollectorBase,
     {

@@ -249,14 +249,6 @@ mod consumer {
         Break,
     }
 
-    pub enum Combiner<'a, C: Try<Output: plumbing::Consumer>> {
-        Continue {
-            combiner: <C::Output as plumbing::Consumer>::Combiner,
-            stopped: &'a AtomicBool,
-        },
-        Break,
-    }
-
     pub enum Serial<'a, C: Try> {
         Continue {
             collector: C::Output,
@@ -293,9 +285,7 @@ mod consumer {
     where
         C: Try<Output: plumbing::UnindexedConsumer, Residual: Send>,
     {
-        type Combiner = Combiner<'a, C>;
-
-        plumbing::impl_split_off_left_at_via_unindexed! {}
+        plumbing::impl_split_at_via_unindexed!('a, C);
 
         #[inline]
         fn max_afford(&self, request: usize) -> usize {
@@ -324,43 +314,30 @@ mod consumer {
         }
 
         #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            match self {
-                Self::Continue { consumer, stopped } => Combiner::Continue {
-                    combiner: consumer.to_combiner(),
-                    stopped,
-                },
-                Self::Break => Combiner::Break,
-            }
-        }
-    }
-
-    impl<C>
-        plumbing::Combiner<
-            Output<ChangeOutputType<C, <C::Output as IntoCollectorBase>::IntoCollector>>,
-        > for Combiner<'_, C>
-    where
-        C: Try<Output: plumbing::Consumer>,
-    {
-        fn combine(
-            self,
-            left: &mut Output<ChangeOutputType<C, <C::Output as IntoCollectorBase>::IntoCollector>>,
-            right: Output<ChangeOutputType<C, <C::Output as IntoCollectorBase>::IntoCollector>>,
-        ) {
-            let Self::Continue { combiner, stopped } = self else {
-                // If this is `Break` then nothing was processed at all!
-                return;
+        fn to_combiner(&self) -> impl FnOnce(&mut Self::Output, Self::Output) + use<'a, C> {
+            let combiner_state = match self {
+                Self::Continue { consumer, stopped } => Some((consumer.to_combiner(), *stopped)),
+                Self::Break => None,
             };
 
-            match (left, right) {
-                (ControlFlow::Continue(left), ControlFlow::Continue(right))
-                    if !stopped.load(Ordering::Relaxed) =>
-                {
-                    combiner.combine(left, right)
+            move |left, right| {
+                let Some((combine, stopped)) = combiner_state else {
+                    // If this is `None` then nothing was processed at all!
+                    return;
+                };
+
+                match (left, right) {
+                    (ControlFlow::Continue(left), ControlFlow::Continue(right))
+                        if !stopped.load(Ordering::Relaxed) =>
+                    {
+                        combine(left, right)
+                    }
+                    (left @ ControlFlow::Continue(_), right @ ControlFlow::Break(_)) => {
+                        *left = right
+                    }
+                    (ControlFlow::Break(left @ None), ControlFlow::Break(right)) => *left = right,
+                    _ => {}
                 }
-                (left @ ControlFlow::Continue(_), right @ ControlFlow::Break(_)) => *left = right,
-                (ControlFlow::Break(left @ None), ControlFlow::Break(right)) => *left = right,
-                _ => {}
             }
         }
     }

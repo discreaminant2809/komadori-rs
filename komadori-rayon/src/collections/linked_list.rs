@@ -113,7 +113,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::Consumer::new(), |mut output| {
+        unique::uniquify((consumer::unindexed(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         }))
@@ -133,7 +133,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::Consumer::new(), |mut output| {
+        unique_unindexed::uniquify((consumer::unindexed(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         }))
@@ -175,7 +175,7 @@ where
         >,
         impl FnOnce(<<Self as DefineSerial<'a>>::Serial as CollectorBase>::Output) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::Consumer::new(), |mut output| {
+        unique::uniquify((consumer::unindexed(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         }))
@@ -197,78 +197,34 @@ where
             <<Self as DefineUnindexedSerial<'a>>::UnindexedSerial as CollectorBase>::Output,
         ) -> ControlFlow<()>,
     ){
-        unique_unindexed::uniquify((consumer::Consumer::new(), |mut output| {
+        unique_unindexed::uniquify((consumer::unindexed(), |mut output| {
             self.0.append(&mut output);
             ControlFlow::Continue(())
         }))
     }
 }
 
-#[allow(missing_debug_implementations)]
 mod consumer {
-    use std::{collections::LinkedList, marker::PhantomData};
+    use std::collections::LinkedList;
 
-    use komadori::prelude::*;
+    use crate::collector::plumbing::{
+        BasicUnindexedConsumer, IntoCollectorBase, OpaqueUnindexedConsumer,
+    };
 
-    use crate::collector::plumbing::{self, UnindexedConsumer};
-
-    pub struct Consumer<T>(PhantomData<T>);
-
-    pub struct Combiner(());
+    pub fn unindexed<T>() -> OpaqueUnindexedConsumer!(Serial<T>)
+    where
+        T: Send,
+    {
+        BasicUnindexedConsumer {
+            state: (),
+            split_f: |_| {},
+            combiner_f: |_| |left: &mut LinkedList<T>, mut right| left.append(&mut right),
+            ma_f: |_, request| request,
+            collector_f: |_| LinkedList::new().into_collector(),
+        }
+    }
 
     pub type Serial<T> = <LinkedList<T> as IntoCollectorBase>::IntoCollector;
-
-    impl<T> Consumer<T> {
-        #[inline]
-        pub(super) fn new() -> Self {
-            Self(PhantomData)
-        }
-    }
-
-    impl<T> IntoCollectorBase for Consumer<T> {
-        type Output = LinkedList<T>;
-
-        type IntoCollector = Serial<T>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            LinkedList::new().into_collector()
-        }
-    }
-
-    impl<T> plumbing::Consumer for Consumer<T>
-    where
-        T: Send,
-    {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-    }
-
-    impl<T> plumbing::UnindexedConsumer for Consumer<T>
-    where
-        T: Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self::new()
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl<T> plumbing::Combiner<LinkedList<T>> for Combiner {
-        #[inline]
-        fn combine(self, left: &mut LinkedList<T>, mut right: LinkedList<T>) {
-            left.append(&mut right);
-        }
-    }
 }
 
 #[cfg(test)]

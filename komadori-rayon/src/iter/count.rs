@@ -65,7 +65,7 @@ impl ParallelCollectorBase for ParCount {
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::Consumer::new(), |count| {
+        unique::uniquify((consumer::unindexed(), |count| {
             self.count += count;
             ControlFlow::Continue(())
         }))
@@ -86,70 +86,27 @@ impl UnindexedParallelCollectorBase for ParCount {
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::Consumer::new(), |count| {
+        unique_unindexed::uniquify((consumer::unindexed(), |count| {
             self.count += count;
             ControlFlow::Continue(())
         }))
     }
 }
 
-#[allow(missing_debug_implementations)]
 mod consumer {
-    use komadori::prelude::*;
+    use crate::collector::plumbing::{BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    use crate::collector::plumbing::{self, UnindexedConsumer};
-
-    pub struct Consumer(());
-
-    pub struct Combiner(());
+    pub fn unindexed() -> OpaqueUnindexedConsumer!(Serial) {
+        BasicUnindexedConsumer {
+            state: (),
+            split_f: Clone::clone,
+            combiner_f: |_| |left, right| *left += right,
+            ma_f: |_, request| request,
+            collector_f: |_| Serial::new(),
+        }
+    }
 
     pub type Serial = komadori::iter::Count;
-
-    impl Consumer {
-        #[inline]
-        pub(super) fn new() -> Self {
-            Self(())
-        }
-    }
-
-    impl IntoCollectorBase for Consumer {
-        type Output = usize;
-
-        type IntoCollector = Serial;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Self::IntoCollector::new()
-        }
-    }
-
-    impl plumbing::Consumer for Consumer {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _: usize) -> (Self, Self::Combiner) {
-            (self.split_off_left(), self.to_combiner())
-        }
-    }
-
-    impl plumbing::UnindexedConsumer for Consumer {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            Self::new()
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl plumbing::Combiner<usize> for Combiner {
-        #[inline]
-        fn combine(self, left: &mut usize, right: usize) {
-            *left += right;
-        }
-    }
 }
 
 #[cfg(test)]

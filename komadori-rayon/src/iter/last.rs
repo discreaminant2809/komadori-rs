@@ -177,7 +177,7 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((indexed::Consumer::new(len), |output| {
+        unique::uniquify((indexed::consumer(len), |output| {
             combine(&mut self.value, output);
             ControlFlow::Continue(())
         }))
@@ -199,7 +199,7 @@ where
     ) {
         let best_found = self.best_found.write(AtomicUsize::new(0));
 
-        unique_unindexed::uniquify((unindexed::Consumer::new(best_found), |output| {
+        unique_unindexed::uniquify((unindexed::consumer(best_found), |output| {
             combine(&mut self.value, output);
             ControlFlow::Continue(())
         }))
@@ -213,91 +213,45 @@ fn combine<T>(left: &mut Option<T>, right: Option<T>) {
 
 #[expect(missing_debug_implementations)]
 mod indexed {
-    use std::{marker::PhantomData, num::NonZero, ops::ControlFlow};
+    use std::ops::ControlFlow;
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{self, BasicConsumer, OpaqueConsumer};
 
-    pub struct Consumer<T> {
-        // We track the len so that we can compare it to `index`
-        // and see whether to disable or not.
-        // `None` means this leaf is "disabled" and won't collect items.
-        // Note that `0` len means being disabled as well, so we use
-        // `Option<NonZero<usize>>`.
-        len: Option<NonZero<usize>>,
-        _marker: PhantomData<T>,
+    pub fn consumer<T>(len: usize) -> OpaqueConsumer!(Serial<T>)
+    where
+        T: Send,
+    {
+        BasicConsumer {
+            // We track the len so that we can compare it to `idx`
+            // and see whether to disable or not.
+            state: len,
+            split_f: |len, idx| {
+                let left_len = if idx < *len {
+                    // It means the last item can be found at the right.
+                    // We can disable the left with `0`.
+                    *len -= idx;
+                    0
+                } else {
+                    std::mem::take(len)
+                };
+
+                (left_len, super::combine)
+            },
+            ma_f: |&len, request| if len > 0 { request } else { 0 },
+            collector_f: |len| {
+                if len > 0 {
+                    Serial::NotYet
+                } else {
+                    Serial::Disabled
+                }
+            },
+        }
     }
-
-    pub struct Combiner(());
 
     pub enum Serial<T> {
         NotYet,
         Last(T),
         Disabled,
-    }
-
-    impl<T> Consumer<T> {
-        #[inline]
-        pub(super) fn new(len: usize) -> Self {
-            Self {
-                len: NonZero::new(len),
-                _marker: PhantomData,
-            }
-        }
-    }
-
-    impl<T> plumbing::IntoCollectorBase for Consumer<T> {
-        type Output = Option<T>;
-
-        type IntoCollector = Serial<T>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            if self.len.is_none() {
-                Serial::Disabled
-            } else {
-                Serial::NotYet
-            }
-        }
-    }
-
-    impl<T> plumbing::Consumer for Consumer<T>
-    where
-        T: Send,
-    {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
-            let len = (|| {
-                self.len = NonZero::new(self.len?.get() - index);
-                if self.len.is_some() {
-                    None
-                } else {
-                    NonZero::new(index)
-                }
-            })();
-
-            (
-                Self {
-                    len,
-                    _marker: PhantomData,
-                },
-                Combiner(()),
-            )
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            if self.len.is_some() { request } else { 0 }
-        }
-    }
-
-    // Note: In practice we will only have at most one `Some` globally.
-    impl<T> plumbing::Combiner<Option<T>> for Combiner {
-        #[inline]
-        fn combine(self, left: &mut Option<T>, right: Option<T>) {
-            super::combine(left, right);
-        }
     }
 
     impl<T> plumbing::CollectorBase for Serial<T> {
@@ -367,107 +321,63 @@ mod indexed {
 mod unindexed {
     use std::{
         cell::Cell,
-        marker::PhantomData,
         ops::ControlFlow,
         sync::atomic::{AtomicUsize, Ordering},
     };
 
-    use crate::collector::plumbing;
+    use crate::collector::plumbing::{self, BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
-    pub struct Consumer<'a, T> {
-        lower: Cell<usize>,
-        upper: usize,
-        best_found: &'a AtomicUsize,
-        _marker: PhantomData<T>,
+    pub fn consumer<T>(best_found: &AtomicUsize) -> OpaqueUnindexedConsumer!(Serial<'_, T>)
+    where
+        T: Send,
+    {
+        struct State<'a> {
+            lower: Cell<usize>,
+            upper: usize,
+            best_found: &'a AtomicUsize,
+        }
+
+        BasicUnindexedConsumer {
+            state: State {
+                lower: 0.into(),
+                upper: usize::MAX,
+                best_found,
+            },
+            split_f: |state| {
+                let lower = state.lower.get();
+                let upper = state.upper.midpoint(lower);
+                state.lower.set(upper);
+
+                State {
+                    lower: lower.into(),
+                    upper,
+                    best_found: state.best_found,
+                }
+            },
+            combiner_f: |_| super::combine,
+            ma_f: |state, request| max_afford(state.best_found, state.upper, request),
+            collector_f: |state| Serial {
+                pos: state.upper,
+                best_found: state.best_found,
+                value: None,
+            },
+        }
     }
 
-    pub struct Combiner(());
+    #[inline]
+    fn max_afford(best_found: &AtomicUsize, pos: usize, request: usize) -> usize {
+        // We can still afford if the best found is still at the left leaves.
+        if best_found.load(Ordering::Relaxed) <= pos {
+            request
+        } else {
+            0
+        }
+    }
 
     pub struct Serial<'a, T> {
         pos: usize,
         best_found: &'a AtomicUsize,
         value: Option<T>,
-    }
-
-    impl<'a, T> Consumer<'a, T> {
-        #[inline]
-        pub(super) fn new(best_found: &'a AtomicUsize) -> Self {
-            Self {
-                lower: 0.into(),
-                upper: usize::MAX,
-                best_found,
-                _marker: PhantomData,
-            }
-        }
-    }
-
-    impl<'a, T> plumbing::IntoCollectorBase for Consumer<'a, T> {
-        type Output = Option<T>;
-
-        type IntoCollector = Serial<'a, T>;
-
-        #[inline]
-        fn into_collector(self) -> Self::IntoCollector {
-            Serial {
-                pos: self.upper,
-                best_found: self.best_found,
-                value: None,
-            }
-        }
-    }
-
-    impl<'a, T> plumbing::Consumer for Consumer<'a, T>
-    where
-        T: Send,
-    {
-        type Combiner = Combiner;
-
-        #[inline]
-        fn split_off_left_at(&mut self, _index: usize) -> (Self, Self::Combiner) {
-            use plumbing::UnindexedConsumer;
-            (self.split_off_left(), self.to_combiner())
-        }
-
-        #[inline]
-        fn max_afford(&self, request: usize) -> usize {
-            // We can still afford if the best found is still at the left leaves.
-            if self.best_found.load(Ordering::Relaxed) <= self.upper {
-                request
-            } else {
-                0
-            }
-        }
-    }
-
-    impl<'a, T> plumbing::UnindexedConsumer for Consumer<'a, T>
-    where
-        T: Send,
-    {
-        #[inline]
-        fn split_off_left(&self) -> Self {
-            let lower = self.lower.get();
-            let upper = self.upper.midpoint(lower);
-            self.lower.set(upper);
-
-            Self {
-                lower: lower.into(),
-                upper,
-                best_found: self.best_found,
-                _marker: PhantomData,
-            }
-        }
-
-        #[inline]
-        fn to_combiner(&self) -> Self::Combiner {
-            Combiner(())
-        }
-    }
-
-    impl<T> plumbing::Combiner<Option<T>> for Combiner {
-        #[inline]
-        fn combine(self, left: &mut Option<T>, right: Option<T>) {
-            super::combine(left, right);
-        }
     }
 
     impl<'a, T> plumbing::CollectorBase for Serial<'a, T> {
@@ -482,12 +392,7 @@ mod unindexed {
 
         #[inline]
         fn max_afford(&self, request: usize) -> usize {
-            // We can still afford if the best found is still at the left leaves.
-            if self.best_found.load(Ordering::Relaxed) <= self.pos {
-                request
-            } else {
-                0
-            }
+            max_afford(self.best_found, self.pos, request)
         }
     }
 

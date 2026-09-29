@@ -157,7 +157,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((linked_vec::Consumer::new(&mut self.0), |output| {
+        unique_unindexed::uniquify((linked_vec::unindexed(&mut self.0), |output| {
             output.finalize();
             ControlFlow::Continue(())
         }))
@@ -252,7 +252,7 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((linked_vec::Consumer::new(self.0), |output| {
+        unique_unindexed::uniquify((linked_vec::unindexed(self.0), |output| {
             output.finalize();
             ControlFlow::Continue(())
         }))
@@ -406,10 +406,7 @@ impl<T> test_utils::IndexedParallelIterator for test_types::IntoParIter<T> {
 mod miri_tests {
     use komadori::prelude::{Collector, IntoCollectorBase};
 
-    use crate::{
-        collector::plumbing::{Combiner, UnindexedConsumer},
-        prelude::*,
-    };
+    use crate::{collector::plumbing::UnindexedConsumer, prelude::*};
 
     #[test]
     fn no_alias_for_collector_mut() {
@@ -437,7 +434,7 @@ mod miri_tests {
             .into_collector()
             .collect_then_finish([6, 7, 8]);
         let mut left_output = left_consumer.into_collector().collect_then_finish([4, 5]);
-        combiner.combine(&mut left_output, right_output);
+        combiner(&mut left_output, right_output);
         let output = left_output;
 
         commit(output);

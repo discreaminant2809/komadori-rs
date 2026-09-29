@@ -5,7 +5,7 @@
 //!
 //! Credit: <https://docs.rs/rayon/latest/src/rayon/iter/plumbing/mod.rs.html>
 
-use crate::collector::plumbing::{Combiner, Consumer};
+use crate::collector::plumbing::Consumer;
 use komadori::prelude::*;
 use rayon::{
     iter::{
@@ -15,13 +15,14 @@ use rayon::{
     join_context,
 };
 
-pub fn bridge<I, C>(par_iter: I, consumer: C) -> C::Output
+#[inline]
+pub fn bridge<C, I>(items: I, consumer: C) -> C::Output
 where
     I: IndexedParallelIterator,
     C: Consumer<IntoCollector: Collector<I::Item>>,
 {
-    let len = par_iter.len();
-    return par_iter.with_producer(Callback { len, consumer });
+    let len = items.len();
+    return items.with_producer(Callback { len, consumer });
 
     struct Callback<C> {
         len: usize,
@@ -33,6 +34,8 @@ where
         C: Consumer<IntoCollector: Collector<T>>,
     {
         type Output = C::Output;
+
+        #[inline]
         fn callback<P>(self, producer: P) -> C::Output
         where
             P: Producer<Item = T>,
@@ -42,6 +45,7 @@ where
     }
 }
 
+#[inline]
 fn bridge_producer_consumer<P, C>(len: usize, producer: P, consumer: C) -> C::Output
 where
     P: Producer,
@@ -66,7 +70,7 @@ where
         } else if splitter.try_split(len, migrated) {
             let mid = len / 2;
             let (left_producer, right_producer) = producer.split_at(mid);
-            let ((left_consumer, combiner), right_consumer) =
+            let ((left_consumer, combine), right_consumer) =
                 (consumer.split_off_left_at(mid), consumer);
 
             let (mut left_result, right_result) = join_context(
@@ -90,7 +94,7 @@ where
                 },
             );
 
-            combiner.combine(&mut left_result, right_result);
+            combine(&mut left_result, right_result);
             left_result
         } else {
             consumer

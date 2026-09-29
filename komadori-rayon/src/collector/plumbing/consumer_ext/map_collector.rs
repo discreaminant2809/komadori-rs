@@ -33,10 +33,14 @@ where
     F: FnOnce(C::IntoCollector) -> Collector + Clone + Send,
     Collector: CollectorBase<Output = C::Output>,
 {
-    type Combiner = C::Combiner;
-
     #[inline]
-    fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
+    fn split_off_left_at(
+        &mut self,
+        index: usize,
+    ) -> (
+        Self,
+        impl FnOnce(&mut Self::Output, Self::Output) + use<C, F, Collector>,
+    ) {
         let (consumer, combiner) = self.consumer.split_off_left_at(index);
         (
             Self {
@@ -68,7 +72,7 @@ where
     }
 
     #[inline]
-    fn to_combiner(&self) -> Self::Combiner {
+    fn to_combiner(&self) -> impl FnOnce(&mut Self::Output, Self::Output) + use<C, F, Collector> {
         self.consumer.to_combiner()
     }
 }

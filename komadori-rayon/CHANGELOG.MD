@@ -34,6 +34,8 @@
 - API surface of `UnindexedParallelCollectorBase::filter_with()`.
 - API surface of `UnindexedParallelCollectorBase::filter_map_with()`.
 - API surface of `crate::iter::ParForEachWith`.
+- API surface of `crate::collector::plumbing::Consumer`.
+- API surface of `crate::collector::plumbing::UnindexedConsumer`.
 - Renamed `UnindexedParallelCollectorBase::parts_unindexed()`
   to `UnindexedParallelCollectorBase::unindexed_parts()`.
 - Renamed `UnindexedParallelCollectorBase::take_parts_unindexed()`
@@ -43,10 +45,13 @@
 
 - `ParallelCollectorBase::tee_mut()` now can accept mutable reference of
   a `?Sized` type.
+- `take_parts()` and `take_unindexed_parts()` methods of `nest_local()`, `nest_local_with()`,
+  `fold_local()` not actually "taking." (was less efficient, such as unneccessary clones).
 
 ### Removed
 
 - `crate::iter::ParForEach::with()`.
+- `crate::collector::plumbing::Combiner`.
 
 ## 0.1.1
 

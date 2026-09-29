@@ -1,4 +1,4 @@
-use super::{Combiner, Consumer, IntoCollectorBase};
+use super::{Consumer, IntoCollectorBase};
 
 pub struct BasicConsumer<S, SF, MAF, CF, Com, I>
 where
@@ -7,7 +7,7 @@ where
     MAF: Fn(&S, usize) -> usize + Clone + Send,
     CF: FnOnce(S) -> I + Clone + Send,
     I: IntoCollectorBase<Output: Send>,
-    Com: Combiner<I::Output>,
+    Com: FnOnce(&mut I::Output, I::Output),
 {
     pub state: S,
     pub split_f: SF,
@@ -22,7 +22,7 @@ where
     MAF: Fn(&S, usize) -> usize + Clone + Send,
     CF: FnOnce(S) -> I + Clone + Send,
     I: IntoCollectorBase<Output: Send>,
-    Com: Combiner<I::Output>,
+    Com: FnOnce(&mut I::Output, I::Output),
 {
     type Output = I::Output;
 
@@ -41,12 +41,16 @@ where
     MAF: Fn(&S, usize) -> usize + Clone + Send,
     CF: FnOnce(S) -> I + Clone + Send,
     I: IntoCollectorBase<Output: Send>,
-    Com: Combiner<I::Output>,
+    Com: FnOnce(&mut I::Output, I::Output),
 {
-    type Combiner = Com;
-
     #[inline]
-    fn split_off_left_at(&mut self, index: usize) -> (Self, Self::Combiner) {
+    fn split_off_left_at(
+        &mut self,
+        index: usize,
+    ) -> (
+        Self,
+        impl FnOnce(&mut Self::Output, Self::Output) + use<S, SF, MAF, CF, Com, I>,
+    ) {
         let (state, combiner) = (self.split_f)(&mut self.state, index);
         (
             Self {
