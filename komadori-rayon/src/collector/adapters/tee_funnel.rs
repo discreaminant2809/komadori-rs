@@ -18,8 +18,7 @@ where
 
 // `pub` to satisfy the compiler.
 // Users can't reach this anyway.
-#[derive(Clone)]
-#[allow(missing_debug_implementations)]
+#[derive(Debug, Clone)]
 pub struct FunnelTeer(());
 
 impl<'a, T> DefinePassDown<'a, T> for FunnelTeer {

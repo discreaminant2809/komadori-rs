@@ -40,11 +40,13 @@ impl<C1, C2, TF> Debug for TeeBase<C1, C2, TF>
 where
     C1: Debug,
     C2: Debug,
+    TF: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TeeBase")
             .field("collector1", &self.collector1)
             .field("collector2", &self.collector2)
+            .field("teer", &self.teer)
             .finish()
     }
 }

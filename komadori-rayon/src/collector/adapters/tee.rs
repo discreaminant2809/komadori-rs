@@ -12,8 +12,7 @@ use super::{DefinePassDown, TeeBase, Teer};
 /// See its documentation for more.
 pub type Tee<C1, C2> = TeeBase<C1, C2, CopyTeer>;
 
-#[derive(Clone)]
-#[allow(missing_debug_implementations)]
+#[derive(Debug, Clone)]
 pub struct CopyTeer(());
 
 pub(in crate::collector) fn tee<C1, C2>(collector1: C1, collector2: C2) -> Tee<C1, C2>
