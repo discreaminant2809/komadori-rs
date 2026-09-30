@@ -17,6 +17,7 @@ komadori = { version = "0.9.0" }
 rayon = { version = "1.12.0", default-features = false, optional = true }
 
 [dev-dependencies]
+rayon-cond = "0.4.0"
 criterion = "0.8.2"
 par-iter = "2.0.0"
 proptest = "1.11.0"
@@ -68,6 +69,10 @@ harness = false
 
 [[example]]
 name = "par_iter_crate"
+
+[[example]]
+name = "rayon_cond_crate"
+required-features = ["rayon"]
 
 [[example]]
 name = "reddit_question1"
