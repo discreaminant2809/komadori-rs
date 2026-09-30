@@ -371,14 +371,22 @@ mod consumer {
     impl<const IS_AND: bool> plumbing::Collector<bool> for Serial<'_, IS_AND> {
         #[inline]
         fn collect(&mut self, item: bool) -> ControlFlow<()> {
+            // See the `par_or` benchmark for why we use two separate
+            // `load` and `store` instead of `fetch_*`.
             if IS_AND {
-                if self.0.fetch_and(item, Ordering::Relaxed) && item {
-                    ControlFlow::Continue(())
-                } else {
+                if !self.0.load(Ordering::Relaxed) {
                     ControlFlow::Break(())
+                } else if !item {
+                    self.0.store(false, Ordering::Relaxed);
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
                 }
             } else {
-                if self.0.fetch_or(item, Ordering::Relaxed) || item {
+                if self.0.load(Ordering::Relaxed) {
+                    ControlFlow::Break(())
+                } else if item {
+                    self.0.store(true, Ordering::Relaxed);
                     ControlFlow::Break(())
                 } else {
                     ControlFlow::Continue(())

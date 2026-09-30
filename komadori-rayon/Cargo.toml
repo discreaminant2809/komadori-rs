@@ -61,6 +61,11 @@ name = "sum_doubles"
 required-features = ["rayon"]
 harness = false
 
+[[bench]]
+name = "par_or"
+required-features = ["rayon"]
+harness = false
+
 [[example]]
 name = "par_iter_crate"
 
