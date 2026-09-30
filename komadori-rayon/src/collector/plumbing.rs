@@ -81,19 +81,18 @@
 //!   It only implements [`Send`] (if `O` is [`Send`]) and **no** other auto traits at all,
 //!   and is invariant over `'a`.
 //!
-//! - `fn uniquify((len, consumer, commit))` (receives a tuple):
+//! - `fn uniquify((consumer, commit))` (receives a tuple):
 //!   Returns the same tuple with a consumer and a committer using
 //!   `Serial` and `Output` in the module.
 //!   This is used in the [`parts()`] method.
 //!
-//! - `fn take_uniquify((len, consumer, commit))`:
+//! - `fn take_uniquify((consumer, commit))`:
 //!   Returns the same tuple with a consumer and a committer using
 //!   `Serial` and `Output` in the module.
 //!   This is used in the [`take_parts()`] method.
 //!
-//! For the unindexed version, it is the same
-//! except for the two functions which do not take `len`
-//! and are used in the [`unindexed_parts()`] and [`take_unindexed_parts()`]
+//! For the unindexed version, they are the same except
+//! being used in the [`unindexed_parts()`] and [`take_unindexed_parts()`]
 //! methods, respectively.
 //!
 //! It should be inaccessible to the callers so that they cannot

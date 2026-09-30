@@ -116,6 +116,53 @@ in-place.
 
 See [here][sum_doubles_bench_mark] for the benchmark of the above and more approaches.
 
+## Usage in API
+
+If a function looks like `fn foo(State, ParallelIterator<T>) -> Output`
+and the iterator is accepted just to be traversed,
+consider rewriting it to `fn foo(State) -> ParallelCollector<T, Output>`,
+since the original unnecessarily owns the traversal, making it hard
+to additional add another reduction to traverse alongside with
+the source.
+
+Consider this example:
+
+```rust
+use rayon::prelude::*;
+
+fn sum_even(nums: impl IntoParallelIterator<Item = i32>) -> i32 {
+    nums.into_par_iter().filter(|&num| num % 2 == 0).sum()
+}
+
+fn max_abs(nums: impl IntoParallelIterator<Item = i32>) -> Option<i32> {
+    nums.into_par_iter().map(i32::abs).max()
+}
+```
+
+Now how can we obtain both `sum_even` and `max_abs` in one traversal,
+especially if numbers are not from an array?
+
+We can rewrite the above:
+
+```rust
+use rayon::prelude::*;
+use komadori_rayon::{prelude::*, cmp::ParMax};
+
+fn sum_even() -> impl UnindexedParallelCollector<i32, Output = i32> {
+    0_i32.into_par_sum().filter(|&num| num % 2 == 0)
+}
+
+fn max_abs() -> impl UnindexedParallelCollector<i32, Output = Option<i32>> {
+    ParMax::new().map(i32::abs)
+}
+
+// Now we can calculate both in one traversal!
+let (sum_even, max_abs) = nums.feed_into((
+    sum_even().copying(),
+    max_abs(),
+));
+```
+
 ## Crate stucture
 
 Modules in this crate mirror those in the standard library, because this crate
