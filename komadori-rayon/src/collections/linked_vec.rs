@@ -1,13 +1,10 @@
 #![allow(missing_debug_implementations)]
 
-use std::{collections::LinkedList, ops::ControlFlow};
+use std::{cell::Cell, collections::LinkedList, ops::ControlFlow};
 
 use komadori::prelude::*;
 
-use crate::{
-    cell::CellOptRefMut,
-    collector::plumbing::{self, BasicUnindexedConsumer, OpaqueUnindexedConsumer},
-};
+use crate::collector::plumbing::{self, BasicUnindexedConsumer, OpaqueUnindexedConsumer};
 
 // The entire idea is that we keep a mutable reference to the original collection
 // in the "left most" consumer.
@@ -21,7 +18,7 @@ where
     T: Send,
 {
     BasicUnindexedConsumer {
-        state: CellOptRefMut::from(Some(collection)),
+        state: Cell::from(Some(collection)),
         split_f: |collection| collection.take().into(),
         combiner_f: |_| {
             |left: &mut Output<'_, C, T>, right: Output<'_, C, T>| {
