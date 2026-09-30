@@ -730,17 +730,34 @@ pub trait CollectorBase {
     /// the mutable reference to the item, "pretending" the collector
     /// accepts owned items.
     ///
+    /// This is useful for collectors that only collect references,
+    /// but we need a collector that collects an ownership.
+    /// It is usually seen in the last collector in a tuple of collectors,
+    /// as it expects an ownership instead of mutable reference.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use komadori::prelude::*;
+    /// use komadori::{prelude::*, clb_mut};
     ///
-    /// let mut collector = vec![]
-    ///     .into_collector()
-    ///     .funnel();
+    /// fn total_len() -> impl for<'a> Collector<&'a str, Output = usize> {
+    ///     0_usize.into_sum().map(str::len)
+    /// }
     ///
-    /// assert!(collector.collect_many([1, 2, 3]).is_continue());
-    /// assert_eq!(collector.finish(), [1, 2, 3]);
+    /// fn socket_stream() -> impl Iterator<Item = String> {
+    ///     ["the", "noble", "and", "the", "singer"]
+    ///         .into_iter()
+    ///         .map(String::from)
+    /// }
+    ///
+    /// let total_len = socket_stream()
+    ///     .feed_into(
+    ///         total_len()
+    ///             .map(clb_mut!(|s: &mut String| -> &str { s }))
+    ///             .funnel()
+    ///     );
+    ///
+    /// assert_eq!(total_len, 20);
     /// ```
     #[inline]
     fn funnel(self) -> Funnel<Self>

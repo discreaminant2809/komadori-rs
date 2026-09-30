@@ -1,6 +1,8 @@
 use core::ops::ControlFlow;
 
-use crate::collector::{Collector, CollectorBase, finish_boxed_impl};
+use crate::collector::{
+    Collector, CollectorBase, advanced_collect_many_default_impl, finish_boxed_impl,
+};
 
 /// A collector that feeds the underlying collector with
 /// the mutable reference to the item, "pretending" the collector
@@ -56,5 +58,32 @@ where
         unsafe { self.0.assume_reserved_collect(&mut item) }
     }
 
-    // Impossible to override `collect_many` and `collect_then_finish`
+    #[inline]
+    fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
+        advanced_collect_many_default_impl(self, items)
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod proptests {
+    use crate::test_utils::prelude::*;
+
+    use super::super::take_collector_model;
+
+    collector_test!(adapter {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let n = ..=5_usize;
+        },
+        iter: nums.iter().copied(),
+        collector: vec![].into_collector().take(n).funnel(),
+        expected_f: |iter, count| {
+            let res: Vec<_> = iter.take(n).collect();
+            (res, count >= n)
+        },
+        output_pred: PartialEq::eq,
+        model: take_collector_model(n),
+    });
 }

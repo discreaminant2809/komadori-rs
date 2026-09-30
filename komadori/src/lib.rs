@@ -195,7 +195,7 @@
 //!     .feed_into((
 //!         String::new()
 //!             .into_concat()
-//!             .map(clb_mut!(|s: &mut String| -> &str { &s[..] })),
+//!             .map(clb_mut!(|s: &mut String| -> &str { s })),
 //!         HashSet::new(),
 //!     ));
 //!
@@ -214,14 +214,16 @@
 //! Consider this example:
 //!
 //! ```no_run
+//! use std::borrow::Borrow;
+//!
 //! # struct Record;
 //! # struct Stats;
-//! fn stats<'a>(records: impl IntoIterator<Item = &'a Record>) -> Stats {
+//! fn stats<T: Borrow<Record>>(records: impl IntoIterator<Item = T>) -> Stats {
 //!     // Implementations
 //! #    todo!()
 //! }
 //!
-//! fn checksum<'a>(records: impl IntoIterator<Item = &'a Record>) -> u64 {
+//! fn checksum<T: Borrow<Record>>(records: impl IntoIterator<Item = T>) -> u64 {
 //!     // Implementations
 //! #    todo!()
 //! }
@@ -264,11 +266,11 @@
 //! # Crate stucture
 //!
 //! Modules in this crate mirror those in the standard library, because this crate
-//! extends many types there. There is also `collector` which
+//! extends many types there. There is also [`collector`][collector_module] which
 //! contains collector functionalities that work behind [`feed_into()`],
-//! and `prelude` which re-exports commons items for easier use.
+//! and [`prelude`] which re-exports commons items for easier use.
 //!
-//! It is recommended to read the documentation of `collector` next
+//! It is recommended to read the documentation of [`collector`][collector_module] next
 //! if you want to delve into how collectors work.
 //!
 //! # Features
@@ -287,6 +289,7 @@
 //!   and may change or be removed at any time.
 //!
 //! [`Collector`]: crate::collector::Collector
+//! [collector_module]: crate::collector
 //! [`feed_into()`]: crate::iter::IteratorExt::feed_into
 //! [`Vec`]: alloc::vec::Vec
 //! [`HashSet`]: std::collections::HashSet
@@ -304,6 +307,7 @@
 )]
 #![deny(missing_debug_implementations)]
 #![cfg_attr(test, deny(deprecated))]
+#![allow(rustdoc::redundant_explicit_links)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 // To make doc examples in sync (prevent accidental deprecated items usage in doc).
 #![doc(test(attr(deny(deprecated))))]

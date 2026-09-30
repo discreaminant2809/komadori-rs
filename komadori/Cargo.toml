@@ -1,6 +1,6 @@
 [package]
 name = "komadori"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2024"
 rust-version = "1.85.1"
 authors = ["Ayabin"]
@@ -10,6 +10,12 @@ description = "Multi-reduction library. Provides a composable, declarative way t
 readme = "README.md"
 categories = ["rust-patterns", "no-std", "no-std::no-alloc", "algorithms"]
 keywords = ["collector", "fold", "unzip", "composition", "iterator"]
+
+# Added this for the fix of 0.9.1 that `EitherExt` being accidentally dyn-compatible.
+# We don't consider it a breaking change since it's not intended to be used
+# as a trait object, and no one would ever try doing that anyway.
+[package.metadata.cargo-semver-checks.lints]
+trait_no_longer_dyn_compatible = "allow"
 
 [dependencies]
 either = { version = "1.17.0", default-features = false }
