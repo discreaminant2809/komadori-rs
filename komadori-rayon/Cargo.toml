@@ -14,7 +14,7 @@ exclude = ["DESIGN_NOTES.md"] # Not worth including anyway.
 
 [dependencies]
 either = { version = "1.18.0", default-features = false }
-komadori = { version = "0.9.0" }
+komadori = { version = "0.9.1" }
 rayon = { version = "1.12.0", default-features = false, optional = true }
 
 [dev-dependencies]
