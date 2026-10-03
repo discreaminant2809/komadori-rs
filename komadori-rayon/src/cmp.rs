@@ -7,8 +7,10 @@
 //!
 //! This module corresponds to [`std::cmp`].
 
+mod is_sorted;
 mod max;
 mod min;
 
+pub use is_sorted::*;
 pub use max::*;
 pub use min::*;

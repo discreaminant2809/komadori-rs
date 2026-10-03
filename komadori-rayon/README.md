@@ -1,4 +1,4 @@
-# komadori-rayon 0.2.0
+# komadori-rayon 0.2.1
 
 [![Crates.io Version](https://img.shields.io/crates/v/komadori-rayon.svg)](https://crates.io/crates/komadori_rayon)
 [![Docs.rs](https://img.shields.io/docsrs/komadori-rayon)](https://docs.rs/komadori_rayon)
