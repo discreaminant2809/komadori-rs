@@ -216,6 +216,7 @@ pub mod ops;
 pub mod prelude;
 pub(crate) mod reference;
 pub mod slice;
+pub mod string;
 #[cfg(test)]
 mod test_utils;
 pub mod tuple;

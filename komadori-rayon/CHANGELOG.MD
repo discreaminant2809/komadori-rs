@@ -5,6 +5,9 @@
 ### Added
 
 - `crate::cmp::ParIsSorted`.
+- `crate::slice::ParConcat`.
+- `crate::slice::IntoParConcat`.
+- `crate::slice::ParConcatMut`.
 
 ## 0.2.0
 
