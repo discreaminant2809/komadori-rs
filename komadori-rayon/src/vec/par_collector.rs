@@ -1,0 +1,414 @@
+use std::{collections::LinkedList, ops::ControlFlow, ptr::NonNull};
+
+use crate::{
+    collections::linked_vec,
+    collector::{
+        IntoParallelCollectorBase, ParallelCollectorBase, assert_unindexed_par_collector,
+        plumbing::{
+            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
+            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+        },
+    },
+    helpers::{unique, unique_unindexed},
+    prelude::UnindexedParallelCollectorBase,
+    slice::in_place_write,
+};
+
+/// A parallel collector that pushes collected items into a [`Vec`].
+/// Its [`Output`] is [`Vec`].
+///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
+///
+/// This struct is created by `Vec::into_par_collector()`.
+///
+/// [`Output`]: ParallelCollectorBase::Output
+#[derive(Debug, Clone)]
+pub struct IntoParCollector<T>(Vec<T>);
+
+/// A parallel collector that pushes collected items into a [`&mut Vec`](Vec).
+/// Its [`Output`] is [`&mut Vec`](Vec).
+///
+/// This can collect `T` where `T` is [`Send`],
+/// and `&T` and `&mut T` where `T` is [`Send`] and [`Copy`].
+///
+/// This struct is created by `Vec::par_collector_mut()`.
+///
+/// [`Output`]: ParallelCollectorBase::Output
+#[derive(Debug)]
+pub struct ParCollectorMut<'a, T>(&'a mut Vec<T>);
+
+impl<T> IntoParallelCollectorBase for Vec<T>
+where
+    T: Send,
+{
+    type Output = Self;
+
+    type IntoParCollector = IntoParCollector<T>;
+
+    #[inline]
+    fn into_par_collector(self) -> Self::IntoParCollector {
+        assert_unindexed_par_collector::<_, T>(IntoParCollector(self))
+    }
+}
+
+impl<'a, T> IntoParallelCollectorBase for &'a mut Vec<T>
+where
+    T: Send,
+{
+    type Output = Self;
+
+    type IntoParCollector = ParCollectorMut<'a, T>;
+
+    #[inline]
+    fn into_par_collector(self) -> Self::IntoParCollector {
+        assert_unindexed_par_collector::<_, T>(ParCollectorMut(self))
+    }
+}
+
+impl<'this, T> DefineSerial<'this> for IntoParCollector<T>
+where
+    T: Send,
+{
+    type Serial = unique::Serial<'this, Self, in_place_write::WriteProof<'this, T>>;
+}
+
+impl<'this, T> DefineUnindexedSerial<'this> for IntoParCollector<T>
+where
+    T: Send,
+{
+    type UnindexedSerial =
+        unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
+}
+
+impl<T> ParallelCollectorBase for IntoParCollector<T>
+where
+    T: Send,
+{
+    type Output = Vec<T>;
+
+    #[inline]
+    fn finish(self) -> Self::Output {
+        self.0
+    }
+
+    fn parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        self.0.reserve(len);
+
+        // We must use `base` of the original vec (not `self`) for the committer
+        // so that we don't alias with the region we're writing to.
+        // Note: DO NOT rewrite it as `as_mut_ptr_range().end`,
+        // since it's UB when being used later on MIRI.
+        let being_written = unsafe {
+            // SAFETY: the vec is `len()` long.
+            self.0.as_mut_ptr().add(self.0.len())
+        };
+        let mut this = NonNull::from_mut(&mut self.0);
+
+        unique::uniquify((
+            unsafe { in_place_write::Consumer::new(being_written, len) },
+            move |write_proof| {
+                in_place_write::commit(write_proof, being_written, len);
+
+                unsafe {
+                    // SAFETY: `this` is `self`, which is a `Vec`.
+                    // We've release the ownership of the written part,
+                    // so we can reclaim the provenance over the `Vec` here.
+                    let this = this.as_mut();
+
+                    // SAFETY: we've fully written to the memory in
+                    // `this.as_mut_ptr_range().end..this.as_mut_ptr_range().end + len`
+                    this.set_len(this.len() + len);
+                }
+
+                ControlFlow::Continue(())
+            },
+        ))
+    }
+}
+
+impl<T> UnindexedParallelCollectorBase for IntoParCollector<T>
+where
+    T: Send,
+{
+    fn unindexed_parts<'a>(
+        &'a mut self,
+    ) -> (
+        impl UnindexedConsumer<
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
+        >,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        unique_unindexed::uniquify((linked_vec::unindexed(&mut self.0), |output| {
+            output.finalize();
+            ControlFlow::Continue(())
+        }))
+    }
+}
+
+impl<'this, 'v, T> DefineSerial<'this> for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    type Serial = unique::Serial<'this, Self, in_place_write::WriteProof<'this, T>>;
+}
+
+impl<'v, 'this, T> DefineUnindexedSerial<'this> for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    type UnindexedSerial =
+        unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
+}
+
+impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    type Output = &'v mut Vec<T>;
+
+    #[inline]
+    fn finish(self) -> Self::Output {
+        self.0
+    }
+
+    fn parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        // NOTE: from outside, the lifetime of `parts` is still bounded to
+        // the collector, but here, the mutable reference to the collector is
+        // conceptually dropped after `let mut this = ...` (to avoid aliasing).
+        // It ensures that the caller cannot obtain another instance of `parts`
+        // without fully consuming the previous `parts`, while the implementation
+        // remains flexible.
+        let this = &mut *self.0;
+
+        this.reserve(len);
+
+        // We must use `base` of the original vec (not `self`) for the committer
+        // so that we don't alias with the region we're writing to.
+        // Note: DO NOT rewrite it as `as_mut_ptr_range().end`,
+        // since it's UB when being used later on MIRI.
+        let being_written = unsafe {
+            // SAFETY: the vec is `len()` long.
+            this.as_mut_ptr().add(this.len())
+        };
+        let mut this = NonNull::from_mut(this);
+
+        unique::uniquify((
+            unsafe { in_place_write::Consumer::new(being_written, len) },
+            move |write_proof| {
+                in_place_write::commit(write_proof, being_written, len);
+
+                unsafe {
+                    // SAFETY: `this` is `self`, which is a `Vec`.
+                    // We've release the ownership of the written part,
+                    // so we can reclaim the provenance over the `Vec` here.
+                    let this = this.as_mut();
+
+                    // SAFETY: we've fully written to the memory in
+                    // `this.as_mut_ptr_range().end..this.as_mut_ptr_range().end + len`
+                    this.set_len(this.len() + len);
+                }
+
+                ControlFlow::Continue(())
+            },
+        ))
+    }
+}
+
+impl<'v, T> UnindexedParallelCollectorBase for ParCollectorMut<'v, T>
+where
+    T: Send,
+{
+    fn unindexed_parts<'a>(
+        &'a mut self,
+    ) -> (
+        impl UnindexedConsumer<
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
+        >,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        unique_unindexed::uniquify((linked_vec::unindexed(self.0), |output| {
+            output.finalize();
+            ControlFlow::Continue(())
+        }))
+    }
+}
+
+impl<T> Default for IntoParCollector<T>
+where
+    T: Send,
+{
+    #[inline]
+    fn default() -> Self {
+        Vec::default().into_par_collector()
+    }
+}
+
+impl<T> linked_vec::Collection<T> for Vec<T> {
+    #[inline]
+    fn push_back(&mut self, elem: T) {
+        self.push(elem);
+    }
+
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        self.reserve(additional);
+    }
+
+    #[inline]
+    unsafe fn assume_reserved_push_back(&mut self, elem: T) {
+        unsafe {
+            super::push_unchecked(self, elem);
+        }
+    }
+
+    fn push_back_iter(&mut self, elems: impl IntoIterator<Item = T>) {
+        self.extend(elems);
+    }
+
+    fn push_back_iter_ref<'a>(&mut self, elems: impl IntoIterator<Item = &'a T>)
+    where
+        T: Copy + 'a,
+    {
+        self.extend(elems);
+    }
+
+    fn push_back_linked_vec(&mut self, chunks: LinkedList<Vec<T>>, append_len: usize) {
+        super::append_linked_vec(self, chunks, append_len);
+    }
+}
+
+#[cfg(test)]
+mod miri_tests {
+    use komadori::prelude::{Collector, IntoCollectorBase};
+
+    use crate::{collector::plumbing::UnindexedConsumer, prelude::*};
+
+    #[test]
+    fn no_alias_for_collector_mut() {
+        let mut nums = vec![1, 2, 3];
+        let mut collector = nums.par_collector_mut();
+
+        let (consumer, commit) = collector.take_parts(3);
+        let output = consumer.into_collector().collect_then_finish([4, 5, 6]);
+        commit(output);
+
+        collector.finish();
+        assert_eq!(nums, [1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn serial_cell_opt_ref_mut_is_sound() {
+        let mut collector = vec![1, 2, 3].into_par_collector();
+        let (consumer, commit) = collector.take_unindexed_parts();
+
+        let right_consumer = consumer;
+        let left_consumer = right_consumer.split_off_left();
+        let combiner = right_consumer.to_combiner();
+
+        let right_output = right_consumer
+            .into_collector()
+            .collect_then_finish([6, 7, 8]);
+        let mut left_output = left_consumer.into_collector().collect_then_finish([4, 5]);
+        combiner(&mut left_output, right_output);
+        let output = left_output;
+
+        commit(output);
+        assert_eq!(collector.finish(), [1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use crate::test_utils::prelude::*;
+
+    par_collector_test!(into_indexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut starting_nums = propvec(any::<i32>(), ..=2);
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_nums.into_par_collector(),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
+            let mut res = starting_nums.clone();
+            res.extend(iter);
+            (res, Continue(((), request)))
+        },
+        output_pred: PartialEq::eq,
+        state_pred: state_is_irrelevant(),
+    });
+
+    unindexed_par_collector_test!(into_unindexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut starting_nums = propvec(any::<i32>(), ..=2);
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_nums.into_par_collector(),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
+            let mut res = starting_nums.clone();
+            res.extend(iter);
+            (res, Continue(((), request)))
+        },
+        output_pred: PartialEq::eq,
+        state_pred: state_is_irrelevant(),
+    });
+
+    par_collector_test!(mut_indexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut starting_nums = propvec(any::<i32>(), ..=2);
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_nums.par_collector_mut(),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
+            let mut res = starting_nums.clone();
+            res.extend(iter);
+            (res, Continue(((), request)))
+        },
+        output_pred: |actual, expected| *actual == expected,
+        state_pred: state_is_irrelevant(),
+    });
+
+    unindexed_par_collector_test!(mut_unindexed {
+        iter_data: {
+            let mut nums = propvec(any::<i32>(), ..=5);
+        },
+        other_data: {
+            let mut starting_nums = propvec(any::<i32>(), ..=2);
+        },
+        iter: nums.par_iter().cloned(),
+        collector: starting_nums.par_collector_mut(),
+        starting_ma_f: |request| request,
+        expected_f: |iter, _, request| {
+            let mut res = starting_nums.clone();
+            res.extend(iter);
+            (res, Continue(((), request)))
+        },
+        output_pred: |actual, expected| *actual == expected,
+        state_pred: state_is_irrelevant(),
+    });
+}
