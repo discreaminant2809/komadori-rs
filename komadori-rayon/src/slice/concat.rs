@@ -39,7 +39,7 @@ pub trait ParConcat: Sized + ParConcatSealed {
     ///
     /// ```
     /// use rayon::prelude::*;
-    /// use komadori_rayon::{prelude::*, slice::ParConcat};
+    /// use komadori_rayon::prelude::*;
     ///
     /// let concat = ["ab", "c", "def"]
     ///     .into_par_iter()
@@ -61,7 +61,7 @@ pub trait ParConcat: Sized + ParConcatSealed {
     ///
     /// ```
     /// use rayon::prelude::*;
-    /// use komadori_rayon::{prelude::*, slice::ParConcat};
+    /// use komadori_rayon::prelude::*;
     ///
     /// let mut nums = vec![1, 2];
     ///
