@@ -9,7 +9,7 @@
 - `crate::slice::IntoParConcat`.
 - `crate::slice::ParConcatMut`.
 
-## 0.2.0
+## 0.2.0 (yanked; merged with the next update)
 
 ### Added
 
