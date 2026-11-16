@@ -1,35 +1,10 @@
-use std::{borrow::Borrow, collections::LinkedList};
+use std::borrow::Borrow;
 
-use crate::slice::{OwnedSlice, OwnedSliceBase, ParConcat, ParConcatSealed};
+use crate::slice::{OwnedSlice, ParConcat, ParConcatSealed};
 
 impl ParConcat for String {}
 
 impl ParConcatSealed for String {}
-
-impl OwnedSliceBase for String {
-    #[inline]
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.is_empty()
-    }
-
-    #[inline]
-    fn capacity(&self) -> usize {
-        self.capacity()
-    }
-
-    fn append(&mut self, other: Self) {
-        *self += &other;
-    }
-
-    fn append_from_linked_list(&mut self, others: LinkedList<Self>, len: usize) {
-        super::append_linked_string(self, others, len);
-    }
-}
 
 impl<T> OwnedSlice<T> for String
 where

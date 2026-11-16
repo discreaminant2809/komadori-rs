@@ -1,11 +1,12 @@
-use std::{collections::LinkedList, ops::ControlFlow};
+use std::ops::ControlFlow;
 
 use crate::{
+    collections::{Append, CollectionBase, linked},
     collector::{
         ParallelCollectorBase, UnindexedParallelCollectorBase,
         plumbing::{
-            Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
-            UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
+            Consumer, DefineSerial, DefineUnindexedSerial, OpaqueUnindexedConsumer, SerialOf,
+            SerialOutputOf, UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
         },
     },
     helpers::{unique, unique_unindexed},
@@ -18,7 +19,9 @@ use crate::{
 ///
 /// Currently, the supported types are:
 ///
-/// - [`Vec<T>`], with item types that implement [`Borrow<[T]>`][`Borrow`].
+/// - [`Vec<T>`], with item types that implement [`Borrow<[T]>`][`Borrow`],
+///   where [`T: Clone`](Clone).
+///
 /// - [`String`], with item types that implement [`Borrow<str>`][`Borrow`].
 ///
 /// This trait is sealed and for providing methods only.
@@ -94,35 +97,35 @@ pub struct ParConcatMut<'os, OS> {
 
 impl<'a, OS> DefineSerial<'a> for IntoParConcat<OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
-    type Serial = unique::Serial<'a, Self, consumer::Serial<'a, OS>>;
+    type Serial = unique::Serial<'a, Self, internal::Serial<'a, OS>>;
 }
 
 impl<'a, 'os, OS> DefineSerial<'a> for ParConcatMut<'os, OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
-    type Serial = unique::Serial<'a, Self, consumer::Serial<'a, OS>>;
+    type Serial = unique::Serial<'a, Self, internal::Serial<'a, OS>>;
 }
 
 impl<'a, OS> DefineUnindexedSerial<'a> for IntoParConcat<OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Serial<'a, OS>>;
+    type UnindexedSerial = unique_unindexed::Serial<'a, Self, internal::Serial<'a, OS>>;
 }
 
 impl<'a, 'os, OS> DefineUnindexedSerial<'a> for ParConcatMut<'os, OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Serial<'a, OS>>;
+    type UnindexedSerial = unique_unindexed::Serial<'a, Self, internal::Serial<'a, OS>>;
 }
 
 impl<OS> ParallelCollectorBase for IntoParConcat<OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
     type Output = OS;
 
@@ -138,16 +141,13 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::unindexed(&mut self.owned_slice), |output| {
-            output.finalize();
-            ControlFlow::Continue(())
-        }))
+        unique::uniquify(parts(&mut self.owned_slice))
     }
 }
 
 impl<'os, OS> ParallelCollectorBase for ParConcatMut<'os, OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
     type Output = &'os mut OS;
 
@@ -163,16 +163,13 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique::uniquify((consumer::unindexed(self.owned_slice), |output| {
-            output.finalize();
-            ControlFlow::Continue(())
-        }))
+        unique::uniquify(parts(self.owned_slice))
     }
 }
 
 impl<OS> UnindexedParallelCollectorBase for IntoParConcat<OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
     fn unindexed_parts<'a>(
         &'a mut self,
@@ -183,16 +180,13 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::unindexed(&mut self.owned_slice), |output| {
-            output.finalize();
-            ControlFlow::Continue(())
-        }))
+        unique_unindexed::uniquify(parts(&mut self.owned_slice))
     }
 }
 
 impl<'os, OS> UnindexedParallelCollectorBase for ParConcatMut<'os, OS>
 where
-    OS: OwnedSliceBase + Send,
+    OS: CollectionBase + Append + Default + Send,
 {
     fn unindexed_parts<'a>(
         &'a mut self,
@@ -203,205 +197,128 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((consumer::unindexed(self.owned_slice), |output| {
-            output.finalize();
-            ControlFlow::Continue(())
-        }))
+        unique_unindexed::uniquify(parts(self.owned_slice))
     }
 }
 
-pub(crate) trait OwnedSliceBase: Default {
-    fn len(&self) -> usize;
-    fn is_empty(&self) -> bool;
-    fn capacity(&self) -> usize;
-    fn append(&mut self, other: Self);
-    fn append_from_linked_list(&mut self, others: LinkedList<Self>, len: usize);
+#[expect(clippy::type_complexity)]
+fn parts<OS>(
+    owned_slice: &mut OS,
+) -> (
+    OpaqueUnindexedConsumer!(internal::Serial<'_, OS>),
+    impl FnOnce(internal::Output<'_, OS>) -> ControlFlow<()>,
+)
+where
+    OS: CollectionBase + Append + Default + Send,
+{
+    (
+        linked::unindexed(internal::ConcatCollection::new(owned_slice)),
+        |output| {
+            output.finalize(
+                |mut owned_slice, chunk| owned_slice.append(chunk),
+                |owned_slice, chunks, len| {
+                    owned_slice
+                        .into_inner()
+                        .append_many(chunks.into_iter().map(|chunk| chunk.into_inner()), len)
+                },
+            );
+            ControlFlow::Continue(())
+        },
+    )
 }
 
-pub(crate) trait OwnedSlice<T>: OwnedSliceBase {
+pub(crate) trait OwnedSlice<T>: CollectionBase {
     fn push(&mut self, item: T);
+}
+
+impl<OS, T> OwnedSlice<T> for &mut OS
+where
+    OS: OwnedSlice<T> + ?Sized,
+{
+    #[inline]
+    fn push(&mut self, item: T) {
+        OS::push(self, item);
+    }
 }
 
 pub(crate) trait ParConcatSealed {}
 
-#[expect(missing_debug_implementations, private_bounds)]
-mod consumer {
-    use std::{cell::Cell, collections::LinkedList, ops::ControlFlow};
+#[expect(missing_debug_implementations)]
+mod internal {
+    use crate::collections::{Append, Collection, CollectionBase, linked};
 
-    use crate::collector::plumbing::{
-        BasicUnindexedConsumer, Collector, CollectorBase, OpaqueUnindexedConsumer,
-        finish_boxed_impl,
-    };
+    use super::OwnedSlice;
 
-    use super::{OwnedSlice, OwnedSliceBase};
+    pub type Serial<'a, OS> = linked::Serial<ConcatCollection<&'a mut OS>, ConcatCollection<OS>>;
 
-    pub fn unindexed<OS>(owned_slice: &mut OS) -> OpaqueUnindexedConsumer!(Serial<'_, OS>)
-    where
-        OS: OwnedSliceBase + Send,
-    {
-        BasicUnindexedConsumer {
-            state: Cell::new(Some(owned_slice)),
-            split_f: |owned_slice| Cell::new(owned_slice.take()),
-            combiner_f: |_| Output::extend,
-            ma_f: |_, request| request,
-            collector_f: |owned_slice| match owned_slice.into_inner() {
-                Some(owned_slice) => Serial::LeftMost(owned_slice),
-                None => Serial::Right(OS::default()),
-            },
+    pub type Output<'a, OS> = linked::Output<ConcatCollection<&'a mut OS>, ConcatCollection<OS>>;
+
+    #[derive(Default)]
+    pub struct ConcatCollection<OS> {
+        owned_slice: OS,
+    }
+
+    impl<OS> ConcatCollection<OS> {
+        #[inline]
+        pub(super) fn new(owned_slice: OS) -> Self {
+            Self { owned_slice }
         }
-    }
-
-    pub enum Serial<'a, OS> {
-        LeftMost(&'a mut OS),
-        Right(OS),
-    }
-
-    pub struct Output<'a, OS> {
-        owned_slice: Option<&'a mut OS>,
-        chunks: Chunks<OS>,
-    }
-
-    enum Chunks<OS> {
-        // This state exists so that we can avoid another indirection of `LinkedList`.
-        // A win if we somehow only ever have 1 chunk (rare).
-        Single(OS),
-        Plural { chunks: LinkedList<OS>, len: usize },
-    }
-
-    impl<'a, OS> CollectorBase for Serial<'a, OS>
-    where
-        OS: OwnedSliceBase,
-    {
-        type Output = Output<'a, OS>;
 
         #[inline]
-        fn finish(self) -> Self::Output {
-            match self {
-                Self::LeftMost(owned_slice) => Output {
-                    owned_slice: Some(owned_slice),
-                    chunks: Chunks::Single(OS::default()),
-                },
-                Self::Right(owned_slice) => Output {
-                    owned_slice: None,
-                    chunks: Chunks::Single(owned_slice),
-                },
-            }
+        pub(super) fn into_inner(self) -> OS {
+            self.owned_slice
         }
-
-        finish_boxed_impl! {}
     }
 
-    impl<'a, OS, T> Collector<T> for Serial<'a, OS>
+    impl<OS> CollectionBase for ConcatCollection<OS>
+    where
+        OS: CollectionBase,
+    {
+        #[inline]
+        fn len(&self) -> usize {
+            self.owned_slice.len()
+        }
+
+        #[inline]
+        fn is_empty(&self) -> bool {
+            self.owned_slice.is_empty()
+        }
+
+        #[inline]
+        fn capacity(&self) -> usize {
+            self.owned_slice.capacity()
+        }
+
+        // Unlike pushing an element at a time, each pushed slice
+        // may contain no elements at all.
+        // We choose NOT to reserve any amount upfront like
+        // the standard library.
+        #[inline]
+        fn reserve(&mut self, _additional: usize) {}
+    }
+
+    impl<OS, OOS> Append<ConcatCollection<OOS>> for ConcatCollection<OS>
+    where
+        OS: Append<OOS>,
+    {
+        #[inline]
+        fn append(&mut self, other: ConcatCollection<OOS>) {
+            self.owned_slice.append(other.owned_slice);
+        }
+    }
+
+    impl<OS, T> Collection<T> for ConcatCollection<OS>
     where
         OS: OwnedSlice<T>,
     {
         #[inline]
-        fn collect(&mut self, item: T) -> ControlFlow<()> {
-            self.owned_slice_mut().push(item);
-            ControlFlow::Continue(())
+        fn push(&mut self, item: T) {
+            self.owned_slice.push(item);
         }
 
         #[inline]
-        fn collect_many(&mut self, items: impl IntoIterator<Item = T>) -> ControlFlow<()> {
-            let owned_slice = self.owned_slice_mut();
-            items
-                .into_iter()
-                .for_each(move |item| owned_slice.push(item));
-
-            ControlFlow::Continue(())
-        }
-    }
-
-    impl<OS> Chunks<OS>
-    where
-        OS: OwnedSliceBase,
-    {
-        fn extend(&mut self, right: Self) {
-            match (&mut *self, right) {
-                (Self::Single(left_chunk), Self::Single(right_chunk)) if left_chunk.is_empty() => {
-                    // Use the one with more capacity to be more efficient.
-                    // If the right chunk has some elements, we must use it,
-                    // so that we don't spend time copying elements.
-                    if !right_chunk.is_empty() || left_chunk.capacity() < right_chunk.capacity() {
-                        *left_chunk = right_chunk;
-                    }
-                }
-                (Self::Single(left_chunk), Self::Single(right_chunk)) if right_chunk.is_empty() => {
-                    // We won't waste a `LinkedList` just to combine with an empty chunk.
-                }
-                (Self::Single(left_chunk), Self::Single(right_chunk)) => {
-                    let left_chunk = std::mem::take(left_chunk);
-                    *self = Self::Plural {
-                        len: left_chunk.len() + right_chunk.len(),
-                        chunks: LinkedList::from([left_chunk, right_chunk]),
-                    };
-                }
-                (Self::Single(left_chunk), Self::Plural { mut chunks, len }) => {
-                    let left_chunk = std::mem::take(left_chunk);
-                    *self = Self::Plural {
-                        len: left_chunk.len() + len,
-                        chunks: {
-                            chunks.push_front(left_chunk);
-                            chunks
-                        },
-                    };
-                }
-
-                (Self::Plural { chunks, len }, Self::Single(chunk)) => {
-                    if !chunk.is_empty() {
-                        *len += chunk.len();
-                        chunks.push_back(chunk);
-                    }
-
-                    // Otherwise that chunk is useless and not worth appending.
-                }
-                (
-                    Self::Plural {
-                        chunks: left_chunks,
-                        len: left_len,
-                    },
-                    Self::Plural {
-                        chunks: mut right_chunks,
-                        len: right_len,
-                    },
-                ) => {
-                    *left_len += right_len;
-                    left_chunks.append(&mut right_chunks);
-                }
-            }
-        }
-    }
-
-    impl<OS> Serial<'_, OS> {
-        #[inline]
-        fn owned_slice_mut(&mut self) -> &mut OS {
-            match self {
-                Self::LeftMost(owned_slice) => owned_slice,
-                Self::Right(owned_slice) => owned_slice,
-            }
-        }
-    }
-
-    impl<OS> Output<'_, OS>
-    where
-        OS: OwnedSliceBase,
-    {
-        fn extend(&mut self, other: Self) {
-            self.chunks.extend(other.chunks);
-        }
-
-        pub(crate) fn finalize(self) {
-            let Some(owned_slice) = self.owned_slice else {
-                // Which means that the parallel collector will be disposed soon
-                // (possibly under `trying_options()` or similar),
-                // or just being combined incorrectly.
-                return;
-            };
-
-            match self.chunks {
-                Chunks::Single(items) => owned_slice.append(items),
-                Chunks::Plural { chunks, len } => owned_slice.append_from_linked_list(chunks, len),
-            }
+        fn push_many(&mut self, items: impl IntoIterator<Item = T>) {
+            items.into_iter().for_each(|item| self.push(item));
         }
     }
 }

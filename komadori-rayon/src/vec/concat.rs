@@ -1,35 +1,10 @@
-use std::{borrow::Borrow, collections::LinkedList};
+use std::borrow::Borrow;
 
-use crate::slice::{OwnedSlice, OwnedSliceBase, ParConcat, ParConcatSealed};
+use crate::slice::{OwnedSlice, ParConcat, ParConcatSealed};
 
-impl<T> ParConcat for Vec<T> {}
+impl<T> ParConcat for Vec<T> where T: Clone {}
 
-impl<T> ParConcatSealed for Vec<T> {}
-
-impl<T> OwnedSliceBase for Vec<T> {
-    #[inline]
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.is_empty()
-    }
-
-    #[inline]
-    fn capacity(&self) -> usize {
-        self.capacity()
-    }
-
-    fn append(&mut self, mut other: Self) {
-        self.append(&mut other);
-    }
-
-    fn append_from_linked_list(&mut self, others: LinkedList<Self>, len: usize) {
-        super::append_linked_vec(self, others, len);
-    }
-}
+impl<T> ParConcatSealed for Vec<T> where T: Clone {}
 
 impl<Item, T> OwnedSlice<Item> for Vec<T>
 where

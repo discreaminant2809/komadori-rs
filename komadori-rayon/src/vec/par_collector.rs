@@ -1,7 +1,7 @@
-use std::{collections::LinkedList, ops::ControlFlow, ptr::NonNull};
+use std::{ops::ControlFlow, ptr::NonNull};
 
 use crate::{
-    collections::linked_vec,
+    collections::{Append, CollectionBase, linked},
     collector::{
         IntoParallelCollectorBase, ParallelCollectorBase, assert_unindexed_par_collector,
         plumbing::{
@@ -78,7 +78,7 @@ where
     T: Send,
 {
     type UnindexedSerial =
-        unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
+        unique_unindexed::Serial<'this, Self, linked::Serial<&'this mut Vec<T>, Vec<T>>>;
 }
 
 impl<T> ParallelCollectorBase for IntoParCollector<T>
@@ -146,8 +146,8 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((linked_vec::unindexed(&mut self.0), |output| {
-            output.finalize();
+        unique_unindexed::uniquify((linked::unindexed(&mut self.0), |output| {
+            output.finalize(Append::append, CollectionBase::append_many);
             ControlFlow::Continue(())
         }))
     }
@@ -165,7 +165,7 @@ where
     T: Send,
 {
     type UnindexedSerial =
-        unique_unindexed::Serial<'this, Self, linked_vec::Serial<'this, Vec<T>, T>>;
+        unique_unindexed::Serial<'this, Self, linked::Serial<&'this mut Vec<T>, Vec<T>>>;
 }
 
 impl<'v, T> ParallelCollectorBase for ParCollectorMut<'v, T>
@@ -241,8 +241,8 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
-        unique_unindexed::uniquify((linked_vec::unindexed(self.0), |output| {
-            output.finalize();
+        unique_unindexed::uniquify((linked::unindexed(&mut *self.0), |output| {
+            output.finalize(Append::append, CollectionBase::append_many);
             ControlFlow::Continue(())
         }))
     }
@@ -255,40 +255,6 @@ where
     #[inline]
     fn default() -> Self {
         Vec::default().into_par_collector()
-    }
-}
-
-impl<T> linked_vec::Collection<T> for Vec<T> {
-    #[inline]
-    fn push_back(&mut self, elem: T) {
-        self.push(elem);
-    }
-
-    #[inline]
-    fn reserve(&mut self, additional: usize) {
-        self.reserve(additional);
-    }
-
-    #[inline]
-    unsafe fn assume_reserved_push_back(&mut self, elem: T) {
-        unsafe {
-            super::push_unchecked(self, elem);
-        }
-    }
-
-    fn push_back_iter(&mut self, elems: impl IntoIterator<Item = T>) {
-        self.extend(elems);
-    }
-
-    fn push_back_iter_ref<'a>(&mut self, elems: impl IntoIterator<Item = &'a T>)
-    where
-        T: Copy + 'a,
-    {
-        self.extend(elems);
-    }
-
-    fn push_back_linked_vec(&mut self, chunks: LinkedList<Vec<T>>, append_len: usize) {
-        super::append_linked_vec(self, chunks, append_len);
     }
 }
 
