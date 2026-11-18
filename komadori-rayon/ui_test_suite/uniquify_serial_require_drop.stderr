@@ -1,5 +1,5 @@
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:15:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:15:22
    |
  6 | macro_rules! for_method {
 ...
@@ -17,7 +17,7 @@ error[E0505]: cannot move out of `collector` because it is borrowed
    | --------------------- in this macro invocation
 
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:22:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:22:22
    |
  6 | macro_rules! for_method {
 ...
@@ -35,7 +35,7 @@ error[E0505]: cannot move out of `collector` because it is borrowed
    | --------------------- in this macro invocation
 
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:15:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:15:22
    |
  6 | macro_rules! for_method {
 ...
@@ -53,7 +53,7 @@ error[E0505]: cannot move out of `collector` because it is borrowed
    | -------------------------- in this macro invocation
 
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:22:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:22:22
    |
  6 | macro_rules! for_method {
 ...
@@ -71,7 +71,7 @@ error[E0505]: cannot move out of `collector` because it is borrowed
    | -------------------------- in this macro invocation
 
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:15:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:15:22
    |
  6 | macro_rules! for_method {
 ...
@@ -89,7 +89,7 @@ error[E0505]: cannot move out of `collector` because it is borrowed
    | ------------------------------ in this macro invocation
 
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:22:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:22:22
    |
  6 | macro_rules! for_method {
 ...
@@ -107,7 +107,7 @@ error[E0505]: cannot move out of `collector` because it is borrowed
    | ------------------------------ in this macro invocation
 
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:15:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:15:22
    |
  6 | macro_rules! for_method {
 ...
@@ -125,7 +125,7 @@ error[E0505]: cannot move out of `collector` because it is borrowed
    | ----------------------------------- in this macro invocation
 
 error[E0505]: cannot move out of `collector` because it is borrowed
-  --> ui_test_suite/serial_require_drop.rs:22:22
+  --> ui_test_suite/uniquify_serial_require_drop.rs:22:22
    |
  6 | macro_rules! for_method {
 ...

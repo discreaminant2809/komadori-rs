@@ -75,11 +75,31 @@
 //! For the indexed version, it creates a private module that contains the following:
 //!
 //! - `Serial<'a, This, C>`: It wraps around a serial collector type.
-//!   It implements **no** auto traits at all, and is invariant over `'a`.
+//!
+//!   It:
+//!   - implements **no** auto traits at all,
+//!   - is invariant over `'a`, `This` and `C`,
+//!   - and needs drop.
+//!
+//!   It is used in [`type Serial`](DefineSerial::Serial)
+//!   (and [`type UnindexedSerial`](DefineUnindexedSerial::UnindexedSerial)
+//!   for the unindexed version).
+//!
+//!   You should bind your lifetime in `'a`,
+//!   your implemented parallel collector type in `This`,
+//!   and the type's serial collector type in `C`.
+//!
 //!
 //! - `Output<'a, This, O>`: It wraps around the serial collector's output type.
-//!   It only implements [`Send`] (if `O` is [`Send`]) and **no** other auto traits at all,
-//!   and is invariant over `'a`.
+//!
+//!   It:
+//!   - only implements [`Send`] (if `O` is [`Send`]) and **no** other auto traits at all,
+//!   - is invariant over `'a`, `This` and `O`,
+//!   - and needs drop.
+//!
+//!   You should bind your lifetime in `'a`,
+//!   your implemented parallel collector type in `This`,
+//!   and the type's serial collector's output type in `O`.
 //!
 //! - `fn uniquify((consumer, commit))` (receives a tuple):
 //!   Returns the same tuple with a consumer and a committer using
@@ -283,21 +303,21 @@ macro_rules! uniquify_serial {
     ($mod_name:ident, unindexed = false) => {
         #[allow(missing_debug_implementations)]
         mod $mod_name {
-            use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
-
             use ::core::any::Any;
             use ::core::marker::PhantomData;
             use ::core::ops::{ControlFlow, Drop};
             use ::core::primitive::usize;
 
+            use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
+
             pub struct Serial<'a, This, C> {
                 collector: C,
-                _marker: Marker<'a, This>,
+                _marker: Marker<'a, This, C>,
             }
 
             pub struct Output<'a, This, O> {
                 output: O,
-                _marker: Marker<'a, This>,
+                _marker: Marker<'a, This, O>,
             }
             // SAFETY: We're just a wrapper.
             unsafe impl<This, O: Send> Send for Output<'_, This, O> {}
@@ -319,7 +339,7 @@ macro_rules! uniquify_serial {
                 (
                     Consumer {
                         consumer,
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     },
                     move |output| {
                         // Due to capturing something implementing no auto traits,
@@ -347,7 +367,7 @@ macro_rules! uniquify_serial {
                 (
                     Consumer {
                         consumer,
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     },
                     move |output| {
                         // Due to capturing something implementing no auto traits,
@@ -359,17 +379,35 @@ macro_rules! uniquify_serial {
             }
 
             // A marker for types in this module that makes:
-            // - Lifetime invariant.
+            // - Every single type and lifetime parameter invariant.
             // - Type not implementing any auto traits. (Can add later)
             // - Type needing drop.
-            struct Marker<'a, This>(PhantomData<(&'a mut &'a mut This, dyn Any)>);
-            impl<This> Drop for Marker<'_, This> {
+            struct Marker<'a, This, S> {
+                _lt_bounded_self_invariant: PhantomData<&'a mut This>,
+                _lt_invariant: PhantomData<&'a mut &'a mut ()>,
+                _subject_invariant: PhantomData<fn(S) -> S>,
+                _no_auto_traits: PhantomData<dyn Any>,
+            }
+
+            impl<This, S> Marker<'_, This, S> {
+                #[inline]
+                fn new() -> Self {
+                    Self {
+                        _lt_bounded_self_invariant: PhantomData,
+                        _lt_invariant: PhantomData,
+                        _subject_invariant: PhantomData,
+                        _no_auto_traits: PhantomData,
+                    }
+                }
+            }
+
+            impl<This, S> Drop for Marker<'_, This, S> {
                 fn drop(&mut self) {}
             }
 
             struct Consumer<'a, This, C> {
                 consumer: C,
-                _marker: Marker<'a, This>,
+                _marker: Marker<'a, This, C>,
             }
             // SAFETY: We're just a wrapper.
             unsafe impl<This, C: Send> Send for Consumer<'_, This, C> {}
@@ -386,7 +424,7 @@ macro_rules! uniquify_serial {
                 fn into_collector(self) -> Self::IntoCollector {
                     Serial {
                         collector: IntoCollectorBase::into_collector(self.consumer),
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     }
                 }
             }
@@ -409,7 +447,7 @@ macro_rules! uniquify_serial {
                     (
                         Self {
                             consumer,
-                            _marker: Marker(PhantomData),
+                            _marker: Marker::new(),
                         },
                         |left, right| combine(&mut left.output, right.output),
                     )
@@ -431,7 +469,7 @@ macro_rules! uniquify_serial {
                 fn finish(self) -> Self::Output {
                     Output {
                         output: CollectorBase::finish(self.collector),
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     }
                 }
 
@@ -464,7 +502,7 @@ macro_rules! uniquify_serial {
                 fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
                     Output {
                         output: Collector::collect_then_finish(self.collector, items),
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     }
                 }
             }
@@ -474,21 +512,21 @@ macro_rules! uniquify_serial {
     ($mod_name:ident, unindexed = true) => {
         #[allow(missing_debug_implementations)]
         mod $mod_name {
-            use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
-
             use ::core::any::Any;
             use ::core::marker::PhantomData;
             use ::core::ops::{ControlFlow, Drop};
             use ::core::primitive::usize;
 
+            use $crate::collector::plumbing::{self, Collector, CollectorBase, IntoCollectorBase};
+
             pub struct Serial<'a, This, C> {
                 collector: C,
-                _marker: Marker<'a, This>,
+                _marker: Marker<'a, This, C>,
             }
 
             pub struct Output<'a, This, O> {
                 output: O,
-                _marker: Marker<'a, This>,
+                _marker: Marker<'a, This, O>,
             }
             // SAFETY: We're just a wrapper.
             unsafe impl<This, O: Send> Send for Output<'_, This, O> {}
@@ -510,7 +548,7 @@ macro_rules! uniquify_serial {
                 (
                     Consumer {
                         consumer,
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     },
                     move |output| {
                         // Due to capturing something implementing no auto traits,
@@ -538,7 +576,7 @@ macro_rules! uniquify_serial {
                 (
                     Consumer {
                         consumer,
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     },
                     move |output| {
                         // Due to capturing something implementing no auto traits,
@@ -550,17 +588,35 @@ macro_rules! uniquify_serial {
             }
 
             // A marker for types in this module that makes:
-            // - Lifetime invariant.
+            // - Every single type and lifetime parameter invariant.
             // - Type not implementing any auto traits. (Can add later)
             // - Type needing drop.
-            struct Marker<'a, This>(PhantomData<(&'a mut &'a mut This, dyn Any)>);
-            impl<This> Drop for Marker<'_, This> {
+            struct Marker<'a, This, S> {
+                _lt_bounded_self_invariant: PhantomData<&'a mut This>,
+                _lt_invariant: PhantomData<&'a mut &'a mut ()>,
+                _subject_invariant: PhantomData<fn(S) -> S>,
+                _no_auto_traits: PhantomData<dyn Any>,
+            }
+
+            impl<This, S> Marker<'_, This, S> {
+                #[inline]
+                fn new() -> Self {
+                    Self {
+                        _lt_bounded_self_invariant: PhantomData,
+                        _lt_invariant: PhantomData,
+                        _subject_invariant: PhantomData,
+                        _no_auto_traits: PhantomData,
+                    }
+                }
+            }
+
+            impl<This, S> Drop for Marker<'_, This, S> {
                 fn drop(&mut self) {}
             }
 
             struct Consumer<'a, This, C> {
                 consumer: C,
-                _marker: Marker<'a, This>,
+                _marker: Marker<'a, This, C>,
             }
             // SAFETY: We're just a wrapper.
             unsafe impl<This, C: Send> Send for Consumer<'_, This, C> {}
@@ -577,7 +633,7 @@ macro_rules! uniquify_serial {
                 fn into_collector(self) -> Self::IntoCollector {
                     Serial {
                         collector: IntoCollectorBase::into_collector(self.consumer),
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     }
                 }
             }
@@ -600,7 +656,7 @@ macro_rules! uniquify_serial {
                     (
                         Self {
                             consumer: left,
-                            _marker: Marker(PhantomData),
+                            _marker: Marker::new(),
                         },
                         |left, right| combine(&mut left.output, right.output),
                     )
@@ -620,7 +676,7 @@ macro_rules! uniquify_serial {
                 fn split_off_left(&self) -> Self {
                     Self {
                         consumer: plumbing::UnindexedConsumer::split_off_left(&self.consumer),
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     }
                 }
 
@@ -643,7 +699,7 @@ macro_rules! uniquify_serial {
                 fn finish(self) -> Self::Output {
                     Output {
                         output: CollectorBase::finish(self.collector),
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     }
                 }
 
@@ -676,7 +732,7 @@ macro_rules! uniquify_serial {
                 fn collect_then_finish(self, items: impl IntoIterator<Item = T>) -> Self::Output {
                     Output {
                         output: Collector::collect_then_finish(self.collector, items),
-                        _marker: Marker(PhantomData),
+                        _marker: Marker::new(),
                     }
                 }
             }
@@ -791,8 +847,10 @@ mod ui_tests {
     use trybuild::TestCases;
 
     #[test]
-    fn serial_require_drop() {
-        TestCases::new().compile_fail("ui_test_suite/serial_require_drop.rs");
+    fn uniquify_serial() {
+        let t = TestCases::new();
+        t.compile_fail("ui_test_suite/uniquify_serial_require_drop.rs");
+        t.compile_fail("ui_test_suite/uniquify_serial_lt_invariant.rs");
     }
 }
 

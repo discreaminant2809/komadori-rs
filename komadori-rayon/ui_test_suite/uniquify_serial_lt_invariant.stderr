@@ -1,0 +1,135 @@
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:16:17
+   |
+12 | macro_rules! for_type {
+...
+15 |             fn covariant<'a>(x: $TyName<'static>) -> $TyName<'a> {
+   |                          -- lifetime `'a` defined here
+16 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+26 | for_type!(Serial);
+   | ----------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique::inner::Serial<'_, ParCount, Count>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique::inner::Serial<'a, This, C>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:20:17
+   |
+12 | macro_rules! for_type {
+...
+19 |             fn contravariant<'a>(x: $TyName<'a>) -> $TyName<'static> {
+   |                              -- lifetime `'a` defined here
+20 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+26 | for_type!(Serial);
+   | ----------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique::inner::Serial<'_, ParCount, Count>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique::inner::Serial<'a, This, C>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:16:17
+   |
+12 | macro_rules! for_type {
+...
+15 |             fn covariant<'a>(x: $TyName<'static>) -> $TyName<'a> {
+   |                          -- lifetime `'a` defined here
+16 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+27 | for_type!(UnindexedSerial);
+   | -------------------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique_unindexed::inner::Serial<'_, ParCount, Count>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique_unindexed::inner::Serial<'a, This, C>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:20:17
+   |
+12 | macro_rules! for_type {
+...
+19 |             fn contravariant<'a>(x: $TyName<'a>) -> $TyName<'static> {
+   |                              -- lifetime `'a` defined here
+20 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+27 | for_type!(UnindexedSerial);
+   | -------------------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique_unindexed::inner::Serial<'_, ParCount, Count>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique_unindexed::inner::Serial<'a, This, C>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:16:17
+   |
+12 | macro_rules! for_type {
+...
+15 |             fn covariant<'a>(x: $TyName<'static>) -> $TyName<'a> {
+   |                          -- lifetime `'a` defined here
+16 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+28 | for_type!(Output);
+   | ----------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique::inner::Output<'_, ParCount, usize>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique::inner::Output<'a, This, O>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:20:17
+   |
+12 | macro_rules! for_type {
+...
+19 |             fn contravariant<'a>(x: $TyName<'a>) -> $TyName<'static> {
+   |                              -- lifetime `'a` defined here
+20 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+28 | for_type!(Output);
+   | ----------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique::inner::Output<'_, ParCount, usize>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique::inner::Output<'a, This, O>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:16:17
+   |
+12 | macro_rules! for_type {
+...
+15 |             fn covariant<'a>(x: $TyName<'static>) -> $TyName<'a> {
+   |                          -- lifetime `'a` defined here
+16 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+29 | for_type!(UnindexedOutput);
+   | -------------------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique_unindexed::inner::Output<'_, ParCount, usize>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique_unindexed::inner::Output<'a, This, O>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+  --> ui_test_suite/uniquify_serial_lt_invariant.rs:20:17
+   |
+12 | macro_rules! for_type {
+...
+19 |             fn contravariant<'a>(x: $TyName<'a>) -> $TyName<'static> {
+   |                              -- lifetime `'a` defined here
+20 |                 x
+   |                 ^ returning this value requires that `'a` must outlive `'static`
+...
+29 | for_type!(UnindexedOutput);
+   | -------------------------- in this macro invocation
+   |
+   = note: requirement occurs because of the type `komadori_rayon::helpers::unique_unindexed::inner::Output<'_, ParCount, usize>`, which makes the generic argument `'_` invariant
+   = note: the struct `komadori_rayon::helpers::unique_unindexed::inner::Output<'a, This, O>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
