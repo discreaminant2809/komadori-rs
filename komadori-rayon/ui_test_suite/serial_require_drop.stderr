@@ -1,0 +1,143 @@
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:15:22
+   |
+ 6 | macro_rules! for_method {
+...
+12 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+13 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+14 |                 let _serial = consumer.into_collector();
+15 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+16 |             }
+   |             - borrow might be used here, when `_serial` is dropped and runs the destructor for type `komadori_rayon::helpers::unique::inner::Serial<'_, ParCount, Count>`
+...
+28 | for_method!(parts(0));
+   | --------------------- in this macro invocation
+
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:22:22
+   |
+ 6 | macro_rules! for_method {
+...
+19 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+20 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+21 |                 let _output = consumer.into_collector().finish();
+22 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+23 |             }
+   |             - borrow might be used here, when `_output` is dropped and runs the destructor for type `komadori_rayon::helpers::unique::inner::Output<'_, ParCount, usize>`
+...
+28 | for_method!(parts(0));
+   | --------------------- in this macro invocation
+
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:15:22
+   |
+ 6 | macro_rules! for_method {
+...
+12 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+13 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+14 |                 let _serial = consumer.into_collector();
+15 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+16 |             }
+   |             - borrow might be used here, when `_serial` is dropped and runs the destructor for type `komadori_rayon::helpers::unique::inner::Serial<'_, ParCount, Count>`
+...
+29 | for_method!(take_parts(0));
+   | -------------------------- in this macro invocation
+
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:22:22
+   |
+ 6 | macro_rules! for_method {
+...
+19 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+20 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+21 |                 let _output = consumer.into_collector().finish();
+22 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+23 |             }
+   |             - borrow might be used here, when `_output` is dropped and runs the destructor for type `komadori_rayon::helpers::unique::inner::Output<'_, ParCount, usize>`
+...
+29 | for_method!(take_parts(0));
+   | -------------------------- in this macro invocation
+
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:15:22
+   |
+ 6 | macro_rules! for_method {
+...
+12 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+13 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+14 |                 let _serial = consumer.into_collector();
+15 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+16 |             }
+   |             - borrow might be used here, when `_serial` is dropped and runs the destructor for type `komadori_rayon::helpers::unique_unindexed::inner::Serial<'_, ParCount, Count>`
+...
+30 | for_method!(unindexed_parts());
+   | ------------------------------ in this macro invocation
+
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:22:22
+   |
+ 6 | macro_rules! for_method {
+...
+19 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+20 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+21 |                 let _output = consumer.into_collector().finish();
+22 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+23 |             }
+   |             - borrow might be used here, when `_output` is dropped and runs the destructor for type `komadori_rayon::helpers::unique_unindexed::inner::Output<'_, ParCount, usize>`
+...
+30 | for_method!(unindexed_parts());
+   | ------------------------------ in this macro invocation
+
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:15:22
+   |
+ 6 | macro_rules! for_method {
+...
+12 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+13 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+14 |                 let _serial = consumer.into_collector();
+15 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+16 |             }
+   |             - borrow might be used here, when `_serial` is dropped and runs the destructor for type `komadori_rayon::helpers::unique_unindexed::inner::Serial<'_, ParCount, Count>`
+...
+31 | for_method!(take_unindexed_parts());
+   | ----------------------------------- in this macro invocation
+
+error[E0505]: cannot move out of `collector` because it is borrowed
+  --> ui_test_suite/serial_require_drop.rs:22:22
+   |
+ 6 | macro_rules! for_method {
+...
+19 |                 let mut collector = ParCount::new();
+   |                     ------------- binding `collector` declared here
+20 |                 let (consumer, _) = collector.$method_name($($len)*);
+   |                                     --------- borrow of `collector` occurs here
+21 |                 let _output = consumer.into_collector().finish();
+22 |                 drop(collector);
+   |                      ^^^^^^^^^ move out of `collector` occurs here
+23 |             }
+   |             - borrow might be used here, when `_output` is dropped and runs the destructor for type `komadori_rayon::helpers::unique_unindexed::inner::Output<'_, ParCount, usize>`
+...
+31 | for_method!(take_unindexed_parts());
+   | ----------------------------------- in this macro invocation

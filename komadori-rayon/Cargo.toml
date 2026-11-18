@@ -23,6 +23,7 @@ criterion = "0.8.2"
 par-iter = "2.0.0"
 proptest = "1.11.0"
 rand = "0.10.1"
+trybuild = "1.0.125"
 
 [features]
 default = ["rayon"]
