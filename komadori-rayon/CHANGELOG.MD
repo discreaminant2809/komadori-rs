@@ -2,6 +2,10 @@
 
 ## 0.2.2
 
+- `crate::cmp::MaxBy`.
+- `crate::cmp::MaxByKey`.
+- `crate::cmp::MinBy`.
+- `crate::cmp::MinByKey`.
 - `crate::cmp::ParIsSortedBy`.
 - `crate::cmp::ParIsSortedByKey`.
 

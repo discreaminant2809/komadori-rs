@@ -10,7 +10,10 @@
 mod is_sorted;
 mod max;
 mod min;
+mod value_key;
 
 pub use is_sorted::*;
 pub use max::*;
 pub use min::*;
+
+use value_key::*;
