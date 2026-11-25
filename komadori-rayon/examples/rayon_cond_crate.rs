@@ -8,7 +8,7 @@ fn main() {
     println!("Sum of {nums:?}: {}", sum(&nums));
 
     let nums = [1; 1_000_000];
-    println!("Sum of one millions of 1s: {}", sum(&nums));
+    println!("Sum of one million of 1s: {}", sum(&nums));
 }
 
 fn sum(nums: &[i32]) -> i32 {

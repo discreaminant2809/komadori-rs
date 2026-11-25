@@ -67,6 +67,8 @@ pub struct ParIsSorted<T> {
 /// If this parallel collector has not collected any items or only collected one item,
 /// the [`Output`] is `true`.
 ///
+/// This parallel collector is constructed by [`ParIsSorted::by()`].
+///
 /// This parallel collector corresponds to [`Iterator::is_sorted_by()`].
 ///
 /// [`Output`]: ParallelCollectorBase::Output
@@ -109,6 +111,8 @@ pub struct ParIsSortedBy<T, F> {
 /// and its previously item are sorted, otherwise the [`Output`] is `false`.
 /// If this parallel collector has not collected any items or only collected one item,
 /// the [`Output`] is `true`.
+///
+/// This parallel collector is constructed by [`ParIsSorted::by_key()`].
 ///
 /// This parallel collector corresponds to [`Iterator::is_sorted_by_key()`].
 ///

@@ -120,14 +120,14 @@
 //!
 //! # Where are `bridge()` and its friends?
 //!
-//! Damn, this crate is **not** a thread pool library! The philosophy is different:
+//! This crate is **not** a thread pool library! The philosophy is different:
 //! The crate only defines parallel reductions,
 //! and it is up to the callers to choose how to drive them.
 //! The main driver is `rayon`, but you can use
 //! other drivers too, such as `chili` like in `par_iter` crate.
 //! Note that [`feed_into()`](crate::iter::RayonParallelIteratorExt)
-//! disappears as long as you "eject" the crate from `rayon`, since it only works
-//! with `rayon`'s parallel iterators, but it is also easy to build
+//! disappears as long as you "eject" `rayon` from the crate, since it only works
+//! with `rayon`'s parallel iterators. However, it is also easy to build
 //! a wrapper around the crate's abstractions!
 //!
 //! # How to implement a parallel collector?

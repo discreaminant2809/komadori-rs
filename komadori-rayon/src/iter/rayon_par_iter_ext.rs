@@ -20,8 +20,10 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
     /// and returns the collector’s output.
     ///
     /// The collector must be convertible to
-    /// [`UnindexedParallelCollector`](crate::collector::UnindexedParallelCollector).
-    /// If you have a collector that only works with the indexed path,
+    /// [`UnindexedParallelCollector`](crate::collector::UnindexedParallelCollector)
+    /// (not every parallel collector implements it).
+    /// If you have a collector that only works with the indexed path
+    /// (e.g. [`enumerate()`](ParallelCollectorBase::enumerate)),
     /// or you want the indexed path explicitly,
     /// use [`feed_into_indexed()`](Self::feed_into_indexed) which can prevent
     /// accidental fallback to the unindexed path and sometimes provide
@@ -82,7 +84,8 @@ pub trait RayonParallelIteratorExt: ParallelIterator {
     /// and is sometimes faster.
     ///
     /// The collector must be convertible to
-    /// [`ParallelCollector`](crate::collector::ParallelCollector).
+    /// [`ParallelCollector`](crate::collector::ParallelCollector)
+    /// (satisfied by **all** parallel collectors).
     /// If you do not strictly require the indexed path,
     /// use [`feed_into()`](Self::feed_into),
     /// which is already efficient enough since it can utilize

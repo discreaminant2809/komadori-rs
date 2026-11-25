@@ -484,7 +484,7 @@ pub trait ParallelCollectorBase: for<'this> DefineSerial<'this> {
     ///             }),
     ///     );
     ///
-    /// let mut sum = receiver.iter().feed_into(0_u32.into_sum());
+    /// let sum = receiver.iter().feed_into(0_u32.into_sum());
     ///
     /// assert_eq!(digit_counts, [1, 10, 4, 7]);
     /// assert_eq!(sum, 2_004_003_001);

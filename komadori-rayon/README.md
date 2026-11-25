@@ -194,7 +194,7 @@ if you want to delve into how parallel collectors work.
 
 [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 [`ParallelIterator`]: https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html
-[`ParallelCollector`]: https://docs.rs/komadori-rayon/0.2.0/komadori_rayon/collector/trait.ParallelCollector.html
-[`feed_into()`]: https://docs.rs/komadori-rayon/0.2.0/komadori_rayon/iter/trait.RayonParallelIteratorExt.html#method.feed_into
+[`ParallelCollector`]: https://docs.rs/komadori-rayon/0.2.2/komadori_rayon/collector/trait.ParallelCollector.html
+[`feed_into()`]: https://docs.rs/komadori-rayon/0.2.2/komadori_rayon/iter/trait.RayonParallelIteratorExt.html#method.feed_into
 [sum_doubles_bench_mark]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/benches/sum_doubles.rs
 [par-iter-example]: https://github.com/discreaminant2809/komadori-rs/blob/main/komadori-rayon/examples/par_iter_crate
