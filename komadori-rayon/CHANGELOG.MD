@@ -2,6 +2,9 @@
 
 ## 0.2.2
 
+- `crate::cmp::ParIsSortedBy`.
+- `crate::cmp::ParIsSortedByKey`.
+
 ## 0.2.1
 
 ### Added

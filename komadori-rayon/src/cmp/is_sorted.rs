@@ -1,17 +1,20 @@
 use std::{
+    fmt::Debug,
     ops::ControlFlow,
     sync::atomic::{AtomicBool, Ordering},
 };
 
 use crate::{
     collector::{
-        ParallelCollectorBase, UnindexedParallelCollectorBase, assert_unindexed_par_collector,
+        Map, MapBase, ParallelCollectorBase, UnindexedParallelCollectorBase,
+        assert_unindexed_par_collector,
         plumbing::{
             Consumer, DefineSerial, DefineUnindexedSerial, SerialOf, SerialOutputOf,
             UnindexedConsumer, UnindexedSerialOf, UnindexedSerialOutputOf,
         },
     },
     helpers::{unique, unique_unindexed},
+    ops::BasicParClosure,
 };
 
 /// A parallel collector that determines whether items are collected in sorted order.
@@ -56,17 +59,131 @@ pub struct ParIsSorted<T> {
     sorted: AtomicBool,
 }
 
-impl<T> ParIsSorted<T>
-where
-    T: PartialOrd + Send,
-{
+/// A parallel collector that determines whether items are collected in sorted order.
+///
+/// The [`Output`] remains `true` as long as every item
+/// and its previously item are sorted according to a given predicate,
+/// otherwise the [`Output`] is `false`.
+/// If this parallel collector has not collected any items or only collected one item,
+/// the [`Output`] is `true`.
+///
+/// This parallel collector corresponds to [`Iterator::is_sorted_by()`].
+///
+/// [`Output`]: ParallelCollectorBase::Output
+/// [`Break(())`]: ControlFlow::Break
+///
+/// # Examples
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::{prelude::*, cmp::ParIsSorted};
+///
+/// let is_sorted = [1, 2, 3]
+///     .into_par_iter()
+///     // Strictly sorted!
+///     .feed_into(ParIsSorted::by(|a, b| a < b));
+///
+/// assert!(is_sorted);
+/// ```
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::{prelude::*, cmp::ParIsSorted};
+///
+/// let is_sorted = [1, 2, 2]
+///     .into_par_iter()
+///     // Strictly sorted!
+///     .feed_into(ParIsSorted::by(|a, b| a < b));
+///
+/// assert!(!is_sorted);
+/// ```
+pub struct ParIsSortedBy<T, F> {
+    prev: Option<T>,
+    sorted: AtomicBool,
+    compare: F,
+}
+
+/// A parallel collector that determines whether items are collected in sorted order.
+///
+/// The [`Output`] remains `true` as long as the keys of every item
+/// and its previously item are sorted, otherwise the [`Output`] is `false`.
+/// If this parallel collector has not collected any items or only collected one item,
+/// the [`Output`] is `true`.
+///
+/// This parallel collector corresponds to [`Iterator::is_sorted_by_key()`].
+///
+/// [`Output`]: ParallelCollectorBase::Output
+/// [`Break(())`]: ControlFlow::Break
+///
+/// # Examples
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::{prelude::*, cmp::ParIsSorted};
+///
+/// let is_sorted = [1, -2, 3]
+///     .into_par_iter()
+///     .feed_into(ParIsSorted::by_key(i32::abs));
+///
+/// assert!(is_sorted);
+/// ```
+///
+/// ```
+/// use rayon::prelude::*;
+/// use komadori_rayon::{prelude::*, cmp::ParIsSorted};
+///
+/// let is_sorted = [-2, 1, 3]
+///     .into_par_iter()
+///     .feed_into(ParIsSorted::by_key(i32::abs));
+///
+/// assert!(!is_sorted);
+/// ```
+// We don't use type alias since if so the serial collectors of
+// both this struct and the aliased type are the same.
+#[derive(Clone)]
+pub struct ParIsSortedByKey<K, F>(Map<ParIsSorted<K>, F>);
+
+impl<T> ParIsSorted<T> {
     /// Creates a new instance of this parallel collector.
     #[inline]
-    pub fn new() -> Self {
+    pub fn new() -> Self
+    where
+        T: PartialOrd + Send,
+    {
         assert_unindexed_par_collector::<_, T>(Self {
             prev: None,
             sorted: AtomicBool::new(true),
         })
+    }
+
+    /// Creates a new instance of [`ParIsSortedBy`] with a given comparator function.
+    #[inline]
+    pub fn by<F>(compare: F) -> ParIsSortedBy<T, F>
+    where
+        T: Send,
+        F: Fn(&T, &T) -> bool + Sync,
+    {
+        assert_unindexed_par_collector::<_, T>(ParIsSortedBy {
+            prev: None,
+            sorted: AtomicBool::new(true),
+            compare,
+        })
+    }
+
+    /// Creates a new instance of [`ParIsSortedByKey`]
+    /// with a given key extraction function.
+    #[inline]
+    pub fn by_key<K, F>(f: F) -> ParIsSortedByKey<K, F>
+    where
+        F: Fn(T) -> K + Sync,
+        K: PartialOrd + Send,
+    {
+        let collector = ParIsSorted {
+            prev: None,
+            sorted: AtomicBool::new(true),
+        };
+        let collector = MapBase::new_base(collector, BasicParClosure::new(f));
+        assert_unindexed_par_collector::<_, T>(ParIsSortedByKey(collector))
     }
 }
 
@@ -97,18 +214,94 @@ where
     }
 }
 
+impl<T, F> Debug for ParIsSortedBy<T, F>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParIsSortedBy")
+            .field("prev", &self.prev)
+            .field("sorted", &self.sorted)
+            .field("pred", &std::any::type_name::<F>())
+            .finish()
+    }
+}
+
+impl<T, F> Clone for ParIsSortedBy<T, F>
+where
+    T: Clone,
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            prev: self.prev.clone(),
+            sorted: self.sorted.load(Ordering::Relaxed).into(),
+            compare: self.compare.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.prev.clone_from(&source.prev);
+        *self.sorted.get_mut() = source.sorted.load(Ordering::Relaxed);
+        self.compare.clone_from(&source.compare);
+    }
+}
+
+impl<K, F> Debug for ParIsSortedByKey<K, F>
+where
+    K: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ParIsSortedByKey").field(&self.0).finish()
+    }
+}
+
 impl<'a, T> DefineSerial<'a> for ParIsSorted<T>
 where
     T: PartialOrd + Send,
 {
-    type Serial = unique::Serial<'a, Self, consumer::Serial<'a, T>>;
+    type Serial = unique::Serial<'a, Self, consumer::Serial<'a, T, consumer::PartialOrdPredicate>>;
+}
+
+impl<'a, T, F> DefineSerial<'a> for ParIsSortedBy<T, F>
+where
+    T: Send,
+    F: Fn(&T, &T) -> bool + Sync,
+{
+    type Serial = unique::Serial<'a, Self, consumer::Serial<'a, T, &'a F>>;
+}
+
+impl<'a, K, F> DefineSerial<'a> for ParIsSortedByKey<K, F>
+where
+    K: PartialOrd + Send,
+    F: Sync,
+{
+    type Serial = unique::Serial<'a, Self, SerialOf<'a, Map<ParIsSorted<K>, F>>>;
 }
 
 impl<'a, T> DefineUnindexedSerial<'a> for ParIsSorted<T>
 where
     T: PartialOrd + Send,
 {
-    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Serial<'a, T>>;
+    type UnindexedSerial =
+        unique_unindexed::Serial<'a, Self, consumer::Serial<'a, T, consumer::PartialOrdPredicate>>;
+}
+
+impl<'a, T, F> DefineUnindexedSerial<'a> for ParIsSortedBy<T, F>
+where
+    T: Send,
+    F: Fn(&T, &T) -> bool + Sync,
+{
+    type UnindexedSerial = unique_unindexed::Serial<'a, Self, consumer::Serial<'a, T, &'a F>>;
+}
+
+impl<'a, K, F> DefineUnindexedSerial<'a> for ParIsSortedByKey<K, F>
+where
+    K: PartialOrd + Send,
+    F: Sync,
+{
+    type UnindexedSerial =
+        unique_unindexed::Serial<'a, Self, UnindexedSerialOf<'a, Map<ParIsSorted<K>, F>>>;
 }
 
 impl<T> ParallelCollectorBase for ParIsSorted<T>
@@ -135,7 +328,11 @@ where
         impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique::uniquify((
-            consumer::unindexed(self.prev.take(), &self.sorted),
+            consumer::unindexed(
+                self.prev.take(),
+                &self.sorted,
+                consumer::PartialOrdPredicate,
+            ),
             |output| {
                 self.prev = output.into_last();
                 control_flow(&self.sorted)
@@ -150,7 +347,99 @@ where
         impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
         impl FnOnce(SerialOutputOf<'a, Self>),
     ) {
-        unique::take_uniquify((consumer::unindexed(self.prev.take(), &self.sorted), drop))
+        unique::take_uniquify((
+            consumer::unindexed(
+                self.prev.take(),
+                &self.sorted,
+                consumer::PartialOrdPredicate,
+            ),
+            drop,
+        ))
+    }
+}
+
+impl<T, F> ParallelCollectorBase for ParIsSortedBy<T, F>
+where
+    T: Send,
+    F: Fn(&T, &T) -> bool + Sync,
+{
+    type Output = bool;
+
+    #[inline]
+    fn finish(self) -> Self::Output {
+        self.sorted.into_inner()
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        max_afford(&self.sorted, request)
+    }
+
+    fn parts<'a>(
+        &'a mut self,
+        _len: usize,
+    ) -> (
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        unique::uniquify((
+            consumer::unindexed(self.prev.take(), &self.sorted, &self.compare),
+            |output| {
+                self.prev = output.into_last();
+                control_flow(&self.sorted)
+            },
+        ))
+    }
+
+    fn take_parts<'a>(
+        &'a mut self,
+        _len: usize,
+    ) -> (
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
+    ) {
+        unique::take_uniquify((
+            consumer::unindexed(self.prev.take(), &self.sorted, &self.compare),
+            drop,
+        ))
+    }
+}
+
+impl<K, F> ParallelCollectorBase for ParIsSortedByKey<K, F>
+where
+    K: PartialOrd + Send,
+    F: Sync,
+{
+    type Output = bool;
+
+    #[inline]
+    fn finish(self) -> Self::Output {
+        self.0.finish()
+    }
+
+    #[inline]
+    fn max_afford(&self, request: usize) -> usize {
+        self.0.max_afford(request)
+    }
+
+    fn parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        unique::uniquify(self.0.parts(len))
+    }
+
+    fn take_parts<'a>(
+        &'a mut self,
+        len: usize,
+    ) -> (
+        impl Consumer<IntoCollector = SerialOf<'a, Self>, Output = SerialOutputOf<'a, Self>>,
+        impl FnOnce(SerialOutputOf<'a, Self>),
+    ) {
+        unique::take_uniquify(self.0.take_parts(len))
     }
 }
 
@@ -168,7 +457,11 @@ where
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
     ) {
         unique_unindexed::uniquify((
-            consumer::unindexed(self.prev.take(), &self.sorted),
+            consumer::unindexed(
+                self.prev.take(),
+                &self.sorted,
+                consumer::PartialOrdPredicate,
+            ),
             |output| {
                 self.prev = output.into_last();
                 control_flow(&self.sorted)
@@ -185,7 +478,83 @@ where
         >,
         impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
     ) {
-        unique_unindexed::take_uniquify((consumer::unindexed(self.prev.take(), &self.sorted), drop))
+        unique_unindexed::take_uniquify((
+            consumer::unindexed(
+                self.prev.take(),
+                &self.sorted,
+                consumer::PartialOrdPredicate,
+            ),
+            drop,
+        ))
+    }
+}
+
+impl<T, F> UnindexedParallelCollectorBase for ParIsSortedBy<T, F>
+where
+    T: Send,
+    F: Fn(&T, &T) -> bool + Sync,
+{
+    fn unindexed_parts<'a>(
+        &'a mut self,
+    ) -> (
+        impl UnindexedConsumer<
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
+        >,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        unique_unindexed::uniquify((
+            consumer::unindexed(self.prev.take(), &self.sorted, &self.compare),
+            |output| {
+                self.prev = output.into_last();
+                control_flow(&self.sorted)
+            },
+        ))
+    }
+
+    fn take_unindexed_parts<'a>(
+        &'a mut self,
+    ) -> (
+        impl UnindexedConsumer<
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
+        >,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
+    ) {
+        unique_unindexed::take_uniquify((
+            consumer::unindexed(self.prev.take(), &self.sorted, &self.compare),
+            drop,
+        ))
+    }
+}
+
+impl<K, F> UnindexedParallelCollectorBase for ParIsSortedByKey<K, F>
+where
+    K: PartialOrd + Send,
+    F: Sync,
+{
+    fn unindexed_parts<'a>(
+        &'a mut self,
+    ) -> (
+        impl UnindexedConsumer<
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
+        >,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>) -> ControlFlow<()>,
+    ) {
+        unique_unindexed::uniquify(self.0.unindexed_parts())
+    }
+
+    fn take_unindexed_parts<'a>(
+        &'a mut self,
+    ) -> (
+        impl UnindexedConsumer<
+            IntoCollector = UnindexedSerialOf<'a, Self>,
+            Output = UnindexedSerialOutputOf<'a, Self>,
+        >,
+        impl FnOnce(UnindexedSerialOutputOf<'a, Self>),
+    ) {
+        unique_unindexed::take_uniquify(self.0.take_unindexed_parts())
     }
 }
 
@@ -220,18 +589,24 @@ mod consumer {
         finish_boxed_impl,
     };
 
-    pub fn unindexed<T>(
+    pub fn unindexed<T, P>(
         prev: Option<T>,
         sorted: &AtomicBool,
-    ) -> OpaqueUnindexedConsumer!(Serial<'_, T>)
+        sorted_pred: P,
+    ) -> OpaqueUnindexedConsumer!(Serial<'_, T, P>)
     where
-        T: PartialOrd + Send,
+        T: Send,
+        P: IsSortedPredicate<T>,
     {
         BasicUnindexedConsumer {
-            state: (sorted, Cell::new(prev)),
-            split_f: |(sorted, prev)| (sorted, prev.take().into()),
-            combiner_f: |(sorted, _)| {
-                |left, right| match (left, right) {
+            state: (sorted, Cell::new(prev), sorted_pred),
+            split_f: |(sorted, prev, sorted_pred)| {
+                (sorted, prev.take().into(), sorted_pred.clone())
+            },
+            combiner_f: |(sorted, _, sorted_pred)| {
+                let sorted = *sorted;
+                let sorted_pred = sorted_pred.clone();
+                move |left, right| match (left, right) {
                     (_, FirstLast::None) => {}
                     _ if !sorted.load(Ordering::Relaxed) => {}
                     (left @ FirstLast::None, right) => *left = right,
@@ -248,7 +623,9 @@ mod consumer {
                         FirstLast::Some {
                             first: right_first, ..
                         },
-                    ) if right_first < *left_last => sorted.store(false, Ordering::Relaxed),
+                    ) if !sorted_pred.is_sorted(left_last, &right_first) => {
+                        sorted.store(false, Ordering::Relaxed)
+                    }
 
                     (
                         FirstLast::Some {
@@ -265,8 +642,8 @@ mod consumer {
                     ) => *left_last = Some(right_last),
                 }
             },
-            ma_f: |(sorted, _), request| super::max_afford(sorted, request),
-            collector_f: |(sorted, prev)| Serial {
+            ma_f: |(sorted, _, _), request| super::max_afford(sorted, request),
+            collector_f: |(sorted, prev, sorted_pred)| Serial {
                 sorted,
                 state: if let Some(prev) = prev.into_inner() {
                     FirstLast::Some {
@@ -276,21 +653,23 @@ mod consumer {
                 } else {
                     FirstLast::None
                 },
+                sorted_pred,
             },
         }
     }
 
-    pub struct Serial<'a, T>
+    pub struct Serial<'a, T, P>
     where
-        T: PartialOrd + Send,
+        T: Send,
     {
         sorted: &'a AtomicBool,
         state: FirstLast<T>,
+        sorted_pred: P,
     }
 
     pub enum FirstLast<T>
     where
-        T: PartialOrd + Send,
+        T: Send,
     {
         None,
         Some {
@@ -302,7 +681,7 @@ mod consumer {
 
     impl<T> FirstLast<T>
     where
-        T: PartialOrd + Send,
+        T: Send,
     {
         #[inline]
         pub(super) fn into_last(self) -> Option<T> {
@@ -314,9 +693,10 @@ mod consumer {
         }
     }
 
-    impl<T> CollectorBase for Serial<'_, T>
+    impl<T, P> CollectorBase for Serial<'_, T, P>
     where
-        T: PartialOrd + Send,
+        T: Send,
+        P: IsSortedPredicate<T>,
     {
         type Output = FirstLast<T>;
 
@@ -337,9 +717,10 @@ mod consumer {
         }
     }
 
-    impl<T> Collector<T> for Serial<'_, T>
+    impl<T, P> Collector<T> for Serial<'_, T, P>
     where
-        T: PartialOrd + Send,
+        T: Send,
+        P: IsSortedPredicate<T>,
     {
         #[inline]
         fn collect(&mut self, item: T) -> ControlFlow<()> {
@@ -352,13 +733,13 @@ mod consumer {
             };
 
             let prev = last.as_ref().unwrap_or(first);
-            if item < *prev {
-                self.sorted.store(false, Ordering::Relaxed);
-                ControlFlow::Break(())
-            } else {
+            if self.sorted_pred.is_sorted(prev, &item) {
                 super::control_flow(self.sorted)?;
                 *last = Some(item);
                 ControlFlow::Continue(())
+            } else {
+                self.sorted.store(false, Ordering::Relaxed);
+                ControlFlow::Break(())
             }
         }
 
@@ -390,25 +771,58 @@ mod consumer {
                     return ControlFlow::Continue(());
                 };
 
-                if item < *first {
-                    self.sorted.store(false, Ordering::Relaxed);
-                    return ControlFlow::Break(());
-                } else {
+                if self.sorted_pred.is_sorted(first, &item) {
                     super::control_flow(self.sorted)?;
                     last.insert(item)
+                } else {
+                    self.sorted.store(false, Ordering::Relaxed);
+                    return ControlFlow::Break(());
                 }
             };
 
             items.try_for_each(|item| {
-                if item < *prev {
-                    self.sorted.store(false, Ordering::Relaxed);
-                    ControlFlow::Break(())
-                } else {
+                if self.sorted_pred.is_sorted(prev, &item) {
                     super::control_flow(self.sorted)?;
                     *prev = item;
                     ControlFlow::Continue(())
+                } else {
+                    self.sorted.store(false, Ordering::Relaxed);
+                    ControlFlow::Break(())
                 }
             })
+        }
+    }
+
+    // We don't use a plain `Fn` because we need to name the implemented type
+    // in `type (Unindexed)Serial`, which isn't possible (for now) for closures.
+    pub trait IsSortedPredicate<T>: Clone + Send {
+        // So that it can be used in if-guard.
+        // We don't plan it to be `FnMut` anyway since we
+        // pass a shared reference of an `Fn`.
+        fn is_sorted(&self, prev: &T, curr: &T) -> bool;
+    }
+
+    // For `ParIsSortedBy`.
+    impl<F, T> IsSortedPredicate<T> for F
+    where
+        F: Fn(&T, &T) -> bool + Clone + Send,
+    {
+        #[inline]
+        fn is_sorted(&self, prev: &T, curr: &T) -> bool {
+            self(prev, curr)
+        }
+    }
+
+    // For `ParIsSorted`.
+    #[derive(Clone)]
+    pub struct PartialOrdPredicate;
+    impl<T> IsSortedPredicate<T> for PartialOrdPredicate
+    where
+        T: PartialOrd,
+    {
+        #[inline]
+        fn is_sorted(&self, prev: &T, curr: &T) -> bool {
+            prev <= curr
         }
     }
 }
