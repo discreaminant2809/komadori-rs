@@ -2,12 +2,18 @@
 
 ## 0.2.2
 
+### Added
+
 - `crate::cmp::MaxBy`.
 - `crate::cmp::MaxByKey`.
 - `crate::cmp::MinBy`.
 - `crate::cmp::MinByKey`.
 - `crate::cmp::ParIsSortedBy`.
 - `crate::cmp::ParIsSortedByKey`.
+
+### Changed
+
+- `crate::cmp::ParIsSorted::new()` is now `const`.
 
 ## 0.2.1
 

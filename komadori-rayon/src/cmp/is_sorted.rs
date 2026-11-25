@@ -146,7 +146,7 @@ pub struct ParIsSortedByKey<K, F>(Map<ParIsSorted<K>, F>);
 impl<T> ParIsSorted<T> {
     /// Creates a new instance of this parallel collector.
     #[inline]
-    pub fn new() -> Self
+    pub const fn new() -> Self
     where
         T: PartialOrd + Send,
     {
@@ -158,7 +158,7 @@ impl<T> ParIsSorted<T> {
 
     /// Creates a new instance of [`ParIsSortedBy`] with a given comparator function.
     #[inline]
-    pub fn by<F>(compare: F) -> ParIsSortedBy<T, F>
+    pub const fn by<F>(compare: F) -> ParIsSortedBy<T, F>
     where
         T: Send,
         F: Fn(&T, &T) -> bool + Sync,
@@ -173,7 +173,7 @@ impl<T> ParIsSorted<T> {
     /// Creates a new instance of [`ParIsSortedByKey`]
     /// with a given key extraction function.
     #[inline]
-    pub fn by_key<K, F>(f: F) -> ParIsSortedByKey<K, F>
+    pub const fn by_key<K, F>(f: F) -> ParIsSortedByKey<K, F>
     where
         F: Fn(T) -> K + Sync,
         K: PartialOrd + Send,

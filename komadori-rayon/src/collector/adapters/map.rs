@@ -39,7 +39,7 @@ pub type Map<C, F> = MapBase<C, BasicParClosure<F>>;
 pub type MapWith<C, S, FF> = MapBase<C, AdvancedParClosure<S, FF>>;
 
 impl<C, F> MapBase<C, F> {
-    pub(crate) fn new_base(collector: C, f: F) -> Self {
+    pub(crate) const fn new_base(collector: C, f: F) -> Self {
         Self { collector, f }
     }
 }
